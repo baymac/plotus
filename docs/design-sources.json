@@ -1,0 +1,279 @@
+{
+  "fileKey": "0AIbJahPpgu09bT3AqguPx",
+  "pageId": "349:144623",
+  "inspected": "2026-10-27",
+  "assets": [
+    {
+      "file": "apps/web/public/assets/figma/0a0c5.svg",
+      "width": "40",
+      "height": "24",
+      "sha256": "7f625869664b203c2bb6dcf6a771eb34dc57cf0d2d7725a494ae6a379c358dde",
+      "sourceNodes": [
+        "364:30176"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/169db.svg",
+      "width": "34",
+      "height": "34",
+      "sha256": "c52f35fc39844a32c9ba739b19de71b9b5226aaf2445f78798130703e02765d3",
+      "sourceNodes": [
+        "364:30411",
+        "364:31376"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/2dfc9.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "c54a47c7c7bbaff0b1a3d6d0ca6b7befb1be4d88da1206d52a2de201fa14895e",
+      "sourceNodes": [
+        "364:31376"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/35434.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "e4a9c0e4feba5833c32c06566ea61754c1100c8c448a6db43c9d392073dbe181",
+      "sourceNodes": [
+        "364:30411",
+        "364:31376"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/41530.svg",
+      "width": "34",
+      "height": "34",
+      "sha256": "58699d54c9dc676cdfa7c263b3f1bbaf01f3c9f635cc6cee814291538924b0e7",
+      "sourceNodes": [
+        "364:29969",
+        "364:30176",
+        "364:30286",
+        "364:30853",
+        "364:31087"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/47908.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "a2aacfd493da4168f82ffa798da80c88544ab2af64d3710fe03be7030d40a9d1",
+      "sourceNodes": [
+        "364:31376"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/50117.svg",
+      "width": "40",
+      "height": "24",
+      "sha256": "af7d3aa7979437912e22609e59776ce04492c9b2d6a18c3cae3f1c115f17c706",
+      "sourceNodes": [
+        "364:30286"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/5535c.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "90e66a6b89795569177c0e85617665fb8552b47ad450397a5338caef203b0957",
+      "sourceNodes": [
+        "364:30411"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/57bc9.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "d0eb8be8fd95cfc6e3299ee46c77e7f4ff81c749cb642b1ae456bec88a2d37f4",
+      "sourceNodes": [
+        "364:31588"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/5a6b6.svg",
+      "width": "340",
+      "height": "160",
+      "sha256": "59e47a0feb746614b018d627a2b785207c5f2012c5999ade6062ca7db41b575b",
+      "sourceNodes": [
+        "364:31588"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/63871.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "63517ba43f63cd2e911f6be2c7010ed2497bb2f3b841ab07aa9ade2cb642894b",
+      "sourceNodes": [
+        "364:30962"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/67d2a.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "f485b17261160a8757c445cf1531c71d1208405c77861a810449a1ff100e2715",
+      "sourceNodes": [
+        "364:30156",
+        "364:31065",
+        "364:31588"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/864a9.svg",
+      "width": "340",
+      "height": "160",
+      "sha256": "7eec56d9a346949effc209f4872eaad3cd9d738b4bd450c7aca49a21ee845bd0",
+      "sourceNodes": [
+        "364:31065"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/8f1a4.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "c87429be99c3cb9e090ed5692d76fa35e0174956c7270224acb5f09bf36e2a5d",
+      "sourceNodes": [
+        "364:29969",
+        "364:30176",
+        "364:30286",
+        "364:30853",
+        "364:31087"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/8fc66.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "be01acbf303b410e1f56e3264b3779c9563e738acfbf45e8c6af3d62a06d0aec",
+      "sourceNodes": [
+        "364:30411",
+        "364:31376"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/a5a97.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "100d5b1894d803c760a3af43bd47dc755546274b31792afa84f267fc95ffc086",
+      "sourceNodes": [
+        "364:30853",
+        "364:30962",
+        "364:31087"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/aa5c4.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "db5687041d33b230274af94030cdf406132f3f36b1d07c9ecce36ca0f300232b",
+      "sourceNodes": [
+        "364:29969",
+        "364:30176",
+        "364:30286",
+        "364:30853",
+        "364:31087"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/bf333.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "3e32c657c78433fb781a159726bb54c6e722f2b33a2ec01d59c721cbf26edf04",
+      "sourceNodes": [
+        "364:29969",
+        "364:30176",
+        "364:30286",
+        "364:30853",
+        "364:31087"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/bf78e.svg",
+      "width": "18",
+      "height": "18",
+      "sha256": "956d3907892686c174db358e8fa94503fb936d505de3e3ebf782f0292e21b8e9",
+      "sourceNodes": [
+        "364:29969",
+        "364:30176",
+        "364:30286",
+        "364:30411",
+        "364:30853",
+        "364:31087",
+        "364:31376"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/c24aa.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "7338d6afb2e630dd3e86fcecc05e7467f1e57edb6f492314e89a4f6abf01f5c3",
+      "sourceNodes": [
+        "364:31376"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/ca6a3.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "34b97bd63033ad98432c369b4f3a14052e69d084d3221f81f26df9942744ebfd",
+      "sourceNodes": [
+        "364:30411",
+        "364:31376"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/cd9e3.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "bc5b7db403ee40143466041d93119e7bbe58a2b007ef32cdfe5235aac8648ada",
+      "sourceNodes": [
+        "364:29969",
+        "364:30176",
+        "364:30286"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/cf006.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "91d71362725012a381075ede942b66ac02929315b969a8812a19450ccd0cd9bf",
+      "sourceNodes": [
+        "364:30156",
+        "364:31065"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/e7b29.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "98b827b7afa0c5c5ed69118694c59981ceb56e354cfb1eb682fbff289789b018",
+      "sourceNodes": [
+        "364:30853",
+        "364:31087"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/f5960.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "8bbaa931a88bbc179bd1f21872edc4caf630164c0c16b2e03f3d4c3acc189eb1",
+      "sourceNodes": [
+        "364:30176",
+        "364:30286",
+        "364:31087"
+      ]
+    },
+    {
+      "file": "apps/web/public/assets/figma/f6f4d.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "71f65dc512bb6883a636dd9fa7754f07a4b5f33f5bba32170f3738d5590133c3",
+      "sourceNodes": [
+        "364:30853",
+        "364:30962",
+        "364:31087"
+      ]
+    }
+  ]
+}

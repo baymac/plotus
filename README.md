@@ -17,6 +17,8 @@ npm run dev:api
 
 Web: http://localhost:5173. API health: http://localhost:4000/health.
 
+Choose **Explore design preview** on the sign-in screen to review the local sample workspace. Google and passkey buttons do not authenticate yet. Preview projects live only in memory; reloading restores the fixtures. Only appearance and sidebar preferences are saved locally.
+
 ```sh
 npm run check
 npm run build
@@ -43,6 +45,12 @@ The existing private Plotus/Naksha product, planning engine, generated plans, da
 
 ## Current milestone
 
-Scaffold and first design implementation. Live authentication, backend persistence, plot editing, floor-plan generation, and a native desktop binary are subsequent milestones. The desktop deliverable currently means the web application. The sample workspace is a design preview, separate from authentication.
+Implemented for web: sign-in UI, Projects, General settings, New/Edit project forms with optional client details, delete confirmation, search, sorting, and light/dark themes. The desktop sidebar collapses and remembers its state. Mobile web uses the supplied two-tab layout. Project rows open metadata editing in this milestone; the planning editor comes next.
+
+The iOS source implements the same initial journey with SwiftUI, native tabs, lists and forms, adaptive colors, bundled vector icons and fonts. Its native layout is adapted to system navigation and safe areas. A native build and device validation are still pending a Mac connection. See [Mac testing](docs/MAC-TESTING.md).
+
+Live authentication, backend persistence, plot editing, floor-plan generation, Meta AI integration, and a native desktop binary are subsequent milestones. The API currently exposes health only; reserved `/v1/*` routes return `501`. The desktop deliverable currently means the web application. This is a starting scaffold, not a finished hackathon submission.
+
+The checks pass locally. A GitHub Actions template is saved in `docs/ci/github-actions.yml`; the available GitHub token cannot create workflow files. Move it to `.github/workflows/check.yml` using an account or token with workflow permission to enable CI.
 
 See `docs/START-HERE.md` for the implementation sequence and `docs/PROVENANCE.md` for the work log.

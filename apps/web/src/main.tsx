@@ -1,4 +1,10 @@
-import React from 'react';
-import { createRoot } from 'react-dom/client';
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { App } from "./App";
+import "./styles.css";
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><main><h1>Plotus</h1><p>App scaffold ready.</p></main></React.StrictMode>);
+createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);

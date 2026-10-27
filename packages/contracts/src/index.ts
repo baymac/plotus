@@ -4,7 +4,7 @@ export interface Project {
   location: string;
   areaSqFt: number | null;
   updatedAt: string;
-  client?: { name: string; email: string };
+  client?: { name: string; email: string; phone?: string };
 }
 
 export interface ApiError {

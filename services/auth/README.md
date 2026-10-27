@@ -7,14 +7,15 @@ A separate Go authentication service, freshly written for Plotus and kept in thi
 ```sh
 cd services/auth
 ./scripts/init-local.sh
+cd ../../docker-local
 docker compose up --build -d
 curl http://localhost:4001/health
 curl http://localhost:4001/api/auth/config
 ```
 
-The script creates ignored `.env` and `.local/signing-key.pem` files, preserving existing ones. Loopback ports: auth 4001, PostgreSQL 5441, Redis 6381. These containers and volumes are separate from the existing private product. Migrations run before startup. Local Compose uses the invoking user's UID/GID to read the protected key; provision the key for a non-root service account in deployment.
+The script creates ignored `docker-local/.env` and `services/auth/.local/signing-key.pem` files, preserving existing ones. Loopback ports: auth 4001, PostgreSQL 5441, Redis 6381. These containers and volumes are separate from the existing private product. Migrations run before startup. Local Compose uses the invoking user's UID/GID to read the protected key; provision the key for a non-root service account in deployment.
 
-Google is disabled until this service's client ID and secret are set in the ignored `.env`. Register the exact callback `http://localhost:4001/api/auth/login/google/callback` locally, or `${AUTH_PUBLIC_URL}/api/auth/login/google/callback` in deployment. Never put the secret in the apps. Deployment requires HTTPS, a fixed web origin, `AUTH_ENV=production`. Browser and auth origins must be on the same site for refresh cookies. Configure proxy rate limits separately; this service deliberately ignores forwarded-IP headers.
+Google is disabled until this service's client ID and secret are set in the ignored `docker-local/.env`. Register the exact callback `http://localhost:4001/api/auth/login/google/callback` locally, or `${AUTH_PUBLIC_URL}/api/auth/login/google/callback` in deployment. Never put the secret in the apps. Deployment requires HTTPS, a fixed web origin, `AUTH_ENV=production`. Browser and auth origins must be on the same site for refresh cookies. Configure proxy rate limits separately; this service deliberately ignores forwarded-IP headers.
 
 ## Browser flow
 
@@ -37,11 +38,15 @@ GET /api/auth/native/google/start
     &code_challenge_method=S256
 ```
 
-iOS uses `plotus://oauth/callback`. Desktop may bind an ephemeral loopback port and use `http://127.0.0.1:<port>/callback`. Redirects match `AUTH_NATIVE_REDIRECTS`; dynamic ports are allowed only for the explicitly configured literal loopback host/path. No wildcard redirects.
+OS-browser clients can use `plotus://oauth/callback`. Desktop may bind an ephemeral loopback port and use `http://127.0.0.1:<port>/callback`. Redirects match `AUTH_NATIVE_REDIRECTS`; dynamic ports are allowed only for the explicitly configured literal loopback host/path. No wildcard redirects.
 
 The callback contains a single-use code and app state, never tokens. Verify state, then `POST /api/auth/native/token/exchange` with `code`, `code_verifier`, `redirect_uri`. The grant expires in 90 seconds and is bound to the proof and exact redirect. Store native refresh/CSRF credentials in the platform secure store (Keychain on iOS), access tokens in memory. `POST /api/auth/native/token/refresh` and `DELETE /api/auth/native/session` both take JSON `refresh_token` and `csrf_token`.
 
-These are server contracts. The shared app's OS browser, secure storage, callback handling and live session UI still need wiring. The service never returns a fake account.
+The shared app restores browser sessions through HttpOnly cookies and keeps access tokens in memory. iOS uses the Google Sign-In SDK with the web client as its server audience, a server-issued nonce and a single-use PKCE proof. Its refresh credential stays in Keychain.
+
+The SDK calls `POST /api/auth/native/google/challenge` with an S256 challenge, then `/native/google/token` with the returned attempt, Google ID token and verifier. The service checks Google's signature, audience, expiry, nonce and authorized party before issuing a Plotus session. The OS adapter lives in `apps/ios`; app UI and session state remain shared Kotlin in `apps/client`.
+
+Copy `apps/ios/Config.local.xcconfig.example` to ignored `apps/ios/Config.local.xcconfig` for the iOS client IDs and HTTPS service address. Client secrets stay on the server. Native passkeys need a public RP domain; localhost browser passkeys work independently.
 
 ## Passkeys
 
@@ -58,7 +63,7 @@ With Go 1.27.1:
 ```sh
 go test ./...
 go vet ./...
-docker compose up -d postgres redis
+docker compose -f ../../docker-local/docker-compose.yml --env-file ../../docker-local/.env up -d postgres redis
 ./scripts/check-integration.sh
 ```
 

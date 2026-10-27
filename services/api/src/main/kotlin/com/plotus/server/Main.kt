@@ -25,5 +25,5 @@ fun Application.plotusModule() {
 
 fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 4000
-    embeddedServer(Netty, port = port, host = "127.0.0.1", module = Application::plotusModule).start(wait = true)
+    embeddedServer(Netty, port = port, host = System.getenv("HOST") ?: "127.0.0.1", module = Application::plotusModule).start(wait = true)
 }

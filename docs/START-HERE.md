@@ -18,6 +18,6 @@ Select **New project**, enter a name and location, and choose whether it is for 
 
 ## What to expect
 
-This is a local demo. Project changes last for the current session and are not shared across devices. Google and passkey sign-in are not connected yet.
+This is a local demo. Project changes last for the current session and are not shared across devices. Google sign-in opens your real account on iPhone and web. To use a passkey in the web app, first sign in with Google and add one from Account settings.
 
 Plot setup, room requirements and floor-plan concepts are planned parts of the product. They are not available in this demo.

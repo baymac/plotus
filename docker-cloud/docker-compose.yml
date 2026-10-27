@@ -1,0 +1,136 @@
+name: plotus-cloud
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: docker-cloud/web.Dockerfile
+    ports:
+    - 80:80
+    - 443:443
+    - 443:443/udp
+    environment:
+      PLOTUS_DOMAIN: ${PLOTUS_DOMAIN:?Set the production domain}
+    volumes:
+    - caddy-data:/data
+    - caddy-config:/config
+    depends_on:
+      auth:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+  api:
+    build:
+      context: ..
+      dockerfile: docker-cloud/api.Dockerfile
+    environment:
+      HOST: 0.0.0.0
+      PORT: '4000'
+    read_only: true
+    tmpfs:
+    - /tmp
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:4000/health
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: plotus_auth
+      POSTGRES_USER: plotus_auth
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:?Set the production database password}
+    volumes:
+    - auth-db:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U plotus_auth -d plotus_auth
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command:
+    - redis-server
+    - --save
+    - ''
+    - --appendonly
+    - 'no'
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+  auth:
+    build:
+      context: ..
+      dockerfile: docker-cloud/auth.Dockerfile
+    user: ${AUTH_UID:-10001}:${AUTH_GID:-10001}
+    command:
+    - sh
+    - -c
+    - plotus-auth -migrate && exec plotus-auth
+    environment:
+      AUTH_ADDRESS: 0.0.0.0:4001
+      AUTH_DATABASE_URL: postgres://plotus_auth:${AUTH_DB_PASSWORD:?Set the production
+        database password}@postgres:5432/plotus_auth?sslmode=disable
+      AUTH_REDIS_URL: redis://redis:6379/0
+      AUTH_SIGNING_KEY_FILE: /run/plotus-signing.pem
+      AUTH_PUBLIC_URL: https://${PLOTUS_DOMAIN}
+      AUTH_WEB_ORIGIN: https://${PLOTUS_DOMAIN}
+      AUTH_NATIVE_REDIRECTS: ${AUTH_NATIVE_REDIRECTS:-plotus://oauth/callback}
+      AUTH_ENV: production
+      WEBAUTHN_RP_ID: ${PLOTUS_DOMAIN}
+      WEBAUTHN_ORIGINS: https://${PLOTUS_DOMAIN}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set the production Google web client}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set the production Google secret}
+      GOOGLE_IOS_CLIENT_ID: ${GOOGLE_IOS_CLIENT_ID:-}
+    volumes:
+    - ${AUTH_SIGNING_KEY_FILE:?Set the signing-key path}:/run/plotus-signing.pem:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    read_only: true
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    healthcheck:
+      test:
+      - CMD
+      - wget
+      - -q
+      - -O
+      - /dev/null
+      - http://127.0.0.1:4001/health
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+  engine:
+    profiles:
+    - engine
+    build:
+      context: ../services/engine-private
+    environment:
+      PLOTUS_ENGINE_SERVICE_TOKEN: ${PLOTUS_ENGINE_SERVICE_TOKEN:-}
+    restart: unless-stopped
+volumes:
+  auth-db: {}
+  caddy-data: {}
+  caddy-config: {}

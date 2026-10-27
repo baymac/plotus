@@ -1,0 +1,5 @@
+PLOTUS_AUTH_URL = http:/$()/localhost:4001
+PLOTUS_GOOGLE_IOS_CLIENT_ID =
+PLOTUS_GOOGLE_SERVER_CLIENT_ID =
+PLOTUS_GOOGLE_REVERSED_CLIENT_ID = plotus.oauth.unconfigured
+#include? "Config.local.xcconfig"

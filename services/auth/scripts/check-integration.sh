@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 exec python3 - <<'PY'
 import os, pathlib
 settings = {}
-for line in pathlib.Path('.env').read_text().splitlines():
+for line in pathlib.Path('../../docker-local/.env').read_text().splitlines():
     if line and not line.startswith('#') and '=' in line:
         name, value = line.split('=', 1)
         settings[name] = value

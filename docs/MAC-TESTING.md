@@ -33,7 +33,7 @@ The independent app checkout is `/Users/parichay/dev/plotus`. The private checko
 cd /Users/parichay/dev/plotus
 export JAVA_HOME=$(/usr/libexec/java_home -v 21)
 ./gradlew :composeApp:linkDebugFrameworkIosArm64
-cd iosApp
+cd apps/ios
 xcodegen generate
 open Plotus.xcodeproj
 ```

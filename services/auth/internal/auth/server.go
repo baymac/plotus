@@ -58,6 +58,8 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("POST "+prefix+"/login/google", s.googleStart)
 	mux.HandleFunc("GET "+prefix+"/native/google/start", s.nativeGoogleStart)
+	mux.HandleFunc("POST "+prefix+"/native/google/challenge", s.nativeGoogleChallenge)
+	mux.HandleFunc("POST "+prefix+"/native/google/token", s.nativeGoogleToken)
 	mux.HandleFunc("GET "+prefix+"/login/google/callback", s.googleCallback)
 	mux.HandleFunc("POST "+prefix+"/native/token/exchange", s.nativeExchange)
 	mux.HandleFunc("GET "+prefix+"/token/csrf", s.csrf)

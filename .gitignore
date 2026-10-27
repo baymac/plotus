@@ -19,3 +19,5 @@ kotlin-js-store/
 .idea/
 local.properties
 services/auth/.local/
+**/Config.local.xcconfig
+docker-cloud/.secrets/

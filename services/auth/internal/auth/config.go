@@ -10,7 +10,7 @@ import (
 
 type Config struct {
 	Address, DatabaseURL, RedisURL, PublicURL, WebOrigin, Issuer, Audience, KeyFile string
-	GoogleID, GoogleSecret, RPID                                                    string
+	GoogleID, GoogleSecret, GoogleIOSID, RPID                                       string
 	NativeRedirects, RPOrigins                                                      []string
 	Production                                                                      bool
 }
@@ -24,6 +24,7 @@ func FromEnv() (Config, error) {
 		Issuer:    env("AUTH_ISSUER", "plotus-auth"), Audience: env("AUTH_AUDIENCE", "plotus-api"),
 		KeyFile: os.Getenv("AUTH_SIGNING_KEY_FILE"), GoogleID: os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleSecret:    os.Getenv("GOOGLE_CLIENT_SECRET"),
+		GoogleIOSID:     os.Getenv("GOOGLE_IOS_CLIENT_ID"),
 		RPID:            env("WEBAUTHN_RP_ID", "localhost"),
 		RPOrigins:       split(env("WEBAUTHN_ORIGINS", "http://localhost:8081")),
 		NativeRedirects: split(env("AUTH_NATIVE_REDIRECTS", "plotus://oauth/callback,http://127.0.0.1/callback")),

@@ -20,6 +20,8 @@ Register these provider callbacks:
 
 Google's authorised web origin is `https://plotus.app`. Web passkeys use `plotus.app` as their relying party. iPhone passkeys also require associated-domain configuration.
 
+The iPhone app uses `https://plotus.app` for both sign-in and projects. Leave `PLOTUS_AUTH_URL` unset in the ignored `apps/ios/Config.local.xcconfig` to keep this default. A development override uses a separate database; its accounts and projects do not sync with production.
+
 ## Website and app
 
 With Node 22+, JDK 17 and authenticated Wrangler available:

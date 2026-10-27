@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,7 +46,8 @@ fun IconAction(icon: AppIcon, label: String, onClick: () -> Unit, border: Boolea
 
 @Composable
 fun PlotusInput(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier,
-                placeholder: String = "", type: KeyboardType = KeyboardType.Text, error: String? = null, enabled: Boolean = true) {
+                placeholder: String = "", type: KeyboardType = KeyboardType.Text, error: String? = null, enabled: Boolean = true,
+                capitalization: KeyboardCapitalization = KeyboardCapitalization.None) {
     val colors = LocalPlotusColors.current
     var focused by remember { mutableStateOf(false) }
     BasicTextField(value, onChange,
@@ -54,7 +56,7 @@ fun PlotusInput(value: String, onChange: (String) -> Unit, label: String, modifi
             .border(if (focused) 2.dp else 1.dp, if (focused || error != null) colors.primary else colors.line, RoundedCornerShape(12.dp))
             .onFocusChanged { focused = it.isFocused }.semantics { contentDescription = label },
         enabled = enabled, textStyle = LocalTextStyle.current.copy(color = colors.ink, fontSize = 14.sp),
-        cursorBrush = SolidColor(colors.primary), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = type),
+        cursorBrush = SolidColor(colors.primary), singleLine = true, keyboardOptions = KeyboardOptions(capitalization = capitalization, keyboardType = type),
         decorationBox = { inner ->
             Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
                 if (value.isEmpty()) Text(placeholder, color = colors.muted)
@@ -64,11 +66,12 @@ fun PlotusInput(value: String, onChange: (String) -> Unit, label: String, modifi
 }
 
 @Composable
-fun LabeledInput(label: String, value: String, onChange: (String) -> Unit, error: String? = null, type: KeyboardType = KeyboardType.Text, enabled: Boolean = true) {
+fun LabeledInput(label: String, value: String, onChange: (String) -> Unit, error: String? = null, type: KeyboardType = KeyboardType.Text,
+                 enabled: Boolean = true, capitalization: KeyboardCapitalization = KeyboardCapitalization.None) {
     val colors = LocalPlotusColors.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, fontSize = 12.sp, color = colors.muted)
-        PlotusInput(value, onChange, label, type = type, error = error, enabled = enabled)
+        PlotusInput(value, onChange, label, type = type, error = error, enabled = enabled, capitalization = capitalization)
         if (error != null) Text(error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
     }
 }

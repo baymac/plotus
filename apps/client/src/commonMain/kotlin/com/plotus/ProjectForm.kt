@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,7 +48,8 @@ fun ProjectFormDialog(project: Project?, compact: Boolean, onDismiss: () -> Unit
                 if (draft.isClient) Column(Modifier.fillMaxWidth().background(colors.quiet, RoundedCornerShape(12.dp))
                     .border(1.dp, colors.line, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("Client information", color = colors.muted, fontSize = 12.sp)
-                    LabeledInput("Client name", draft.clientName, { draft = draft.copy(clientName = it.take(120)) }, errors["clientName"], enabled = !busy)
+                    LabeledInput("Client name", draft.clientName, { draft = draft.copy(clientName = it.take(120)) }, errors["clientName"],
+                        enabled = !busy, capitalization = KeyboardCapitalization.Words)
                     LabeledInput("Email", draft.email, { draft = draft.copy(email = it.take(254)) }, errors["email"], KeyboardType.Email, enabled = !busy)
                     LabeledInput("Phone no.", draft.phone, { draft = draft.copy(phone = it.take(40)) }, errors["phone"], KeyboardType.Phone, enabled = !busy)
                 }

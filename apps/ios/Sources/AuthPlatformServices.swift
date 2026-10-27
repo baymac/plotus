@@ -9,6 +9,7 @@ import PlotusApp
 final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding, ASWebAuthenticationPresentationContextProviding {
     private let session = URLSession(configuration: .ephemeral)
     private var passkeyCompletion: ((String?, String?) -> Void)?
+    private var passkeyOperation: String?
     private var authorizationController: ASAuthorizationController?
     private var webAuthenticationSession: ASWebAuthenticationSession?
     private let keychain: [String: Any] = [
@@ -147,7 +148,7 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationContr
         }
         let rp = operation == "register" ? (key["rp"] as? [String: Any])?["id"] as? String : key["rpId"] as? String
         guard let rp, !rp.isEmpty, rp != "localhost", rp != "127.0.0.1" else {
-            complete(completion, nil, "Passkeys aren’t available on iPhone yet. Please use Google."); return
+            complete(completion, nil, "Passkeys need a secure Plotus domain. Please use plotus.app."); return
         }
         let provider = ASAuthorizationPlatformPublicKeyCredentialProvider(relyingPartyIdentifier: rp)
         let request: ASAuthorizationRequest
@@ -164,6 +165,7 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationContr
             request = assertion
         }
         passkeyCompletion = completion
+        passkeyOperation = operation
         let controller = ASAuthorizationController(authorizationRequests: [request])
         controller.delegate = self
         controller.presentationContextProvider = self
@@ -195,11 +197,12 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationContr
         finishPasskey(json, nil)
     }
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        finishPasskey(nil, (error as NSError).code == ASAuthorizationError.canceled.rawValue ? "cancelled" : "Couldn’t use this passkey. Please try Google sign-in.")
+        let message = passkeyOperation == "register" ? "Couldn’t add this passkey. Please try again." : "Couldn’t sign in with this passkey. Please try again."
+        finishPasskey(nil, (error as NSError).code == ASAuthorizationError.canceled.rawValue ? "cancelled" : message)
     }
     private func finishPasskey(_ value: String?, _ error: String?) {
         if let callback = passkeyCompletion { complete(callback, value, error) }
-        passkeyCompletion = nil; authorizationController = nil
+        passkeyCompletion = nil; passkeyOperation = nil; authorizationController = nil
     }
     private func presenter() -> UIViewController? {
         var controller = (UIApplication.shared.delegate as? AppDelegate)?.window?.rootViewController

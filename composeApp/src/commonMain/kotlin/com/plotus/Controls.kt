@@ -25,7 +25,7 @@ fun PlotusButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifie
     val colors = LocalPlotusColors.current
     val content: @Composable RowScope.() -> Unit = {
         if (icon != null) { PlotusIcon(icon); Spacer(Modifier.width(8.dp)) }
-        Text(text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Text(text, color = if (outline) colors.ink else colors.onPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
     }
     if (outline) OutlinedButton(onClick, modifier.heightIn(min = 44.dp), enabled,
         shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, colors.line),

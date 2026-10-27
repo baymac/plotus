@@ -36,7 +36,10 @@ fun ProjectFormDialog(project: Project?, compact: Boolean, onDismiss: () -> Unit
                 LabeledInput("Location", draft.location, { draft = draft.copy(location = it.take(200)) }, errors["location"])
                 Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Client project?", Modifier.weight(1f))
-                    Switch(draft.isClient, { draft = draft.copy(isClient = it) })
+                    Switch(draft.isClient, { draft = draft.copy(isClient = it) }, colors = SwitchDefaults.colors(
+                        checkedThumbColor = colors.surface, checkedTrackColor = colors.primary,
+                        checkedBorderColor = colors.primary, uncheckedThumbColor = colors.surface,
+                        uncheckedTrackColor = colors.border, uncheckedBorderColor = colors.border))
                 }
                 if (draft.isClient) Column(Modifier.fillMaxWidth().background(colors.quiet, RoundedCornerShape(12.dp))
                     .border(1.dp, colors.line, RoundedCornerShape(12.dp)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

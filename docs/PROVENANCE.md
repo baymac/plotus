@@ -17,4 +17,6 @@ The planning engine and its CAD assets are pre-existing private technology. They
 - The Facebook sign-in icon is adapted from [Meta’s Android SDK](https://github.com/facebook/facebook-android-sdk/blob/main/facebook-common/src/main/res/drawable/com_facebook_button_icon.xml), with its [license](../third-party/facebook-sdk-license.txt).
 - The app and services use open-source libraries identified in their dependency files.
 
+- The marketing website uses the existing Plotus mark and fonts, newly written copy and SVG concept studies, and an original AI-generated courtyard-home illustration. Architecture/product references and asset details are recorded in [the marketing site README](../apps/marketing/README.md). The illustrations are not generated app results. Cloudflare Pages and Email Routing host the site and forward its public contact address.
+
 Private product source, customer data, generated plans and credentials are not included in the public app source.

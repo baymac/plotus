@@ -1,14 +1,23 @@
-# First milestone
+# Explore Plotus
 
-Start with the provided design's sign-in, Projects, General settings, and New project screens. Use a clearly separate local preview to review the interface before accounts exist.
+The demo shows how Plotus helps organise the beginning of a home-design project. It is available on iPhone and web.
 
-1. Commit the independent scaffold with the Gradle wrapper and build instructions.
-2. Implement the first shared Kotlin/Compose screens for web and iOS against Figma, with semantic light/dark tokens and accessible controls.
-3. Connect the separate public auth service to shared clients: Google/OIDC, native PKCE, browser sessions, sign-out and passkeys. Configure Google and the production passkey RP domain before live verification.
-4. Add authenticated project storage and migrations. Keep ownership enforcement on the server.
-5. Implement Plot setup → Floor plan → Generation as a vertical slice, including the event's Meta AI integration and any explicitly disclosed private service boundary.
-6. Test the native app on the connected iPhone and desktop web in a browser; document device and build results.
+## Start with a project
 
-Avoid expanding into all finite prototype states before the first complete journey works. Native desktop packaging can follow once the web and iOS clients share the API.
+Choose **View demo** on the welcome screen to open the sample projects. Each project has a name and location; sample projects also show their plot area.
 
-The shared ChatGPT office-hours link was inaccessible during setup. The event page was read on 27 October 2026. The user-supplied standalone-repository requirement governs this repository; the accessible event details do not independently establish that clarification.
+Select **New project**, enter a name and location, and choose whether it is for a client. Client projects can include the client's name, email and phone number.
+
+## Keep your work organised
+
+- Search projects by name or location.
+- Sort by name or recent activity.
+- Open a project to edit its details.
+- Remove a project when it is no longer needed.
+- On desktop, choose light, dark or system appearance from the account menu.
+
+## What to expect
+
+This is a local demo. Project changes last for the current session and are not shared across devices. Google and passkey sign-in are not connected yet.
+
+Plot setup, room requirements and floor-plan concepts are planned parts of the product. They are not available in this demo.

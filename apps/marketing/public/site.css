@@ -2091,3 +2091,24 @@ svg {
     line-height: 1.6;
   }
 }
+
+.footer-wordmark {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+.footer-wordmark > img {
+  width: clamp(80px, 14vw, 200px);
+  height: auto;
+  opacity: 0.23;
+  flex-shrink: 0;
+}
+@media (max-width: 760px) {
+  .footer-wordmark {
+    gap: 14px;
+    font-size: 24vw;
+  }
+  .footer-wordmark > img {
+    width: 16vw;
+  }
+}

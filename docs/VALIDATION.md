@@ -5,6 +5,7 @@
 - TypeScript checks, production web build, and API tests.
 - Chromium browser checks: sign-in does not create a session, explicit preview entry, search/empty state, sorting, sidebar preference persistence, project create/edit/delete, conditional client fields, theme switching, General settings, Escape dismissal, and no horizontal document overflow at 320, 390, 768, 1024 and 1440 pixels.
 - Browser requests for bundled UI assets succeeded; no page runtime errors in those flows.
+- Keyboard check: Tab and Shift-Tab stay inside the project dialog; the skip link focuses main content while retaining the preview route.
 - Visual review against the supplied Figma references for desktop Projects, mobile Projects, desktop sign-in, mobile project form and dark Projects. Colors, fonts, icon assets and main dimensions follow the referenced frames.
 - iOS plist parses; referenced fonts and adaptive image resources exist and are nonempty. Mac helper passes Bash syntax validation.
 - Public GitHub repository starts with new history; no existing product code, private data or credentials were imported.

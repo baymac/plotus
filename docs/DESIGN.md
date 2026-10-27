@@ -12,7 +12,7 @@ Source: [Plotus / App design clean](https://www.figma.com/design/0AIbJahPpgu09bT
 
 Web uses semantic CSS tokens, Plus Jakarta Sans, and Hanken Grotesk for General settings. The desktop shell has a 264px sidebar, 72px top bar and 32px content inset. Collapsing the sidebar takes 180ms and retains the preference across pages. Reduced-motion preferences disable the transition. Mobile uses a 76px header and two-tab bottom navigation, with safe-area padding.
 
-New/Edit project is a native HTML dialog: focus is contained by the browser, Escape dismisses it, fields retain their values while open, and Save/Create validates required fields. The desktop drawer is 440px; mobile uses a bottom sheet. Destructive deletion requires confirmation. Theme follows the OS unless overridden from the desktop account menu.
+New/Edit project is a native HTML dialog with an explicit Tab/Shift-Tab focus loop. Escape dismisses it, fields retain their values while open, and Save/Create validates required fields. The desktop drawer is 440px; mobile uses a bottom sheet. Destructive deletion requires confirmation. Theme follows the OS unless overridden from the desktop account menu.
 
 iOS adapts the source to native SwiftUI TabView, NavigationStack, List, Form, sheets and confirmation dialogs, retaining the product's color and typography tokens. The sign-in content scrolls when larger text or a shorter display needs more room. Native asset catalogs have independent light/dark values.
 

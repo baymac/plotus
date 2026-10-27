@@ -23,6 +23,10 @@ Choose **View demo** on the welcome screen. Project changes last for the current
 
 [Demo guide](docs/START-HERE.md) · [Design](docs/DESIGN.md)
 
+## Website
+
+The public marketing site and support/privacy/deletion pages live at [plotus.app](https://plotus.app). Its independent static source is in [apps/marketing](apps/marketing/README.md) and deploys to Cloudflare Pages.
+
 ## Credits
 
 The app and supporting public services were created during the hackathon. The supplied visual design and private planning engine predate the event; the engine is not connected to the demo. [Sources and credits](docs/PROVENANCE.md).

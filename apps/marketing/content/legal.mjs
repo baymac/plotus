@@ -32,9 +32,9 @@ export const legalPages = [
       {
         title: "Information used by the current app",
         bullets: [
-          "Account information. When you choose Google sign-in, Plotus receives your Google account identifier, email address, name and profile-picture URL. These identify your Plotus account and display your account details. Plotus does not receive your Google password.",
+          "Account information. When you choose Google or Facebook sign-in, Plotus receives the provider account identifier, name, and any email address and profile-picture URL the provider supplies. These identify your Plotus account and display your account details. Plotus does not receive your Google or Facebook password.",
           "Login and security information. Plotus keeps account and session identifiers, session expiry and revocation records, and credentials needed to keep you signed in and protect the service. If you add a passkey, Plotus stores its public credential information and related security metadata. Your fingerprint, face data and device unlock code are not sent to Plotus.",
-          "Demo project information. The demo lets you enter project names, locations and optional client names, email addresses and phone numbers. These edits stay in the running demo session; they are not uploaded to the project backend or synced between devices. Use sample information when exploring the demo.",
+          "Project information. When signed in, you can save project names, locations and optional client names, email addresses and phone numbers. Plotus stores these details on its backend under your account so you can access them on iPhone and web. Only provide client information you are authorised to use. The separate iPhone design preview uses temporary local sample projects.",
           "Support messages. If you email us, we receive your email address, message and any attachments you choose to send. Please avoid sending passwords, login codes, identity documents or confidential client material.",
         ],
       },
@@ -54,9 +54,9 @@ export const legalPages = [
       {
         title: "How information is used and shared",
         paragraphs: [
-          "We use account and session information to provide sign-in, show your account, manage passkeys, prevent abuse and troubleshoot service problems. We use support messages to respond to your request. We do not sell your personal information or use it for targeted advertising.",
-          "Information is processed by the services needed to provide these functions, including our hosting infrastructure and Google when you choose Google sign-in. Google also processes information under its own privacy policy. Information may be disclosed when legally required or when necessary to protect people and the service.",
-          "The planning engine is not connected to the current demo. Demo project and client information is not sent to an AI or planning service. Facebook Login is still in development and is not a sign-in option in the current release. We will update this policy before enabling additional collection or uses of information.",
+          "We use account and session information to provide sign-in, show your account, manage passkeys, prevent abuse and troubleshoot service problems. We use your saved project and client information to provide your workspace across devices. We use support messages to respond to your request. We do not sell your personal information or use it for targeted advertising.",
+          "Information is processed by the services needed to provide these functions, including our hosting infrastructure, Google when you choose Google sign-in, and Meta when you choose Facebook sign-in. These providers also process information under their own privacy policies. Information may be disclosed when legally required or when necessary to protect people and the service.",
+          "The planning engine is not connected to the current app. Project and client information is not sent to an AI or planning service. We will update this policy before enabling additional collection or uses of information.",
         ],
         links: [
           {
@@ -68,8 +68,8 @@ export const legalPages = [
       {
         title: "Retention and your choices",
         paragraphs: [
-          "Demo project edits last only for the running demo session. Account and passkey records remain until they are removed; signing out does not delete your account. Login sessions expire after seven days, but expiry does not itself delete the stored account or session records. Support correspondence is kept as needed to handle your request and follow-up.",
-          "You can remove a saved passkey in Account settings, sign out, clear local browser data, or revoke Plotus access in your Google account. Removing provider access and deleting your Plotus account are separate actions.",
+          "Saved projects remain in your account until you delete them or request account deletion. iPhone preview edits last only for the running preview session. Account and passkey records remain until they are removed; signing out does not delete your account. Login sessions expire after seven days, but expiry does not itself delete the stored account or session records. Support correspondence is kept as needed to handle your request and follow-up.",
+          "You can remove a saved passkey in Account settings, sign out, clear local browser data, or revoke Plotus access in your Google or Facebook account. Removing provider access and deleting your Plotus account are separate actions.",
           "You can request access, correction or deletion by emailing hello@plotus.app. Account and data deletion are currently handled manually. We may verify that the request is yours before making changes. We will explain the scope and expected completion time in our reply, confirm completion, and explain any information that must be retained and why. Requests are available to all users, wherever they are located.",
         ],
         links: [
@@ -108,8 +108,8 @@ export const legalPages = [
       {
         title: "The current service",
         paragraphs: [
-          "Plotus is being built to help architects and residential designers organise a home-design brief and explore early planning ideas. The current demo lets you explore sample projects, edit project and client details, search and sort projects, and change appearance. Google sign-in and web passkeys provide access to a real Plotus account.",
-          "Demo project changes last for the current session. Saved projects, plot setup, room requirements and floor-plan generation are still in development. Descriptions of that direction are not a promise that a feature is available today or will ship on a particular date.",
+          "Plotus is being built to help architects and residential designers organise a home-design brief and explore early planning ideas. The current app lets signed-in users save project and client details, search and sort projects, and change appearance. Google and Facebook sign-in, together with web passkeys, provide access to your Plotus account.",
+          "Signed-in project changes are saved to your account and available across devices. Plot setup, room requirements and floor-plan generation are still in development. Descriptions of that direction are not a promise that a feature is available today or will ship on a particular date.",
         ],
       },
       {
@@ -176,16 +176,16 @@ export const legalPages = [
       {
         title: "What the demo can do today",
         paragraphs: [
-          "Choose View demo to explore sample projects without signing in. You can create and edit project details, search, sort and change the theme. Demo project changes are temporary and do not sync across devices.",
-          "Google sign-in opens a real Plotus account. Web accounts can add and remove passkeys in Account settings. Saved projects, plot setup, room requirements and generated floor plans are still in development. Facebook Login is not available in the current release.",
+          "Choose Start project on the website and sign in to open your saved workspace. You can create and edit project details, search, sort and change the theme. A separate iPhone design preview contains temporary local sample projects.",
+          "Google or Facebook sign-in opens your Plotus account. Web accounts can add and remove passkeys in Settings → Account. Plot setup, room requirements and generated floor plans are still in development.",
         ],
       },
       {
         title: "Having trouble signing in?",
         bullets: [
-          "Check your connection, close the sign-in prompt and start again. A cancelled or expired Google attempt can be restarted safely.",
-          "Use the same Google account you used to create your Plotus account.",
-          "To use a web passkey, sign in with Google first and add one in Account settings on a compatible browser and device.",
+          "Check your connection, close the sign-in prompt and start again. A cancelled or expired sign-in attempt can be restarted safely.",
+          "Use the same Google or Facebook account you used to create your Plotus account.",
+          "To use a web passkey, sign in with Google or Facebook first and add one in Account settings on a compatible browser and device.",
           "If the problem continues, email the error message and your device or browser details. Do not include login codes or credentials.",
         ],
       },
@@ -229,7 +229,7 @@ export const legalPages = [
       {
         title: "What your request can cover",
         paragraphs: [
-          "A full account-deletion request covers the Plotus profile and provider identifier, stored sessions and passkey credentials associated with that account. You can also ask about information you sent to support. Demo project edits stay in the running session and are not saved to the project backend.",
+          "A full account-deletion request covers the Plotus profile and provider identifier, saved projects and client details, stored sessions and passkey credentials associated with that account. You can also ask about information you sent to support. Temporary iPhone preview edits stay in the running session.",
           "Deleting data from Plotus does not delete your account with Google, Facebook or another provider. Signing out, uninstalling the app, or removing a provider connection does not by itself delete a stored Plotus account.",
         ],
         links: [
@@ -243,7 +243,7 @@ export const legalPages = [
         title: "Remove a provider connection",
         paragraphs: [
           "For Google, open the connections section of your Google account, select Plotus and remove its access. For Facebook, open Settings, find Apps and websites, select Plotus if it appears and remove it. You can do this separately from a deletion request to Plotus.",
-          "Facebook Login is in development and is not offered by the current public demo. These instructions also cover any Plotus Facebook test authorization you may have granted.",
+          "These instructions cover Facebook sign-in and any Plotus Facebook test authorisation you may have granted.",
         ],
         links: [
           {

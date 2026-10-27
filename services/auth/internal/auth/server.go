@@ -266,7 +266,7 @@ func (s *Server) oauthFailure(w http.ResponseWriter, r *http.Request, p oauthPen
 		http.Redirect(w, r, u.String(), 302)
 		return
 	}
-	http.Redirect(w, r, s.Config.WebOrigin+"/?auth_error=oauth_failed", 302)
+	http.Redirect(w, r, s.Config.WebOrigin+"/login?auth_error=oauth_failed", 302)
 }
 func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 	raw, err := s.Cache.GetDel(r.Context(), "plotus:oauth:"+digest(r.URL.Query().Get("state"))).Bytes()

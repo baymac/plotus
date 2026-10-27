@@ -1,18 +1,11 @@
 name: plotus-cloud
 services:
-  web:
+  gateway:
     build:
       context: ..
-      dockerfile: docker-cloud/web.Dockerfile
+      dockerfile: docker-cloud/gateway.Dockerfile
     ports:
-    - 80:80
-    - 443:443
-    - 443:443/udp
-    environment:
-      PLOTUS_DOMAIN: ${PLOTUS_DOMAIN:?Set the production domain}
-    volumes:
-    - caddy-data:/data
-    - caddy-config:/config
+    - ${PLOTUS_GATEWAY_BIND:-127.0.0.1:4003}:80
     depends_on:
       auth:
         condition: service_healthy
@@ -158,5 +151,3 @@ services:
 volumes:
   projects-db: {}
   auth-db: {}
-  caddy-data: {}
-  caddy-config: {}

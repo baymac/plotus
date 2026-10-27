@@ -1,6 +1,6 @@
 # Your Plotus workspace
 
-Sign in with Google or Facebook on iPhone or web. Your workspace starts empty and shows the projects saved to your account.
+Choose **Start project** at [plotus.app](https://plotus.app), then sign in with Google or Facebook. The web workspace lives at `/projects` and requires sign-in. Your workspace starts empty and shows the projects saved to your account.
 
 ## Start with a project
 
@@ -21,6 +21,6 @@ If a save fails, your entered details stay in the form so you can try again. Whe
 
 ## Explore the demo
 
-Choose **View demo** on the welcome screen to explore local sample projects without an account. Demo changes last for that session and stay separate from your saved workspace.
+Choose **View demo** on the iPhone welcome screen to explore local sample projects without an account. Demo changes last for that session and stay separate from your saved workspace.
 
 Plot setup, room requirements and floor-plan concepts are planned parts of the product. They are not available yet.

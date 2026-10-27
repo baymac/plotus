@@ -1,16 +1,33 @@
 # Cloud deployment
 
+Cloudflare Pages serves the landing page, public information pages and Kotlin/Compose web app in one deployment. The app uses `/projects`, `/settings`, `/settings/general` and `/settings/account`. Protected pages verify the backend session; signed-out visitors are redirected to `/login`.
+
+## Backend
+
 ```sh
 cd docker-cloud
 cp .env.example .env
-# Fill in your domain, Google credentials, both database passwords and signing-key path.
+# Set the production credentials, separate database passwords and signing-key path.
 docker compose up --build -d
 ```
 
-Point the domain at the host and make ports 80/443 available. Caddy serves the optimized web app, obtains HTTPS certificates and routes auth/API requests internally. The separate project and auth databases, Redis, API and auth service have no published host ports.
+The gateway listens only on `127.0.0.1:4003`. Expose it through an HTTPS Cloudflare Tunnel and set `PLOTUS_BACKEND_ORIGIN` in `wrangler.jsonc` to that origin. The current deployment uses the existing named tunnel's `/__plotus_app` route; the gateway removes that transport prefix. Project/auth databases and Redis have private Docker networking and production-only volumes. The signing key stays on the server, readable by the configured auth UID/GID.
 
-Register `https://YOUR_DOMAIN/api/auth/login/google/callback` with the production Google web client. The same domain is used for web passkeys. iPhone passkeys additionally need the app's associated-domain configuration.
+Register these provider callbacks:
 
-To enable Facebook, add its app ID/secret and register `https://YOUR_DOMAIN/api/auth/login/facebook/callback` in Meta.
+- Google: `https://plotus.app/api/auth/login/google/callback`
+- Facebook: `https://plotus.app/api/auth/login/facebook/callback`
 
-The signing key stays on the server and must be readable by the configured auth UID/GID. This environment has its own database and certificate volumes. The private engine is an optional profile, excluded from default deployment.
+Google's authorised web origin is `https://plotus.app`. Web passkeys use `plotus.app` as their relying party. iPhone passkeys also require associated-domain configuration.
+
+## Website and app
+
+With Node 22+, JDK 17 and authenticated Wrangler available:
+
+```sh
+./docker-cloud/deploy-web.sh
+```
+
+This builds the landing site and optimised Kotlin app together, then deploys the combined output to the existing `plotus-landing` Pages project. The app's assets live under `/_app/`; the root stays the landing page. Deploy this combined build when updating the website, so the app routes remain available. No repository automation is required.
+
+The optional private engine remains excluded from the default deployment.

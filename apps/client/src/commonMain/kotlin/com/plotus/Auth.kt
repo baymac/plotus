@@ -95,9 +95,9 @@ class AuthSession(private val scope: CoroutineScope) {
         finally { initializing = false; authCallbackError()?.let { error = it } }
     }
 
-    fun google() = perform("google") {
+    fun google(redirect: String = "/login") = perform("google") {
         if (authIsBrowser()) {
-            val result = request("POST", "/api/auth/login/google", jsonObject("redirect" to "/"))
+            val result = request("POST", "/api/auth/login/google", jsonObject("redirect" to redirect))
             authNavigateGoogle(result.jsonObject["authUrl"]!!.jsonPrimitive.content)
         } else {
             val proof = authCreateProof()
@@ -117,13 +117,13 @@ class AuthSession(private val scope: CoroutineScope) {
         adopt(tokens(request("POST", "$prefix/passkey/login/finish", assertion)))
     }
 
-    fun facebook() = perform("facebook") {
+    fun facebook(webRedirect: String = "/login") = perform("facebook") {
         val proof = authCreateProof()
         val state = authCreateProof().verifier
         val redirect = "plotus://oauth/callback"
         val browser = authIsBrowser()
         val result = request("POST", if (browser) "/api/auth/login/facebook" else "/api/auth/native/facebook",
-            if (browser) jsonObject("redirect" to "/", "state" to state, "code_challenge" to proof.challenge, "code_challenge_method" to "S256")
+            if (browser) jsonObject("redirect" to webRedirect, "state" to state, "code_challenge" to proof.challenge, "code_challenge_method" to "S256")
             else jsonObject("redirect_uri" to redirect, "state" to state, "code_challenge" to proof.challenge, "code_challenge_method" to "S256"))
         val target = result.jsonObject["authUrl"]!!.jsonPrimitive.content
         if (browser) {

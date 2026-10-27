@@ -1,0 +1,9 @@
+{
+  "name": "plotus-landing",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-10-27",
+  "vars": {
+    "PUBLIC_ORIGIN": "https://plotus.app",
+    "PLOTUS_BACKEND_ORIGIN": "https://playground.plotus.app/__plotus_app"
+  }
+}

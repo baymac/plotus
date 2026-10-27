@@ -1,18 +1,21 @@
-{$PLOTUS_DOMAIN} {
-    encode zstd gzip
-    handle /api/auth/* {
-        reverse_proxy auth:4001
-    }
-    handle /.well-known/jwks.json {
-        reverse_proxy auth:4001
-    }
-    handle /v1/* {
-        reverse_proxy api:4000
-    }
-    handle {
-        root * /srv
-        try_files {path} /index.html
-        file_server
+:80 {
+    route {
+        uri strip_prefix /__plotus_app
+        handle /health {
+            respond "ok\n" 200
+        }
+        handle /api/auth/* {
+            reverse_proxy auth:4001
+        }
+        handle /.well-known/jwks.json {
+            reverse_proxy auth:4001
+        }
+        handle /v1/* {
+            reverse_proxy api:4000
+        }
+        handle {
+            respond "Not found" 404
+        }
     }
     header X-Content-Type-Options nosniff
     header Referrer-Policy strict-origin-when-cross-origin

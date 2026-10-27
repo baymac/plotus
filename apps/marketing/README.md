@@ -8,11 +8,15 @@ npm run build
 npm run dev
 ```
 
-Build output: `apps/marketing/dist`. Cloudflare Pages project: `plotus-landing`; public domain: `plotus.app`. No server, tracking pixel, analytics script, or website form storage is included. `hello@plotus.app` uses Cloudflare Email Routing to the verified project contact. Deployment uses the authenticated Cloudflare account, never repository credentials.
+Build output: `apps/marketing/dist`. Cloudflare Pages project: `plotus-landing`; public domain: `plotus.app`. Marketing pages add no tracking pixel, analytics script, or website form storage. The signed-in Kotlin app is served alongside them at `/projects`. `hello@plotus.app` uses Cloudflare Email Routing to the verified project contact. Deployment uses the authenticated Cloudflare account, never repository credentials.
+
+Deploy the combined website and app from the repository root:
 
 ```sh
-npx wrangler pages deploy dist --project-name plotus-landing --branch main
+./docker-cloud/deploy-web.sh
 ```
+
+See [cloud deployment](../../docker-cloud/README.md) for backend and provider configuration.
 
 ## Public review URLs
 
@@ -26,7 +30,7 @@ npx wrangler pages deploy dist --project-name plotus-landing --branch main
 | Account deletion instructions                     | https://plotus.app/account-deletion/ |
 | Contact                                           | https://plotus.app/contact/          |
 
-These public pages do not complete app approval. Current account deletion is a manual email request. Apple still requires an accessible in-app deletion action, an in-app privacy link, and a qualifying privacy-preserving login option under guideline 4.8 unless an exemption applies. Facebook Login implementation, testing and reviewer access are separate work. Do not configure the instructions page as an automated Meta deletion callback.
+These public pages do not complete app approval. Current account deletion is a manual email request. Apple still requires an accessible in-app deletion action, an in-app privacy link, and a qualifying privacy-preserving login option under guideline 4.8 unless an exemption applies. Provider app review and reviewer access remain separate from deploying the website. Do not configure the instructions page as an automated Meta deletion callback.
 
 Current demo limits and data handling are reflected in the public copy. Update `content/legal.mjs` before changing collection, storage, providers or tracking. Concept imagery is clearly labelled and does not claim to be app output.
 

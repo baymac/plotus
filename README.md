@@ -10,7 +10,7 @@ Sign in with Google or Facebook to create projects, add client details and keep 
 
 Account settings also let you add a passkey for web sign-in. Appearance options live in **Settings → General**.
 
-Choose **View demo** to explore sample projects without signing in. Demo changes last for the current session.
+Choose **Start project** at [plotus.app](https://plotus.app) to open your workspace. Sign-in is required on the web. The iPhone's separate **View demo** option contains temporary sample projects.
 
 ## What comes next
 
@@ -20,7 +20,7 @@ Plotus is being built to turn plot details and a client's brief into floor-plan 
 
 ## Website
 
-The public marketing site and support/privacy/deletion pages live at [plotus.app](https://plotus.app). Its independent static source is in [apps/marketing](apps/marketing/README.md) and deploys to Cloudflare Pages.
+The public website and support/privacy/deletion pages live at [plotus.app](https://plotus.app). Your workspace opens at [plotus.app/projects](https://plotus.app/projects), with its own General and Account settings pages.
 
 ## Credits
 

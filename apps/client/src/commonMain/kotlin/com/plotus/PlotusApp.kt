@@ -16,20 +16,26 @@ import androidx.compose.ui.unit.sp
 import com.plotus.shared.*
 import kotlinx.coroutines.delay
 
-enum class Destination { PROJECTS, SETTINGS, GENERAL, ACCOUNT }
-
 @Composable
 fun PlotusApp() {
     val scope = rememberCoroutineScope()
+    val navigation = remember { AppNavigation(readAppLocation()) }
+    DisposableEffect(navigation) {
+        val unsubscribe = observeAppLocation { navigation.receive(readAppLocation()) }
+        onDispose { unsubscribe() }
+    }
     val auth = remember { AuthSession(scope) }
     LaunchedEffect(auth) { auth.restore() }
+    LaunchedEffect(auth.user?.id, auth.initializing, navigation.destination) {
+        navigation.reconcileSession(auth.user != null, auth.initializing)
+    }
     LaunchedEffect(auth.user?.id) {
         if (auth.user != null) while (true) { delay(12 * 60 * 1000L); auth.refreshIfSignedIn() }
     }
     var appearance by remember { mutableStateOf(Appearance.entries.firstOrNull { it.name == readPreference("appearance") } ?: Appearance.SYSTEM) }
     var collapsed by remember { mutableStateOf(readPreference("sidebar") == "collapsed") }
     var preview by remember { mutableStateOf(false) }
-    var destination by remember { mutableStateOf(Destination.PROJECTS) }
+    val destination = navigation.destination
     var projects by remember { mutableStateOf(sampleProjects()) }
     var editing by remember { mutableStateOf<Project?>(null) }
     var showForm by remember { mutableStateOf(false) }
@@ -38,7 +44,7 @@ fun PlotusApp() {
     var nextId by remember { mutableStateOf(1) }
     val account = auth.user
     val workspace = remember(account?.id) { account?.let { ProjectWorkspace(auth, scope, it.id) } }
-    LaunchedEffect(account?.id) { showForm = false; editing = null; deleting = null }
+    LaunchedEffect(account?.id, destination) { showForm = false; editing = null; deleting = null }
     LaunchedEffect(workspace, preview, destination) {
         if (workspace != null && !preview && destination == Destination.PROJECTS) {
             while (true) { workspace.refresh(); delay(30_000L) }
@@ -51,20 +57,23 @@ fun PlotusApp() {
             BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
                 val compact = maxWidth < 1000.dp
                 val exit = { if (preview) preview = false else auth.signOut() }
-                if (!preview && account == null) Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
+                if (navigation.browser && (auth.initializing || (account != null && destination == Destination.LOGIN))) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                }
+                else if (!preview && account == null) Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
                     SignInScreen(compact,
-                        onGoogle = { destination = Destination.PROJECTS; auth.google() },
-                        onFacebook = { destination = Destination.PROJECTS; auth.facebook() },
-                        onPasskey = { destination = Destination.PROJECTS; auth.passkey() },
-                        onPreview = { destination = Destination.PROJECTS; preview = true },
+                        onGoogle = { if (!navigation.browser) navigation.navigate(Destination.PROJECTS); auth.google(navigation.loginCallbackPath) },
+                        onFacebook = { if (!navigation.browser) navigation.navigate(Destination.PROJECTS); auth.facebook(navigation.loginCallbackPath) },
+                        onPasskey = { if (!navigation.browser) navigation.navigate(Destination.PROJECTS); auth.passkey() },
+                        onPreview = if (navigation.browser) null else { { navigation.navigate(Destination.PROJECTS); preview = true } },
                         busy = auth.busy || auth.initializing, action = auth.action)
                 }
                 else Row(Modifier.fillMaxSize()) {
                     if (!compact) Sidebar(destination, collapsed, onCollapse = {
                         collapsed = !collapsed; writePreference("sidebar", if (collapsed) "collapsed" else "open")
-                    }, onNavigate = { destination = it })
+                    }, onNavigate = { navigation.navigate(it) })
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        if (!compact || destination != Destination.SETTINGS) AppHeader(compact, destination) { destination = Destination.SETTINGS }
+                        if (!compact || destination != Destination.SETTINGS) AppHeader(compact, destination) { navigation.navigate(Destination.SETTINGS) }
                         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) 24.dp else 32.dp,
                             vertical = if (compact) 12.dp else 32.dp)) {
                             if (destination == Destination.PROJECTS) ProjectsScreen(if (preview) projects else workspace?.projects.orEmpty(), compact,
@@ -74,7 +83,7 @@ fun PlotusApp() {
                                 loading = !preview && workspace?.loading == true, busy = !preview && workspace?.busy == true,
                                 error = if (preview) null else workspace?.error,
                                 onRetry = if (preview) null else { { workspace?.reload() } })
-                            else if (destination == Destination.SETTINGS) SettingsHomeScreen { destination = it }
+                            else if (destination == Destination.SETTINGS) SettingsHomeScreen { navigation.navigate(it) }
                             else if (destination == Destination.GENERAL) GeneralSettingsScreen(compact, appearance) {
                                 appearance = it; writePreference("appearance", it.name)
                             }
@@ -83,10 +92,10 @@ fun PlotusApp() {
                                 showTitle = !compact)
                             else PreviewAccountScreen(compact, onSignIn = exit)
                         }
-                        if (compact) MobileNavigation(destination) { destination = it }
+                        if (compact) MobileNavigation(destination) { navigation.navigate(it) }
                     }
                 }
-                if (showForm && (preview || account != null)) ProjectFormDialog(editing, compact, onDismiss = { showForm = false },
+                if (destination == Destination.PROJECTS && showForm && (preview || account != null)) ProjectFormDialog(editing, compact, onDismiss = { showForm = false },
                     busy = !preview && workspace?.busy == true, error = if (preview) null else workspace?.mutationError,
                     onSave = { draft ->
                         if (preview) {
@@ -94,7 +103,7 @@ fun PlotusApp() {
                             projects = saveProject(projects, project); showForm = false
                         } else workspace?.save(editing, draft) { showForm = false }
                     })
-                if (preview || account != null) deleting?.let { project ->
+                if (destination == Destination.PROJECTS && (preview || account != null)) deleting?.let { project ->
                     val busy = !preview && workspace?.busy == true
                     val dismiss = { if (!busy) deleting = null }
                     AlertDialog(onDismissRequest = dismiss, title = { Text("Delete project?") },
@@ -167,7 +176,7 @@ private fun AppHeader(compact: Boolean, destination: Destination, onSettingsBack
     Row(Modifier.fillMaxWidth().height(if (compact) 76.dp else 72.dp).padding(horizontal = if (compact) 24.dp else 32.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (compact) Wordmark(Modifier.weight(1f))
-        else Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.SETTINGS -> "Settings"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account" },
+        else Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.SETTINGS -> "Settings"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account"; Destination.LOGIN -> "Sign in" },
             Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
     if (!compact) HorizontalDivider(color = colors.line)

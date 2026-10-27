@@ -23,7 +23,7 @@ const mail = (subject = "Hello Plotus") =>
   `mailto:${contactEmail}?subject=${encodeURIComponent(subject)}`;
 
 function header() {
-  return `<header class="site-header"><nav class="nav-shell" aria-label="Main navigation">${brand()}<button class="menu-toggle" type="button" aria-label="Toggle navigation" aria-controls="primary-links" aria-expanded="false"><span></span><span></span></button><div class="nav-links" id="primary-links"><a href="/#idea">The idea</a><a href="/#for-you">Who it’s for</a><a href="/#questions">Questions</a><a class="button button-small button-dark" href="${mail()}">Say hello ${diagonal}</a></div></nav></header>`;
+  return `<header class="site-header"><nav class="nav-shell" aria-label="Main navigation">${brand()}<button class="menu-toggle" type="button" aria-label="Toggle navigation" aria-controls="primary-links" aria-expanded="false"><span></span><span></span></button><div class="nav-links" id="primary-links"><a href="/#idea">The idea</a><a href="/#for-you">Who it’s for</a><a href="/#questions">Questions</a><a class="button button-small button-dark" href="/projects">Start project ${diagonal}</a></div></nav></header>`;
 }
 function footer() {
   return `<footer class="site-footer"><div class="container"><div class="footer-top"><div>${brand()}<p>Considered beginnings.<br>Extraordinary possibilities.</p></div><div class="footer-links"><div><span class="eyebrow">EXPLORE</span><a href="/#idea">The idea</a><a href="/#for-you">Who it’s for</a><a href="/#questions">Questions</a><a href="https://github.com/baymac/plotus" target="_blank" rel="noopener noreferrer">Demo source ${diagonal}</a></div><div><span class="eyebrow">HERE TO HELP</span><a href="/support/">Support</a><a href="/privacy/">Privacy policy</a><a href="/terms/">Terms of use</a><a href="/data-deletion/">Data deletion</a><a href="/account-deletion/">Delete your account</a></div><div><span class="eyebrow">LET’S TALK</span><a href="${mail()}">${escape(contactEmail)} ${diagonal}</a><span class="footer-note">Ideas, questions, or a home<br>you can’t stop thinking about.</span></div></div></div><div class="footer-wordmark" aria-hidden="true"><img src="/assets/plotus-mark.svg" alt="" width="80" height="80">Plotus</div><div class="footer-bottom"><span>© ${new Date().getUTCFullYear()} Plotus</span><span>Made for the way you want to live.</span><a href="/accessibility/">Accessibility</a></div></div></footer>`;
@@ -50,11 +50,11 @@ const FAQs = [
   ],
   [
     "What can I try today?",
-    "The current iPhone and web demo lets you explore sample projects, organise project and client details, and try the visual experience. Google sign-in is available, and web accounts can add a passkey. Demo project changes last for the current session. You can find the source and setup instructions in our public repository.",
+    "Sign in with Google or Facebook to create projects, organise client details, and pick up your saved work on iPhone or web. You can search, sort and edit your projects, and add a passkey in web Account settings.",
   ],
   [
     "Does Plotus generate floor plans yet?",
-    "Not in the current public demo. Plot setup, room requirements, saved projects, and floor-plan concepts are in development. The home and plan illustrations on this website express our direction; they are not generated app results.",
+    "Not in the current public demo. Plot setup, room requirements, and floor-plan concepts are in development. The home and plan illustrations on this website express our direction; they are not generated app results.",
   ],
   [
     "Is this for homeowners or design professionals?",
@@ -75,7 +75,7 @@ const home = `
   <div class="container hero-copy">
     <p class="eyebrow hero-eyebrow"><span class="little-mark" aria-hidden="true">✳</span> A NEW PERSPECTIVE ON HOME PLANNING</p>
     <h1 id="hero-title">Make room for<br><span>something better.</span></h1>
-    <div class="hero-bottom"><p>An emerging home-planning workspace for homeowners and designers.<br class="desktop-break"> A place for your plot, your people, and your possibilities.</p><div class="hero-action-wrap"><a class="button button-dark hero-cta" href="#idea">Meet Plotus <span class="arrow-down">${arrow}</span></a><span class="hero-status"><span></span> An early demo. A bigger idea.</span></div></div>
+    <div class="hero-bottom"><p>An emerging home-planning workspace for homeowners and designers.<br class="desktop-break"> A place for your plot, your people, and your possibilities.</p><div class="hero-action-wrap"><a class="button button-dark hero-cta" href="/projects">Start project <span>${arrow}</span></a><span class="hero-status"><span></span> An early demo. A bigger idea.</span></div></div>
   </div>
   <figure class="hero-figure wide" data-reveal>
     <div class="hero-visual">
@@ -104,7 +104,7 @@ const home = `
 
 <section id="questions" class="questions-section section-space"><div class="container questions-grid"><div class="questions-heading" data-reveal><p class="eyebrow"><span class="section-dot"></span> A FEW THINGS TO KNOW</p><h2>Good questions.<br>Clear answers.</h2><p>Something else on your mind?<br><a href="${mail()}">We’re a hello away. ${diagonal}</a></p></div><div class="faq-list" data-reveal>${FAQs.map(([question, answer], i) => `<details${i === 0 ? " open" : ""}><summary>${question}<span aria-hidden="true"></span></summary><div class="faq-answer"><p>${escape(answer)}${i === 1 ? ' <a href="https://github.com/baymac/plotus" target="_blank" rel="noopener noreferrer">Source and setup instructions ↗</a>' : ""}</p></div></details>`).join("")}</div></div></section>
 
-<section class="closing-section"><div class="container closing-inner" data-reveal><div><p class="eyebrow">YOUR NEXT CHAPTER STARTS SOMEWHERE.</p><h2>Let’s make<br>room for it.</h2></div><div class="closing-action"><p>Have a plot, a practice,<br>or a possibility in mind?</p><a class="button button-paper" href="${mail("Let’s make room for it")}">Say hello to Plotus ${diagonal}</a><span>${escape(contactEmail)}</span></div></div><span class="closing-orbit" aria-hidden="true"></span></section>`;
+<section class="closing-section"><div class="container closing-inner" data-reveal><div><p class="eyebrow">YOUR NEXT CHAPTER STARTS SOMEWHERE.</p><h2>Let’s make<br>room for it.</h2></div><div class="closing-action"><p>Have a plot, a practice,<br>or a possibility in mind?</p><a class="button button-paper" href="/projects">Start project ${diagonal}</a><span>${escape(contactEmail)}</span></div></div><span class="closing-orbit" aria-hidden="true"></span></section>`;
 
 function legalBody(page) {
   const related = page.related || legalLinks;
@@ -197,7 +197,7 @@ await writeFile(
 );
 await writeFile(
   resolve(out, "robots.txt"),
-  `User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`,
+  `User-agent: *\nAllow: /\nDisallow: /projects\nDisallow: /settings\nDisallow: /login\nDisallow: /_app/\nSitemap: ${origin}/sitemap.xml\n`,
 );
 await writeFile(
   resolve(out, "_redirects"),

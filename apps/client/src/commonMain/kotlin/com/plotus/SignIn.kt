@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun SignInScreen(compact: Boolean, onGoogle: () -> Unit, onFacebook: () -> Unit, onPasskey: () -> Unit, onPreview: () -> Unit,
+fun SignInScreen(compact: Boolean, onGoogle: () -> Unit, onFacebook: () -> Unit, onPasskey: () -> Unit, onPreview: (() -> Unit)?,
     busy: Boolean = false, action: String = "") {
     val colors = LocalPlotusColors.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -54,7 +54,7 @@ fun SignInScreen(compact: Boolean, onGoogle: () -> Unit, onFacebook: () -> Unit,
                 Spacer(Modifier.height(12.dp))
                 PasskeyAction(onPasskey, Modifier.widthIn(max = 400.dp).fillMaxWidth(), !busy, action == "passkey")
                 Spacer(Modifier.height(10.dp))
-                DemoAction(onPreview)
+                if (onPreview != null) DemoAction(onPreview)
                 Spacer(Modifier.height(16.dp))
             }
         } else {
@@ -83,7 +83,7 @@ fun SignInScreen(compact: Boolean, onGoogle: () -> Unit, onFacebook: () -> Unit,
                         PasskeyAction(onPasskey, Modifier.fillMaxWidth(), !busy, action == "passkey")
                     }
                     Spacer(Modifier.weight(1f))
-                    DemoAction(onPreview)
+                    if (onPreview != null) DemoAction(onPreview)
                 }
             }
         }

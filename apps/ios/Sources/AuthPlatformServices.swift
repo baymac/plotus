@@ -141,6 +141,19 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationContr
     }
     func signOutProvider() { GIDSignIn.sharedInstance.signOut() }
 
+    func forgetPasskey(rpID: String, credentialID: String, completion: @escaping (String?, String?) -> Void) {
+        guard let origin = setting("PlotusAuthURL"), URL(string: origin)?.host == rpID,
+              let id = Data(base64URL: credentialID) else {
+            complete(completion, "{}", nil); return
+        }
+        if #available(iOS 26.0, *) {
+            Task { @MainActor in
+                try? await ASCredentialUpdater().reportUnknownPublicKeyCredential(relyingPartyIdentifier: rpID, credentialID: id)
+                self.complete(completion, "{}", nil)
+            }
+        } else { complete(completion, "{}", nil) }
+    }
+
     func passkey(operation: String, options: String, completion: @escaping (String?, String?) -> Void) {
         guard let data = options.data(using: .utf8), let envelope = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let key = envelope["publicKey"] as? [String: Any], let encoded = key["challenge"] as? String, let challenge = Data(base64URL: encoded) else {

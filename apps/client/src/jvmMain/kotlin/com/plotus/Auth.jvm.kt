@@ -27,6 +27,7 @@ internal actual suspend fun authFacebookBrowser(url: String): String = throw Aut
 internal actual fun authFacebookNavigate(url: String, pending: String) { error("Use the Plotus web app to sign in on desktop.") }
 internal actual fun authFacebookReturn(): String? = null
 internal actual suspend fun authPasskey(operation: String, options: String): String = throw AuthFailure(0,"Use the Plotus web app for passkeys on desktop.")
+internal actual suspend fun authForgetPasskey(rpID: String, credentialID: String) { }
 internal actual fun authNavigateGoogle(url: String) { java.awt.Desktop.getDesktop().browse(URI(url)) }
 internal actual fun authReadSession(): String? = null
 internal actual fun authWriteSession(value: String?) { }

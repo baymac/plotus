@@ -11,6 +11,7 @@ interface NativeAuthHost {
     fun googleIdentity(nonce: String, completion: (String?, String?) -> Unit)
     fun facebookBrowser(url: String, completion: (String?, String?) -> Unit)
     fun passkey(operation: String, options: String, completion: (String?, String?) -> Unit)
+    fun forgetPasskey(rpID: String, credentialID: String, completion: (String?, String?) -> Unit)
     fun readSession(): String?
     fun writeSession(value: String?): Boolean
     fun signOutProvider()
@@ -34,6 +35,7 @@ internal actual suspend fun authFacebookBrowser(url: String) = result { host().f
 internal actual fun authFacebookNavigate(url: String, pending: String) { error("Native Facebook sign-in uses the system browser") }
 internal actual fun authFacebookReturn(): String? = null
 internal actual suspend fun authPasskey(operation: String, options: String) = result { host().passkey(operation,options,it) }
+internal actual suspend fun authForgetPasskey(rpID: String, credentialID: String) { result { host().forgetPasskey(rpID,credentialID,it) } }
 internal actual fun authNavigateGoogle(url: String) { error("Native Google sign-in uses the OS adapter") }
 internal actual fun authReadSession() = host().readSession()
 internal actual fun authWriteSession(value: String?) { if (!host().writeSession(value)) throw AuthFailure(0, "Couldn’t save your session securely. Please try again.") }

@@ -45,11 +45,20 @@ private external fun browserRequest(method: String,path: String,body: String?,be
   }
   return JSON.stringify({id:credential.id,rawId:encode(credential.rawId),type:'public-key',response,
    authenticatorAttachment:credential.authenticatorAttachment,clientExtensionResults:credential.getClientExtensionResults()});
- }).catch(error=>fail(['NotAllowedError','AbortError'].includes(error.name) ? 'cancelled' :
+ }).catch(error=>fail(error.name==='AbortError' ? 'cancelled' :
+  error.name==='NotAllowedError' ? 'Passkey sign-in wasn’t completed. Try another saved passkey, or choose your iPhone from the passkey options.' :
   error.name==='InvalidStateError' ? 'This account already has a passkey on this device.' :
-  'Couldn’t use this passkey. Please try Google sign-in.'));
+  'Couldn’t use this passkey. Try another passkey, or sign in with Google or Facebook.'));
 }""")
 private external fun browserPasskey(operation: String,options: String): Promise<JsString>
+
+@JsFun("""async (rpId,credentialId) => {
+ if(typeof window.PublicKeyCredential?.signalUnknownCredential==='function') {
+  await window.PublicKeyCredential.signalUnknownCredential({rpId,credentialId});
+ }
+ return '{}';
+}""")
+private external fun forgetPasskey(rpID: String,credentialID: String): Promise<JsString>
 
 @JsFun("""url => {const target=new URL(url);if(target.protocol!=='https:' || target.hostname!=='accounts.google.com')throw new Error('Invalid Google sign-in address');location.assign(target.href);}""")
 private external fun navigate(url: String)
@@ -106,6 +115,7 @@ internal actual suspend fun authPasskey(operation: String,options: String): Stri
     return value
 }
 internal actual fun authNavigateGoogle(url: String) = navigate(url)
+internal actual suspend fun authForgetPasskey(rpID: String, credentialID: String) { forgetPasskey(rpID,credentialID).await<JsString>() }
 internal actual fun authReadSession(): String? = null
 internal actual fun authWriteSession(value: String?) { /* Browser refresh credentials remain HttpOnly cookies. */ }
 internal actual fun authProviderSignOut() { }

@@ -21,7 +21,7 @@ internal val authJson = Json { ignoreUnknownKeys = true }
 @Serializable internal data class StoredSession(val refresh: String, val csrf: String)
 @Serializable internal data class AuthWireResponse(val status: Int, val body: String)
 @Serializable internal data class AuthProof(val verifier: String, val challenge: String)
-internal class AuthFailure(val status: Int, override val message: String) : Exception(message)
+internal class AuthFailure(val status: Int, override val message: String, val code: String? = null) : Exception(message)
 internal class AuthCancelled : Exception()
 
 internal expect fun authIsBrowser(): Boolean
@@ -32,6 +32,7 @@ internal expect suspend fun authFacebookBrowser(url: String): String
 internal expect fun authFacebookNavigate(url: String, pending: String)
 internal expect fun authFacebookReturn(): String?
 internal expect suspend fun authPasskey(operation: String, options: String): String
+internal expect suspend fun authForgetPasskey(rpID: String, credentialID: String)
 internal expect fun authNavigateGoogle(url: String)
 internal expect fun authReadSession(): String?
 internal expect fun authWriteSession(value: String?)
@@ -50,6 +51,7 @@ class AuthSession(private val scope: CoroutineScope) {
     private var access = ""
     private var csrf = ""
     private var nativeSession: StoredSession? = null
+    private var passkeyRPID = ""
     private val lock = Mutex()
 
     fun dismissError() { error = null }
@@ -114,7 +116,15 @@ class AuthSession(private val scope: CoroutineScope) {
         val prefix = if (authIsBrowser()) "/api/auth" else "/api/auth/native"
         val options = request("POST", "$prefix/passkey/login/begin", "{}")
         val assertion = authPasskey("login", options.toString())
-        adopt(tokens(request("POST", "$prefix/passkey/login/finish", assertion)))
+        try { adopt(tokens(request("POST", "$prefix/passkey/login/finish", assertion))) }
+        catch (failure: AuthFailure) {
+            if (failure.code == "PASSKEY_UNKNOWN") {
+                val rpID = options.jsonObject["publicKey"]?.jsonObject?.get("rpId")?.jsonPrimitive?.contentOrNull
+                val credentialID = authJson.parseToJsonElement(assertion).jsonObject["id"]?.jsonPrimitive?.contentOrNull
+                if (rpID != null && credentialID != null) forgetPasskey(rpID, credentialID)
+            }
+            throw failure
+        }
     }
 
     fun facebook(webRedirect: String = "/login") = perform("facebook") {
@@ -148,7 +158,9 @@ class AuthSession(private val scope: CoroutineScope) {
     fun removePasskey(id: String) = perform("remove") {
         require(Regex("^[A-Za-z0-9_-]+$").matches(id))
         authenticated("DELETE", "/api/auth/passkey/credentials/$id")
+        forgetPasskey(passkeyRPID, id)
         loadPasskeys()
+        notice = "Passkey removed. If it still appears when signing in, remove its old entry in your device’s password manager."
     }
 
     fun signOut() = perform("logout") {
@@ -225,6 +237,15 @@ class AuthSession(private val scope: CoroutineScope) {
     private suspend fun loadPasskeys() {
         val result = authenticated("GET", "/api/auth/passkey/credentials")
         passkeys = authJson.decodeFromJsonElement(result.jsonObject["credentials"] ?: JsonArray(emptyList()))
+        passkeyRPID = result.jsonObject["rp_id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+    }
+    private suspend fun forgetPasskey(rpID: String, credentialID: String) {
+        if (rpID.isBlank() || !Regex("^[A-Za-z0-9_-]+$").matches(credentialID)) return
+        withTimeoutOrNull(2000) {
+            try { authForgetPasskey(rpID, credentialID) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { /* Credential managers can decline this optional update. */ }
+        }
     }
     private suspend fun authenticated(method: String, path: String, body: String? = null): JsonElement {
         var response = authTransport(method, path, body, access)
@@ -232,7 +253,7 @@ class AuthSession(private val scope: CoroutineScope) {
         return checked(response)
     }
     private fun clearLocal() {
-        authWriteSession(null); access = ""; csrf = ""; nativeSession = null; user = null; passkeys = emptyList()
+        authWriteSession(null); access = ""; csrf = ""; nativeSession = null; user = null; passkeys = emptyList(); passkeyRPID = ""
     }
     private suspend fun request(method: String, path: String, body: String? = null, bearer: String? = null, csrf: String? = null) =
         checked(authTransport(method, path, body, bearer, csrf))
@@ -245,7 +266,8 @@ internal fun checked(response: AuthWireResponse): JsonElement {
     val body = try { authJson.parseToJsonElement(response.body.ifBlank { "{}" }) } catch (_: Exception) { JsonObject(emptyMap()) }
     if (response.status !in 200..299) {
         val message = (body as? JsonObject)?.get("error")?.jsonObject?.get("message")?.jsonPrimitive?.contentOrNull
-        throw AuthFailure(response.status, message ?: if (response.status == 401) "Please sign in again." else "Couldn’t complete this request. Please try again.")
+        val code = (body as? JsonObject)?.get("error")?.jsonObject?.get("code")?.jsonPrimitive?.contentOrNull
+        throw AuthFailure(response.status, message ?: if (response.status == 401) "Please sign in again." else "Couldn’t complete this request. Please try again.", code)
     }
     return body
 }

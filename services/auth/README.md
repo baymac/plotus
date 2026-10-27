@@ -65,6 +65,8 @@ Facebook email is optional. Accounts are keyed by their provider identity; match
 - List/delete owned credentials: `GET /api/auth/passkey/credentials`, `DELETE /api/auth/passkey/credentials/{id}`. Verified assertions update stored counters/backup state; clone warnings reject login.
 - Configure `WEBAUTHN_RP_ID` and the exact comma-separated `WEBAUTHN_ORIGINS`. Challenges expire after five minutes and are single-use and cookie-bound.
 
+Removing a passkey revokes its registration in Plotus. The apps also ask supported credential managers to remove or hide that saved key; a provider can decline this update. If an old entry remains, remove it in the device's password manager. A login with an unregistered key returns `PASSKEY_UNKNOWN` so the client can report only that key, without treating expired prompts or invalid signatures as removed credentials.
+
 ## Check
 
 With Go 1.27.1:

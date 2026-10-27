@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -145,13 +147,28 @@ func (s *Server) passkeyFinishLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	pending, err := s.takePasskey(w, r, kind)
 	if err != nil {
+		log.Printf("passkey_login client=%s result=invalid_challenge", kind)
 		authError(w, err)
 		return
 	}
 	var storeErr error
+	var unknownCredential bool
 	lookup := func(rawID, userHandle []byte) (webauthn.User, error) {
 		id, err := uuid.Parse(string(userHandle))
 		if err != nil {
+			return nil, ErrUnauthenticated
+		}
+		var owner string
+		err = s.Store.Pool.QueryRow(r.Context(), "SELECT user_id FROM plotus_auth.passkeys WHERE credential_id=$1", base64.RawURLEncoding.EncodeToString(rawID)).Scan(&owner)
+		if errors.Is(err, pgx.ErrNoRows) {
+			unknownCredential = true
+			return nil, ErrUnauthenticated
+		}
+		if err != nil {
+			storeErr = err
+			return nil, err
+		}
+		if owner != id.String() {
 			return nil, ErrUnauthenticated
 		}
 		user, err := s.Store.passkeyUser(r.Context(), id.String())
@@ -171,7 +188,13 @@ func (s *Server) passkeyFinishLogin(w http.ResponseWriter, r *http.Request) {
 		authError(w, storeErr)
 		return
 	}
+	if unknownCredential {
+		log.Printf("passkey_login client=%s result=unknown_credential", kind)
+		fail(w, 401, "PASSKEY_UNKNOWN", "This saved passkey is no longer registered with Plotus. Choose another passkey, or sign in with Google or Facebook.")
+		return
+	}
 	if err != nil || credential.Authenticator.CloneWarning {
+		log.Printf("passkey_login client=%s result=verification_failed", kind)
 		fail(w, 401, "PASSKEY_REJECTED", "Passkey verification failed. Try another sign-in method.")
 		return
 	}
@@ -185,6 +208,7 @@ func (s *Server) passkeyFinishLogin(w http.ResponseWriter, r *http.Request) {
 		authError(w, err)
 		return
 	}
+	log.Printf("passkey_login client=%s result=success", kind)
 	writeJSON(w, 200, tokens)
 }
 func (s *Server) passkeyBeginRegister(w http.ResponseWriter, r *http.Request) {
@@ -271,7 +295,7 @@ func (s *Server) passkeyList(w http.ResponseWriter, r *http.Request) {
 		authError(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"credentials": result})
+	writeJSON(w, 200, map[string]any{"credentials": result, "rp_id": s.Config.RPID})
 }
 func (s *Server) passkeyDelete(w http.ResponseWriter, r *http.Request) {
 	claims, err := s.bearer(r)

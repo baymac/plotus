@@ -10,10 +10,10 @@ Source: [Plotus / App design clean](https://www.figma.com/design/0AIbJahPpgu09bT
 | New project | `364:30176` | `364:31087` | Semantic palette from Projects |
 | Client project form | `364:30286` | Same form at desktop drawer width | Semantic palette from Projects |
 
-Web uses semantic CSS tokens, Plus Jakarta Sans, and Hanken Grotesk for General settings. The desktop shell has a 264px sidebar, 72px top bar and 32px content inset. Collapsing the sidebar takes 180ms and retains the preference across pages. Reduced-motion preferences disable the transition. Mobile uses a 76px header and two-tab bottom navigation, with safe-area padding.
+One Compose Multiplatform implementation in `composeApp/src/commonMain` supplies both the iOS and web UI. The semantic light/dark palette, Plus Jakarta Sans fonts, shared controls, layout breakpoints and supplied icons are common resources. Original SVG exports remain under `assets/design`; the shared image resources are direct 3x raster conversions for consistent cross-platform loading.
 
-New/Edit project is a native HTML dialog with an explicit Tab/Shift-Tab focus loop. Escape dismisses it, fields retain their values while open, and Save/Create validates required fields. The desktop drawer is 440px; mobile uses a bottom sheet. Destructive deletion requires confirmation. Theme follows the OS unless overridden from the desktop account menu.
+Desktop uses a 264px sidebar, 72px top bar and 32px content inset. Narrow layouts use the supplied mobile header and two-destination bottom navigation. Forms use Compose dialogs with keyboard focus management, field validation, conditional client details and deletion confirmation.
 
-iOS adapts the source to native SwiftUI TabView, NavigationStack, List, Form, sheets and confirmation dialogs, retaining the product's color and typography tokens. The sign-in content scrolls when larger text or a shorter display needs more room. Native asset catalogs have independent light/dark values.
+The only authored Swift code is the iOS lifecycle host for the exported Compose UIViewController. There are no separate SwiftUI or React screen implementations. Theme and sidebar preferences use tiny platform-specific storage adapters; app data and validation are common Kotlin.
 
-The explicit design preview link is a scaffold addition so reviewers can inspect sample data without authentication. Account settings beyond the preview notice, passkey enrollment, plot editing, and planning/generation workflows are deferred. Project rows open metadata editing until the planning editor is added.
+The explicit preview entry is a scaffold addition for reviewing local sample data without authentication. Account settings beyond the preview notice, passkey enrollment, plot editing and generation are deferred.

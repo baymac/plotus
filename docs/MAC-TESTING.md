@@ -24,3 +24,18 @@ Retain the returned workspace/surface IDs and target only that dedicated workspa
 If local socket access is disabled or the API rejects access, report it and use a user-configured SSH connection instead. Do not change cmux access settings automatically.
 
 Source: [cmux relay architecture](https://github.com/manaflow-ai/cmux/blob/main/daemon/remote/README.md).
+
+## Kotlin app workspace
+
+The independent app checkout is `/Users/parichay/dev/plotus`. The private checkout `/Users/parichay/dev/naksha` is only a build-configuration reference and stays outside the submission.
+
+```sh
+cd /Users/parichay/dev/plotus
+export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+./gradlew :composeApp:linkDebugFrameworkIosArm64
+cd iosApp
+xcodegen generate
+open Plotus.xcodeproj
+```
+
+The Xcode pre-build phase invokes `:composeApp:embedAndSignAppleFrameworkForXcode`. All screens are Compose, hosted by a minimal UIKit application delegate. Signing settings belong to the local Xcode build, not the public repository.

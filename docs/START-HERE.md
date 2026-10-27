@@ -2,8 +2,8 @@
 
 Start with the provided design's sign-in, Projects, General settings, and New project screens. Use a clearly separate local preview to review the interface before accounts exist.
 
-1. Commit the independent scaffold with a lockfile and build instructions.
-2. Implement the first web and native iOS screens against Figma, with semantic light/dark tokens and accessible controls.
+1. Commit the independent scaffold with the Gradle wrapper and build instructions.
+2. Implement the first shared Kotlin/Compose screens for web and iOS against Figma, with semantic light/dark tokens and accessible controls.
 3. Add one auth service for both clients: provider callback validation, session handling, sign-out, then passkeys. Pick the provider before implementing real auth.
 4. Add authenticated project storage and migrations. Keep ownership enforcement on the server.
 5. Implement Plot setup → Floor plan → Generation as a vertical slice, including the event's Meta AI integration and any explicitly disclosed private service boundary.

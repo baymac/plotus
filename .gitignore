@@ -12,3 +12,9 @@ DerivedData/
 xcuserdata/
 .artifacts/
 .swiftpm/
+.gradle/
+.kotlin/
+**/build/
+kotlin-js-store/
+.idea/
+local.properties

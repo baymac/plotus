@@ -11,4 +11,6 @@ Point the domain at the host and make ports 80/443 available. Caddy serves the o
 
 Register `https://YOUR_DOMAIN/api/auth/login/google/callback` with the production Google web client. The same domain is used for web passkeys. iPhone passkeys additionally need the app's associated-domain configuration.
 
+To enable Facebook, add its app ID/secret and register `https://YOUR_DOMAIN/api/auth/login/facebook/callback` in Meta.
+
 The signing key stays on the server and must be readable by the configured auth UID/GID. This environment has its own database and certificate volumes. The private engine is an optional profile, excluded from default deployment.

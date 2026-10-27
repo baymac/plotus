@@ -56,11 +56,48 @@ private external fun navigate(url: String)
 @JsFun("""() => {const url=new URL(location.href);if(!url.searchParams.has('auth_error'))return null;url.searchParams.delete('auth_error');history.replaceState(null,'',url);return 'Google sign-in was cancelled or expired. Please try again.';}""")
 private external fun callbackError(): String?
 
+@JsFun("""async () => {
+ const encode=value=>btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+ const verifier=encode(crypto.getRandomValues(new Uint8Array(32)));
+ const challenge=encode(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier)));
+ return JSON.stringify({verifier,challenge});
+}""")
+private external fun browserProof(): Promise<JsString>
+
+@JsFun("""(url,pending) => {
+ const target=new URL(url);
+ if(target.protocol!=='https:' || target.username || target.password || target.pathname!=='/api/auth/login/facebook/authorize') throw new Error('Invalid Facebook sign-in address');
+ sessionStorage.setItem('plotus.facebook.pending',JSON.stringify({...JSON.parse(pending),createdAt:Date.now()}));
+ location.assign(target.href);
+}""")
+private external fun facebookNavigate(url: String,pending: String)
+
+@JsFun("""() => {
+ const url=new URL(location.href);const result=new URLSearchParams(url.hash.slice(1));
+ if(!result.has('auth_code') && !result.has('auth_error')) return null;
+ const raw=sessionStorage.getItem('plotus.facebook.pending');sessionStorage.removeItem('plotus.facebook.pending');
+ const state=result.get('auth_state');const code=result.get('auth_code');const declined=result.has('auth_error');
+ for(const name of ['auth_code','auth_state','auth_error'])result.delete(name);
+ url.hash=result.toString();history.replaceState(null,'',url);
+ const fail=()=>JSON.stringify({error:'Facebook sign-in expired or could not be verified. Please try again.'});
+ try {
+  const saved=JSON.parse(raw);
+  if(!saved || saved.state!==state || !/^[A-Za-z0-9_-]{43}$/.test(saved.verifier) || !Number.isFinite(saved.createdAt) || Date.now()-saved.createdAt>600000 || Date.now()<saved.createdAt) return fail();
+  if(declined)return JSON.stringify({error:'Facebook sign-in was cancelled or declined. Please try again.'});
+  if(!/^[A-Za-z0-9_-]{43}$/.test(code || ''))return fail();
+  return JSON.stringify({code,verifier:saved.verifier});
+ }catch(_){return fail();}
+}""")
+private external fun facebookReturn(): String?
+
 internal actual fun authIsBrowser() = true
 internal actual suspend fun authTransport(method: String,path: String,body: String?,bearer: String?,csrf: String?) =
     authJson.decodeFromString<AuthWireResponse>(browserRequest(method,path,body,bearer,csrf).await<JsString>().toString())
-internal actual suspend fun authCreateProof(): AuthProof = error("Browser OAuth proof is held by the auth service")
+internal actual suspend fun authCreateProof(): AuthProof = authJson.decodeFromString<AuthProof>(browserProof().await<JsString>().toString())
 internal actual suspend fun authGoogleIdentity(nonce: String): String = error("Browser Google sign-in uses a redirect")
+internal actual suspend fun authFacebookBrowser(url: String): String = error("Browser Facebook sign-in uses a redirect")
+internal actual fun authFacebookNavigate(url: String,pending: String) = facebookNavigate(url,pending)
+internal actual fun authFacebookReturn() = facebookReturn()
 internal actual suspend fun authPasskey(operation: String,options: String): String {
     val value=browserPasskey(operation,options).await<JsString>().toString()
     val error=authJson.parseToJsonElement(value).jsonObject["_platformError"]?.jsonPrimitive?.content

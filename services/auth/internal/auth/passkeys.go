@@ -21,8 +21,16 @@ type passkeyUser struct {
 	Credentials []webauthn.Credential
 }
 
-func (u passkeyUser) WebAuthnID() []byte                         { return []byte(u.ID) }
-func (u passkeyUser) WebAuthnName() string                       { return u.Email }
+func (u passkeyUser) WebAuthnID() []byte { return []byte(u.ID) }
+func (u passkeyUser) WebAuthnName() string {
+	if u.Email != "" {
+		return u.Email
+	}
+	if u.Name != "" {
+		return u.Name
+	}
+	return u.ID
+}
 func (u passkeyUser) WebAuthnDisplayName() string                { return u.Name }
 func (u passkeyUser) WebAuthnCredentials() []webauthn.Credential { return u.Credentials }
 func (s *Store) passkeyUser(ctx context.Context, id string) (passkeyUser, error) {

@@ -25,9 +25,10 @@ type Server struct {
 	Cache    *redis.Client
 	Signer   *Signer
 	Google   *GoogleProvider
+	Facebook *FacebookProvider
 	Passkeys *webauthn.WebAuthn
 }
-type oauthPending struct{ Verifier, Nonce, CookieHash, Redirect, AppRedirect, AppState, AppChallenge string }
+type oauthPending struct{ Verifier, Nonce, CookieHash, Redirect, AppRedirect, AppState, AppChallenge, WebState, WebChallenge string }
 type nativeGrant struct{ UserID, Redirect, Challenge string }
 type tokenResponse struct {
 	Access  string `json:"access_token"`
@@ -43,7 +44,7 @@ func New(c Config, store *Store, cache *redis.Client, signer *Signer, google *Go
 	if err != nil {
 		return nil, err
 	}
-	return &Server{Config: c, Store: store, Cache: cache, Signer: signer, Google: google, Passkeys: wa}, nil
+	return &Server{Config: c, Store: store, Cache: cache, Signer: signer, Google: google, Facebook: NewFacebook(c), Passkeys: wa}, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -54,13 +55,18 @@ func (s *Server) Handler() http.Handler {
 		writeJSON(w, 200, s.Signer.JWKS())
 	})
 	mux.HandleFunc("GET "+prefix+"/config", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"google_enabled": s.Google != nil, "passkeys_enabled": true, "rp_id": s.Config.RPID})
+		writeJSON(w, 200, map[string]any{"google_enabled": s.Google != nil, "facebook_enabled": s.Facebook != nil, "passkeys_enabled": true, "rp_id": s.Config.RPID})
 	})
 	mux.HandleFunc("POST "+prefix+"/login/google", s.googleStart)
 	mux.HandleFunc("GET "+prefix+"/native/google/start", s.nativeGoogleStart)
 	mux.HandleFunc("POST "+prefix+"/native/google/challenge", s.nativeGoogleChallenge)
 	mux.HandleFunc("POST "+prefix+"/native/google/token", s.nativeGoogleToken)
 	mux.HandleFunc("GET "+prefix+"/login/google/callback", s.googleCallback)
+	mux.HandleFunc("POST "+prefix+"/login/facebook", s.facebookStart)
+	mux.HandleFunc("POST "+prefix+"/native/facebook", s.nativeFacebookStart)
+	mux.HandleFunc("GET "+prefix+"/login/facebook/authorize", s.facebookAuthorize)
+	mux.HandleFunc("GET "+prefix+"/login/facebook/callback", s.facebookCallback)
+	mux.HandleFunc("POST "+prefix+"/login/facebook/exchange", s.facebookWebExchange)
 	mux.HandleFunc("POST "+prefix+"/native/token/exchange", s.nativeExchange)
 	mux.HandleFunc("GET "+prefix+"/token/csrf", s.csrf)
 	mux.HandleFunc("GET "+prefix+"/token/access", s.webAccess)
@@ -288,6 +294,19 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		fail(w, 503, "AUTH_UNAVAILABLE", "Authentication is temporarily unavailable.")
 		return
 	}
+	s.completeOAuth(w, r, pending, user)
+}
+
+func (s *Server) completeOAuth(w http.ResponseWriter, r *http.Request, pending oauthPending, user User) {
+	if pending.WebChallenge != "" {
+		code := randomToken()
+		if s.put(r.Context(), "plotus:facebook-web-grant:"+digest(code), nativeGrant{user.ID, s.Config.WebOrigin, pending.WebChallenge}, 90*time.Second) != nil {
+			authError(w, errors.New("grant storage unavailable"))
+			return
+		}
+		s.facebookWebReturn(w, r, pending, url.Values{"auth_code": {code}, "auth_state": {pending.WebState}})
+		return
+	}
 	if pending.AppRedirect != "" {
 		code := randomToken()
 		grant := nativeGrant{user.ID, pending.AppRedirect, pending.AppChallenge}
@@ -303,13 +322,17 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, target.String(), 302)
 		return
 	}
-	if _, err = s.issue(w, r, user.ID, "web"); err != nil {
+	if _, err := s.issue(w, r, user.ID, "web"); err != nil {
 		fail(w, 503, "AUTH_UNAVAILABLE", "Authentication is temporarily unavailable.")
 		return
 	}
 	http.Redirect(w, r, s.Config.WebOrigin+pending.Redirect, 302)
 }
 func (s *Server) nativeExchange(w http.ResponseWriter, r *http.Request) {
+	s.exchangeGrant(w, r, "native", "plotus:grant:")
+}
+
+func (s *Server) exchangeGrant(w http.ResponseWriter, r *http.Request, kind, keyPrefix string) {
 	var body struct {
 		Code     string `json:"code"`
 		Verifier string `json:"code_verifier"`
@@ -319,14 +342,18 @@ func (s *Server) nativeExchange(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "INVALID_GRANT", "Invalid authorization grant.")
 		return
 	}
-	key := "plotus:grant:" + digest(body.Code)
+	redirect := body.Redirect
+	if kind == "web" {
+		redirect = s.Config.WebOrigin
+	}
+	key := keyPrefix + digest(body.Code)
 	raw, err := s.Cache.Get(r.Context(), key).Bytes()
 	if err != nil && !errors.Is(err, redis.Nil) {
 		authError(w, err)
 		return
 	}
 	var grant nativeGrant
-	if err != nil || json.Unmarshal(raw, &grant) != nil || !equal(grant.Challenge, pkce(body.Verifier)) || grant.Redirect != body.Redirect {
+	if err != nil || json.Unmarshal(raw, &grant) != nil || !equal(grant.Challenge, pkce(body.Verifier)) || grant.Redirect != redirect {
 		fail(w, 401, "INVALID_GRANT", "Authorization grant is invalid or expired.")
 		return
 	}
@@ -339,7 +366,7 @@ func (s *Server) nativeExchange(w http.ResponseWriter, r *http.Request) {
 		fail(w, 401, "INVALID_GRANT", "Authorization grant has already been used.")
 		return
 	}
-	tokens, err := s.issue(w, r, grant.UserID, "native")
+	tokens, err := s.issue(w, r, grant.UserID, kind)
 	if err != nil {
 		fail(w, 503, "AUTH_UNAVAILABLE", "Authentication is temporarily unavailable.")
 		return

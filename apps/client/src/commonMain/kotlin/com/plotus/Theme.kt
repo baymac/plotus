@@ -50,7 +50,7 @@ fun PlotusTheme(appearance: Appearance, content: @Composable () -> Unit) {
     }
 }
 
-enum class AppIcon { SEARCH, SIDEBAR, PROJECTS, MOBILE_PROJECTS, SETTINGS, ACCOUNT, SORT, MORE, CLOSE, PASSKEY, GOOGLE, ARROW }
+enum class AppIcon { SEARCH, SIDEBAR, PROJECTS, MOBILE_PROJECTS, SETTINGS, ACCOUNT, SORT, MORE, CLOSE, PASSKEY, GOOGLE, FACEBOOK, ARROW }
 
 @Composable
 fun BrandMark(size: Dp, modifier: Modifier = Modifier) {
@@ -73,6 +73,7 @@ fun PlotusIcon(icon: AppIcon, description: String? = null) {
         AppIcon.CLOSE -> Res.drawable.close
         AppIcon.PASSKEY -> if (dark) Res.drawable.passkey_dark else Res.drawable.passkey
         AppIcon.GOOGLE -> Res.drawable.google
+        AppIcon.FACEBOOK -> Res.drawable.facebook
         AppIcon.ARROW -> Res.drawable.arrow
     }
     Image(painterResource(resource), description, Modifier.size(if (icon == AppIcon.SEARCH) 18.dp else 20.dp))

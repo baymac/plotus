@@ -28,6 +28,9 @@ internal expect fun authIsBrowser(): Boolean
 internal expect suspend fun authTransport(method: String, path: String, body: String? = null, bearer: String? = null, csrf: String? = null): AuthWireResponse
 internal expect suspend fun authCreateProof(): AuthProof
 internal expect suspend fun authGoogleIdentity(nonce: String): String
+internal expect suspend fun authFacebookBrowser(url: String): String
+internal expect fun authFacebookNavigate(url: String, pending: String)
+internal expect fun authFacebookReturn(): String?
 internal expect suspend fun authPasskey(operation: String, options: String): String
 internal expect fun authNavigateGoogle(url: String)
 internal expect fun authReadSession(): String?
@@ -53,8 +56,18 @@ class AuthSession(private val scope: CoroutineScope) {
     fun dismissNotice() { notice = null }
 
     suspend fun restore() = lock.withLock {
+        var finishingFacebook = false
         try {
             if (authIsBrowser()) {
+                val returned = authFacebookReturn()
+                if (returned != null) {
+                    finishingFacebook = true
+                    val result = authJson.parseToJsonElement(returned).jsonObject
+                    result["error"]?.jsonPrimitive?.contentOrNull?.let { throw AuthFailure(400, it) }
+                    adopt(tokens(request("POST", "/api/auth/login/facebook/exchange", jsonObject(
+                        "code" to result["code"]!!.jsonPrimitive.content, "code_verifier" to result["verifier"]!!.jsonPrimitive.content))))
+                    return@withLock
+                }
                 val response = authTransport("GET", "/api/auth/token/csrf")
                 if (response.status == 401 || response.status == 403) return@withLock
                 csrf = checked(response).jsonObject["csrf_token"]!!.jsonPrimitive.content
@@ -68,8 +81,11 @@ class AuthSession(private val scope: CoroutineScope) {
                 loadUser()
             }
         } catch (cancelled: CancellationException) { throw cancelled }
-        catch (failure: AuthFailure) { if (failure.status == 401) clearLocal() }
-        catch (_: Exception) { /* Offline restoration retains the secure refresh credential for retry. */ }
+        catch (failure: AuthFailure) {
+            if (failure.status == 401) clearLocal()
+            if (finishingFacebook) error = failure.message
+        }
+        catch (_: Exception) { if (finishingFacebook) error = "Couldn’t finish Facebook sign-in. Please try again." }
         finally { initializing = false; authCallbackError()?.let { error = it } }
     }
 
@@ -93,6 +109,26 @@ class AuthSession(private val scope: CoroutineScope) {
         val options = request("POST", "$prefix/passkey/login/begin", "{}")
         val assertion = authPasskey("login", options.toString())
         adopt(tokens(request("POST", "$prefix/passkey/login/finish", assertion)))
+    }
+
+    fun facebook() = perform("facebook") {
+        val proof = authCreateProof()
+        val state = authCreateProof().verifier
+        val redirect = "plotus://oauth/callback"
+        val browser = authIsBrowser()
+        val result = request("POST", if (browser) "/api/auth/login/facebook" else "/api/auth/native/facebook",
+            if (browser) jsonObject("redirect" to "/", "state" to state, "code_challenge" to proof.challenge, "code_challenge_method" to "S256")
+            else jsonObject("redirect_uri" to redirect, "state" to state, "code_challenge" to proof.challenge, "code_challenge_method" to "S256"))
+        val target = result.jsonObject["authUrl"]!!.jsonPrimitive.content
+        if (browser) {
+            authFacebookNavigate(target, jsonObject("state" to state, "verifier" to proof.verifier))
+        } else {
+            val callback = authJson.parseToJsonElement(authFacebookBrowser(target)).jsonObject
+            if (callback["state"]?.jsonPrimitive?.content != state) throw AuthFailure(400, "Facebook sign-in could not be verified. Please try again.")
+            if (callback["error"] != null) throw AuthFailure(400, "Facebook sign-in was cancelled or declined. Please try again.")
+            val code = callback["code"]?.jsonPrimitive?.content ?: throw AuthFailure(400, "Facebook sign-in could not be completed.")
+            adopt(tokens(request("POST", "/api/auth/native/token/exchange", jsonObject("code" to code, "code_verifier" to proof.verifier, "redirect_uri" to redirect))))
+        }
     }
 
     fun addPasskey() = perform("register") {

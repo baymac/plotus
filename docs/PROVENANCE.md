@@ -14,6 +14,7 @@ The planning engine and its CAD assets are pre-existing private technology. They
 
 - Plus Jakarta Sans and Hanken Grotesk are from [Google Fonts](https://github.com/google/fonts), with their bundled SIL Open Font License files.
 - Interface icons and the Plotus mark are local exports of the supplied design. Their source references and checksums are in the asset record.
+- The Facebook sign-in icon is adapted from [Meta’s Android SDK](https://github.com/facebook/facebook-android-sdk/blob/main/facebook-common/src/main/res/drawable/com_facebook_button_icon.xml), with its [license](../third-party/facebook-sdk-license.txt).
 - The app and services use open-source libraries identified in their dependency files.
 
 Private product source, customer data, generated plans and credentials are not included in the public app source.

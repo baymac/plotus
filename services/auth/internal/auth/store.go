@@ -13,6 +13,9 @@ import (
 
 //go:embed migrations/001_auth.sql
 var migration string
+
+//go:embed migrations/002_facebook.sql
+var facebookMigration string
 var ErrUnauthenticated = errors.New("unauthenticated")
 
 type User struct {
@@ -28,7 +31,10 @@ type Session struct {
 }
 type Store struct{ Pool *pgxpool.Pool }
 
-func (s *Store) Migrate(ctx context.Context) error { _, err := s.Pool.Exec(ctx, migration); return err }
+func (s *Store) Migrate(ctx context.Context) error {
+	_, err := s.Pool.Exec(ctx, migration+"\n"+facebookMigration)
+	return err
+}
 func (s *Store) Health(ctx context.Context) error {
 	var present bool
 	if err := s.Pool.QueryRow(ctx, "SELECT to_regclass('plotus_auth.sessions') IS NOT NULL").Scan(&present); err != nil {
@@ -44,6 +50,14 @@ func (s *Store) GoogleUser(ctx context.Context, subject, email, name, picture st
 	u := User{}
 	err := s.Pool.QueryRow(ctx, `INSERT INTO plotus_auth.users (id,google_subject,email,name,picture) VALUES ($1,$2,$3,$4,$5)
         ON CONFLICT (google_subject) DO UPDATE SET email=EXCLUDED.email,name=EXCLUDED.name,picture=EXCLUDED.picture,updated_at=now()
+        RETURNING id,email,name,picture`, uuid.NewString(), subject, email, name, picture).Scan(&u.ID, &u.Email, &u.Name, &u.Picture)
+	return u, err
+}
+
+func (s *Store) FacebookUser(ctx context.Context, subject, email, name, picture string) (User, error) {
+	u := User{}
+	err := s.Pool.QueryRow(ctx, `INSERT INTO plotus_auth.users (id,facebook_subject,email,name,picture) VALUES ($1,$2,$3,$4,$5)
+        ON CONFLICT (facebook_subject) DO UPDATE SET email=EXCLUDED.email,name=EXCLUDED.name,picture=EXCLUDED.picture,updated_at=now()
         RETURNING id,email,name,picture`, uuid.NewString(), subject, email, name, picture).Scan(&u.ID, &u.Email, &u.Name, &u.Picture)
 	return u, err
 }

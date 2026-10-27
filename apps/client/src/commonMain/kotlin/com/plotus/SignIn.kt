@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun SignInScreen(compact: Boolean, onGoogle: () -> Unit, onPasskey: () -> Unit, onPreview: () -> Unit,
+fun SignInScreen(compact: Boolean, onGoogle: () -> Unit, onFacebook: () -> Unit, onPasskey: () -> Unit, onPreview: () -> Unit,
     busy: Boolean = false, action: String = "") {
     val colors = LocalPlotusColors.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -35,12 +35,12 @@ fun SignInScreen(compact: Boolean, onGoogle: () -> Unit, onPasskey: () -> Unit, 
         if (compact) {
             Column(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-                    .heightIn(min = maxOf(viewportHeight, 620.dp)).padding(horizontal = 24.dp),
+                    .heightIn(min = maxOf(viewportHeight, 680.dp)).padding(horizontal = 24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 WelcomeBrand(Modifier.fillMaxWidth().padding(top = 20.dp))
                 Spacer(Modifier.weight(0.65f))
-                Box(Modifier.fillMaxWidth().height(minOf(280.dp, viewportHeight * 0.34f)), contentAlignment = Alignment.Center) {
+                Box(Modifier.fillMaxWidth().height(minOf(260.dp, viewportHeight * 0.30f)), contentAlignment = Alignment.Center) {
                     WelcomeModel(Modifier.fillMaxHeight().aspectRatio(1.25f))
                 }
                 Spacer(Modifier.height(8.dp))
@@ -49,6 +49,8 @@ fun SignInScreen(compact: Boolean, onGoogle: () -> Unit, onPasskey: () -> Unit, 
                 Spacer(Modifier.height(24.dp))
                 Spacer(Modifier.weight(1f))
                 GoogleAction(onGoogle, Modifier.widthIn(max = 400.dp).fillMaxWidth(), !busy, action == "google")
+                Spacer(Modifier.height(12.dp))
+                FacebookAction(onFacebook, Modifier.widthIn(max = 400.dp).fillMaxWidth(), !busy, action == "facebook")
                 Spacer(Modifier.height(12.dp))
                 PasskeyAction(onPasskey, Modifier.widthIn(max = 400.dp).fillMaxWidth(), !busy, action == "passkey")
                 Spacer(Modifier.height(10.dp))
@@ -75,6 +77,8 @@ fun SignInScreen(compact: Boolean, onGoogle: () -> Unit, onPasskey: () -> Unit, 
                         Text("A new space starts here.", color = colors.muted, fontSize = 15.sp)
                         Spacer(Modifier.height(32.dp))
                         GoogleAction(onGoogle, Modifier.fillMaxWidth(), !busy, action == "google")
+                        Spacer(Modifier.height(12.dp))
+                        FacebookAction(onFacebook, Modifier.fillMaxWidth(), !busy, action == "facebook")
                         Spacer(Modifier.height(12.dp))
                         PasskeyAction(onPasskey, Modifier.fillMaxWidth(), !busy, action == "passkey")
                     }
@@ -105,6 +109,19 @@ private fun GoogleAction(onClick: () -> Unit, modifier: Modifier = Modifier, ena
         if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = colors.primary, strokeWidth = 2.dp) else PlotusIcon(AppIcon.GOOGLE)
         Spacer(Modifier.width(12.dp))
         Text(if (loading) "Signing in…" else "Continue with Google", fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, color = colors.ink)
+    }
+}
+
+@Composable
+private fun FacebookAction(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, loading: Boolean = false) {
+    val colors = LocalPlotusColors.current
+    OutlinedButton(onClick, modifier.heightIn(min = 56.dp), enabled = enabled, shape = RoundedCornerShape(28.dp),
+        border = BorderStroke(1.dp, colors.border),
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = colors.surface, contentColor = colors.ink),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp)) {
+        if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = colors.primary, strokeWidth = 2.dp) else PlotusIcon(AppIcon.FACEBOOK)
+        Spacer(Modifier.width(12.dp))
+        Text(if (loading) "Signing in…" else "Continue with Facebook", fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold, color = colors.ink)
     }
 }
 

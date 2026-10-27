@@ -11,6 +11,7 @@ import (
 type Config struct {
 	Address, DatabaseURL, RedisURL, PublicURL, WebOrigin, Issuer, Audience, KeyFile string
 	GoogleID, GoogleSecret, GoogleIOSID, RPID                                       string
+	FacebookID, FacebookSecret, FacebookCallbackURL, FacebookVersion                string
 	NativeRedirects, RPOrigins                                                      []string
 	Production                                                                      bool
 }
@@ -23,12 +24,15 @@ func FromEnv() (Config, error) {
 		WebOrigin: env("AUTH_WEB_ORIGIN", "http://localhost:8081"),
 		Issuer:    env("AUTH_ISSUER", "plotus-auth"), Audience: env("AUTH_AUDIENCE", "plotus-api"),
 		KeyFile: os.Getenv("AUTH_SIGNING_KEY_FILE"), GoogleID: os.Getenv("GOOGLE_CLIENT_ID"),
-		GoogleSecret:    os.Getenv("GOOGLE_CLIENT_SECRET"),
-		GoogleIOSID:     os.Getenv("GOOGLE_IOS_CLIENT_ID"),
-		RPID:            env("WEBAUTHN_RP_ID", "localhost"),
-		RPOrigins:       split(env("WEBAUTHN_ORIGINS", "http://localhost:8081")),
-		NativeRedirects: split(env("AUTH_NATIVE_REDIRECTS", "plotus://oauth/callback,http://127.0.0.1/callback")),
-		Production:      os.Getenv("AUTH_ENV") == "production",
+		GoogleSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+		GoogleIOSID:  os.Getenv("GOOGLE_IOS_CLIENT_ID"),
+		FacebookID:   os.Getenv("FACEBOOK_APP_ID"), FacebookSecret: os.Getenv("FACEBOOK_APP_SECRET"),
+		FacebookCallbackURL: env("FACEBOOK_CALLBACK_URL", strings.TrimRight(env("AUTH_PUBLIC_URL", "http://localhost:4001"), "/")+"/api/auth/login/facebook/callback"),
+		FacebookVersion:     env("FACEBOOK_GRAPH_VERSION", "v26.0"),
+		RPID:                env("WEBAUTHN_RP_ID", "localhost"),
+		RPOrigins:           split(env("WEBAUTHN_ORIGINS", "http://localhost:8081")),
+		NativeRedirects:     split(env("AUTH_NATIVE_REDIRECTS", "plotus://oauth/callback,http://127.0.0.1/callback")),
+		Production:          os.Getenv("AUTH_ENV") == "production",
 	}
 	return c, c.Validate()
 }
@@ -54,6 +58,18 @@ func (c Config) Validate() error {
 	}
 	if (c.GoogleID == "") != (c.GoogleSecret == "") {
 		return errors.New("set both Google OAuth credentials, or neither")
+	}
+	if (c.FacebookID == "") != (c.FacebookSecret == "") {
+		return errors.New("set both Facebook app credentials, or neither")
+	}
+	if c.FacebookID != "" {
+		u, err := url.Parse(c.FacebookCallbackURL)
+		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Path != "/api/auth/login/facebook/callback" {
+			return errors.New("FACEBOOK_CALLBACK_URL must be the registered HTTPS Facebook callback")
+		}
+		if !facebookVersion.MatchString(c.FacebookVersion) {
+			return errors.New("invalid FACEBOOK_GRAPH_VERSION")
+		}
 	}
 	for _, redirect := range c.NativeRedirects {
 		if !c.AllowNativeRedirect(redirect) {

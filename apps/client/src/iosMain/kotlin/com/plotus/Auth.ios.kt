@@ -9,6 +9,7 @@ interface NativeAuthHost {
     fun request(method: String, path: String, body: String?, bearer: String?, csrf: String?, completion: (String?, String?) -> Unit)
     fun createProof(): String
     fun googleIdentity(nonce: String, completion: (String?, String?) -> Unit)
+    fun facebookBrowser(url: String, completion: (String?, String?) -> Unit)
     fun passkey(operation: String, options: String, completion: (String?, String?) -> Unit)
     fun readSession(): String?
     fun writeSession(value: String?): Boolean
@@ -29,6 +30,9 @@ internal actual suspend fun authTransport(method: String, path: String, body: St
     authJson.decodeFromString<AuthWireResponse>(result { host().request(method,path,body,bearer,csrf,it) })
 internal actual suspend fun authCreateProof() = authJson.decodeFromString<AuthProof>(host().createProof())
 internal actual suspend fun authGoogleIdentity(nonce: String) = result { host().googleIdentity(nonce,it) }
+internal actual suspend fun authFacebookBrowser(url: String) = result { host().facebookBrowser(url,it) }
+internal actual fun authFacebookNavigate(url: String, pending: String) { error("Native Facebook sign-in uses the system browser") }
+internal actual fun authFacebookReturn(): String? = null
 internal actual suspend fun authPasskey(operation: String, options: String) = result { host().passkey(operation,options,it) }
 internal actual fun authNavigateGoogle(url: String) { error("Native Google sign-in uses the OS adapter") }
 internal actual fun authReadSession() = host().readSession()

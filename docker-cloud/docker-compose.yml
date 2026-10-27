@@ -98,6 +98,10 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?Set the production Google web client}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?Set the production Google secret}
       GOOGLE_IOS_CLIENT_ID: ${GOOGLE_IOS_CLIENT_ID:-}
+      FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
+      FACEBOOK_CALLBACK_URL: https://${PLOTUS_DOMAIN}/api/auth/login/facebook/callback
+      FACEBOOK_GRAPH_VERSION: ${FACEBOOK_GRAPH_VERSION:-v26.0}
     volumes:
     - ${AUTH_SIGNING_KEY_FILE:?Set the signing-key path}:/run/plotus-signing.pem:ro
     depends_on:

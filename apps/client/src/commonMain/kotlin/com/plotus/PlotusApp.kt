@@ -47,6 +47,7 @@ fun PlotusApp() {
                 if (!preview && account == null) Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
                     SignInScreen(compact,
                         onGoogle = { destination = Destination.PROJECTS; auth.google() },
+                        onFacebook = { destination = Destination.PROJECTS; auth.facebook() },
                         onPasskey = { destination = Destination.PROJECTS; auth.passkey() },
                         onPreview = { destination = Destination.PROJECTS; preview = true },
                         busy = auth.busy || auth.initializing, action = auth.action)

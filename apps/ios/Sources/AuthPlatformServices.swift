@@ -6,10 +6,11 @@ import GoogleSignIn
 import PlotusApp
 
 /// OS adapters only. Shared Kotlin owns accounts, sessions and every app screen.
-final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding, ASWebAuthenticationPresentationContextProviding {
     private let session = URLSession(configuration: .ephemeral)
     private var passkeyCompletion: ((String?, String?) -> Void)?
     private var authorizationController: ASAuthorizationController?
+    private var webAuthenticationSession: ASWebAuthenticationSession?
     private let keychain: [String: Any] = [
         kSecClass as String: kSecClassGenericPassword,
         kSecAttrService as String: "com.plotus.app.auth",
@@ -82,6 +83,48 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationContr
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess, let data = item as? Data else { return nil }
         return String(data: data, encoding: .utf8)
+    }
+
+    func facebookBrowser(url: String, completion: @escaping (String?, String?) -> Void) {
+        guard let target = URL(string: url), target.scheme == "https", target.host != nil,
+              target.user == nil, target.password == nil, target.path == "/api/auth/login/facebook/authorize" else {
+            complete(completion, nil, "Facebook sign-in isn’t configured on this device."); return
+        }
+        DispatchQueue.main.async {
+            let browser = ASWebAuthenticationSession(url: target, callbackURLScheme: "plotus") { returned, error in
+                self.webAuthenticationSession = nil
+                if let error {
+                    self.complete(completion, nil, (error as NSError).code == ASWebAuthenticationSessionError.canceledLogin.rawValue ? "cancelled" : "Couldn’t complete Facebook sign-in. Please try again.")
+                    return
+                }
+                guard let returned, returned.scheme == "plotus", returned.host == "oauth", returned.path == "/callback",
+                      let components = URLComponents(url: returned, resolvingAgainstBaseURL: false) else {
+                    self.complete(completion, nil, "Facebook sign-in could not be verified. Please try again."); return
+                }
+                var payload: [String: String] = [:]
+                for key in ["state", "code", "error"] {
+                    let values = (components.queryItems ?? []).filter { $0.name == key }
+                    guard values.count <= 1 else {
+                        self.complete(completion, nil, "Facebook sign-in could not be verified. Please try again."); return
+                    }
+                    if let value = values.first?.value { payload[key] = value }
+                }
+                guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else {
+                    self.complete(completion, nil, "Couldn’t read the sign-in response."); return
+                }
+                self.complete(completion, json, nil)
+            }
+            browser.presentationContextProvider = self
+            self.webAuthenticationSession = browser
+            if !browser.start() {
+                self.webAuthenticationSession = nil
+                self.complete(completion, nil, "Couldn’t open Facebook sign-in. Please try again.")
+            }
+        }
+    }
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        (UIApplication.shared.delegate as? AppDelegate)?.window ?? ASPresentationAnchor()
     }
     func writeSession(value: String?) -> Bool {
         guard let value else {

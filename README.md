@@ -19,7 +19,7 @@ The intended journey is simple:
 
 The current iPhone and web demo lets you explore projects, add or edit project and client details, search and sort your work, and switch between light and dark themes.
 
-Choose **View demo** on the welcome screen. Project changes last for the current demo session. Google sign-in is available on iPhone and web. Web accounts can also add a passkey. Saved projects and floor-plan generation are still in development.
+Choose **View demo** on the welcome screen. Project changes last for the current demo session. Google and Facebook sign-in are available on iPhone and web. Web accounts can also add a passkey. Saved projects and floor-plan generation are still in development.
 
 [Demo guide](docs/START-HERE.md) · [Design](docs/DESIGN.md)
 

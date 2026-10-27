@@ -109,6 +109,10 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_IOS_CLIENT_ID: ${GOOGLE_IOS_CLIENT_ID:-}
+      FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
+      FACEBOOK_CALLBACK_URL: ${FACEBOOK_CALLBACK_URL:-}
+      FACEBOOK_GRAPH_VERSION: ${FACEBOOK_GRAPH_VERSION:-v26.0}
     volumes:
     - ../services/auth/.local/signing-key.pem:/run/plotus-signing.pem:ro
     depends_on:

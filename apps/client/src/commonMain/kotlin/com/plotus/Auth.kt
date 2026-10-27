@@ -55,6 +55,12 @@ class AuthSession(private val scope: CoroutineScope) {
     fun dismissError() { error = null }
     fun dismissNotice() { notice = null }
 
+    internal suspend fun projectRequest(method: String, path: String, body: String? = null): JsonElement = lock.withLock {
+        if (user == null) throw AuthFailure(401, "Sign in to continue.")
+        try { authenticated(method,path,body) }
+        catch (failure: AuthFailure) { if (failure.status == 401) clearLocal(); throw failure }
+    }
+
     suspend fun restore() = lock.withLock {
         var finishingFacebook = false
         try {

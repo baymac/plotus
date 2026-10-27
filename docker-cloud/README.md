@@ -3,11 +3,11 @@
 ```sh
 cd docker-cloud
 cp .env.example .env
-# Fill in your domain, Google credentials, database password and signing-key path.
+# Fill in your domain, Google credentials, both database passwords and signing-key path.
 docker compose up --build -d
 ```
 
-Point the domain at the host and make ports 80/443 available. Caddy serves the optimized web app, obtains HTTPS certificates and routes auth/API requests internally. The database, Redis, API and auth service have no published host ports.
+Point the domain at the host and make ports 80/443 available. Caddy serves the optimized web app, obtains HTTPS certificates and routes auth/API requests internally. The separate project and auth databases, Redis, API and auth service have no published host ports.
 
 Register `https://YOUR_DOMAIN/api/auth/login/google/callback` with the production Google web client. The same domain is used for web passkeys. iPhone passkeys additionally need the app's associated-domain configuration.
 

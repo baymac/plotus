@@ -27,6 +27,17 @@ class WorkspaceTest {
         assertEquals("Alwar Bypass Farmstead", visibleProjects(sampleProjects(), "", ProjectSort.NAME).first().name)
     }
 
+    @Test fun clientDetailsValidateAndRoundTripForSavedProjects() {
+        val draft = ProjectDraft("Courtyard", "Bengaluru", true, "Client", "client@example.com", "1234")
+        assertTrue(draft.errors().isEmpty())
+        assertEquals("client@example.com", draft.toProject("saved").client?.email)
+        assertTrue("email" in draft.copy(email = "invalid email@example.com").errors())
+        assertTrue("clientName" in draft.copy(clientName = "x".repeat(121)).errors())
+        assertTrue("phone" in draft.copy(phone = "1".repeat(41)).errors())
+        val request = SaveProjectRequest(draft, 3)
+        assertEquals(request, Json.decodeFromString<SaveProjectRequest>(Json.encodeToString(request)))
+    }
+
     @Test fun wireModelRoundTripsWithoutPlatformSpecificTypes() {
         val project = sampleProjects().first()
         assertEquals(project, Json.decodeFromString<Project>(Json.encodeToString(project)))

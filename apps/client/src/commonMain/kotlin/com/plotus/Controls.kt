@@ -45,7 +45,7 @@ fun IconAction(icon: AppIcon, label: String, onClick: () -> Unit, border: Boolea
 
 @Composable
 fun PlotusInput(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier,
-                placeholder: String = "", type: KeyboardType = KeyboardType.Text, error: String? = null) {
+                placeholder: String = "", type: KeyboardType = KeyboardType.Text, error: String? = null, enabled: Boolean = true) {
     val colors = LocalPlotusColors.current
     var focused by remember { mutableStateOf(false) }
     BasicTextField(value, onChange,
@@ -53,7 +53,7 @@ fun PlotusInput(value: String, onChange: (String) -> Unit, label: String, modifi
             .background(colors.surface, RoundedCornerShape(12.dp))
             .border(if (focused) 2.dp else 1.dp, if (focused || error != null) colors.primary else colors.line, RoundedCornerShape(12.dp))
             .onFocusChanged { focused = it.isFocused }.semantics { contentDescription = label },
-        textStyle = LocalTextStyle.current.copy(color = colors.ink, fontSize = 14.sp),
+        enabled = enabled, textStyle = LocalTextStyle.current.copy(color = colors.ink, fontSize = 14.sp),
         cursorBrush = SolidColor(colors.primary), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = type),
         decorationBox = { inner ->
             Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
@@ -64,11 +64,11 @@ fun PlotusInput(value: String, onChange: (String) -> Unit, label: String, modifi
 }
 
 @Composable
-fun LabeledInput(label: String, value: String, onChange: (String) -> Unit, error: String? = null, type: KeyboardType = KeyboardType.Text) {
+fun LabeledInput(label: String, value: String, onChange: (String) -> Unit, error: String? = null, type: KeyboardType = KeyboardType.Text, enabled: Boolean = true) {
     val colors = LocalPlotusColors.current
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(label, fontSize = 12.sp, color = colors.muted)
-        PlotusInput(value, onChange, label, type = type, error = error)
+        PlotusInput(value, onChange, label, type = type, error = error, enabled = enabled)
         if (error != null) Text(error, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
     }
 }

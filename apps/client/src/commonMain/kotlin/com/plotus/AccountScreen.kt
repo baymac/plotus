@@ -14,21 +14,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun AuthenticatedProjects(user: AuthUser, onAccount: () -> Unit) {
-    val colors = LocalPlotusColors.current
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        BrandMark(48.dp)
-        Spacer(Modifier.height(24.dp))
-        Text("Welcome, ${user.name.substringBefore(' ').ifEmpty { "there" }}", fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(12.dp))
-        Text("Your account is ready. Project creation is coming soon.", color = colors.muted)
-        Spacer(Modifier.height(24.dp))
-        PlotusButton("Account settings", onAccount, outline = true)
-    }
-}
-
-@Composable
 fun AccountScreen(user: AuthUser, passkeys: List<SavedPasskey>, busy: Boolean,
     onAddPasskey: () -> Unit, onRemovePasskey: (String) -> Unit, onSignOut: () -> Unit) {
     val colors = LocalPlotusColors.current
@@ -37,7 +22,7 @@ fun AccountScreen(user: AuthUser, passkeys: List<SavedPasskey>, busy: Boolean,
         Column(Modifier.widthIn(max = 660.dp).fillMaxWidth().background(colors.surface, RoundedCornerShape(16.dp)).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(user.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(user.email, color = colors.muted)
+            if (user.email.isNotBlank()) Text(user.email, color = colors.muted)
         }
         Column(Modifier.widthIn(max = 660.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Passkeys", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)

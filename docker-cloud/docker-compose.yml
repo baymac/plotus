@@ -26,6 +26,13 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: '4000'
+      AUTH_INTERNAL_URL: http://auth:4001
+      PLOTUS_DATABASE_URL: jdbc:postgresql://projects-db:5432/plotus
+      PLOTUS_DATABASE_USER: plotus
+      PLOTUS_DATABASE_PASSWORD: ${API_DB_PASSWORD:?Set the project database password}
+    depends_on:
+      projects-db:
+        condition: service_healthy
     read_only: true
     tmpfs:
     - /tmp
@@ -40,6 +47,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 6
+    restart: unless-stopped
+  projects-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: plotus
+      POSTGRES_USER: plotus
+      POSTGRES_PASSWORD: ${API_DB_PASSWORD:?Set the project database password}
+    volumes:
+    - projects-db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U plotus -d plotus]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     restart: unless-stopped
   postgres:
     image: postgres:17-alpine
@@ -135,6 +156,7 @@ services:
       PLOTUS_ENGINE_SERVICE_TOKEN: ${PLOTUS_ENGINE_SERVICE_TOKEN:-}
     restart: unless-stopped
 volumes:
+  projects-db: {}
   auth-db: {}
   caddy-data: {}
   caddy-config: {}

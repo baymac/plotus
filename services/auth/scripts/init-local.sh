@@ -20,4 +20,4 @@ if [ ! -f "$auth_env_file" ]; then
   ' "$auth_env_file" > .local/env-next
   mv .local/env-next "$auth_env_file"
 fi
-printf '%s\n' 'Local auth configuration is ready. Run: cd docker-local && docker compose up --build -d'
+printf '%s\n' 'Local auth configuration is ready.'

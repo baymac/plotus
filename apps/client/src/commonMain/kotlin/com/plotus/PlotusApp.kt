@@ -36,13 +36,20 @@ fun PlotusApp() {
     var deleting by remember { mutableStateOf<Project?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var nextId by remember { mutableStateOf(1) }
+    val account = auth.user
+    val workspace = remember(account?.id) { account?.let { ProjectWorkspace(auth, scope, it.id) } }
+    LaunchedEffect(account?.id) { showForm = false; editing = null; deleting = null }
+    LaunchedEffect(workspace, preview, destination) {
+        if (workspace != null && !preview && destination == Destination.PROJECTS) {
+            while (true) { workspace.refresh(); delay(30_000L) }
+        }
+    }
 
     PlotusTheme(appearance) {
         val colors = LocalPlotusColors.current
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 44.dp) {
             BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
                 val compact = maxWidth < 1000.dp
-                val account = auth.user
                 val exit = { if (preview) preview = false else auth.signOut() }
                 if (!preview && account == null) Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
                     SignInScreen(compact,
@@ -57,33 +64,47 @@ fun PlotusApp() {
                         collapsed = !collapsed; writePreference("sidebar", if (collapsed) "collapsed" else "open")
                     }, onNavigate = { destination = it })
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        AppHeader(compact, destination, appearance,
-                            onAppearance = { appearance = it; writePreference("appearance", it.name) },
-                            onExit = exit, account = if (preview) null else account,
-                            onAccount = { destination = Destination.ACCOUNT })
+                        AppHeader(compact, destination)
                         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) 24.dp else 32.dp,
                             vertical = if (compact) 12.dp else 32.dp)) {
-                            if (destination == Destination.PROJECTS && preview) ProjectsScreen(projects, compact,
-                                onNew = { editing = null; showForm = true },
-                                onEdit = { editing = it; showForm = true }, onDelete = { deleting = it })
-                            else if (destination == Destination.PROJECTS && account != null) AuthenticatedProjects(account) { destination = Destination.ACCOUNT }
+                            if (destination == Destination.PROJECTS) ProjectsScreen(if (preview) projects else workspace?.projects.orEmpty(), compact,
+                                onNew = { editing = null; workspace?.clearMutationError(); showForm = true },
+                                onEdit = { editing = it; workspace?.clearMutationError(); showForm = true },
+                                onDelete = { deleting = it; workspace?.clearMutationError() },
+                                loading = !preview && workspace?.loading == true, busy = !preview && workspace?.busy == true,
+                                error = if (preview) null else workspace?.error,
+                                onRefresh = if (preview) null else { { workspace?.reload() } })
                             else if (destination == Destination.ACCOUNT && !preview && account != null) AccountScreen(account, auth.passkeys, auth.busy,
                                 onAddPasskey = { auth.addPasskey() }, onRemovePasskey = { auth.removePasskey(it) }, onSignOut = { auth.signOut() })
                             else SettingsScreen(destination, compact, onExit = exit,
-                                accountEmail = if (preview) null else account?.email, onAccount = { destination = Destination.ACCOUNT })
+                                accountEmail = if (preview) null else account?.email, onAccount = { destination = Destination.ACCOUNT },
+                                appearance = appearance, onAppearance = { appearance = it; writePreference("appearance", it.name) }, preview = preview)
                         }
                         if (compact) MobileNavigation(destination) { destination = it }
                     }
                 }
-                if (showForm) ProjectFormDialog(editing, compact, onDismiss = { showForm = false }, onSave = { draft ->
-                    val project = draft.toProject(editing?.id ?: "preview-new-${nextId++}", editing)
-                    projects = saveProject(projects, project); showForm = false
-                })
-                deleting?.let { project ->
-                    AlertDialog(onDismissRequest = { deleting = null }, title = { Text("Delete project?") },
-                        text = { Text("Delete “${project.name}” from the local preview? This cannot be undone.") },
-                        confirmButton = { TextButton(onClick = { projects = projects.filterNot { it.id == project.id }; deleting = null }) { Text("Delete project") } },
-                        dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } })
+                if (showForm && (preview || account != null)) ProjectFormDialog(editing, compact, onDismiss = { showForm = false },
+                    busy = !preview && workspace?.busy == true, error = if (preview) null else workspace?.mutationError,
+                    onSave = { draft ->
+                        if (preview) {
+                            val project = draft.toProject(editing?.id ?: "preview-new-${nextId++}", editing)
+                            projects = saveProject(projects, project); showForm = false
+                        } else workspace?.save(editing, draft) { showForm = false }
+                    })
+                if (preview || account != null) deleting?.let { project ->
+                    val busy = !preview && workspace?.busy == true
+                    val dismiss = { if (!busy) deleting = null }
+                    AlertDialog(onDismissRequest = dismiss, title = { Text("Delete project?") },
+                        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(if (preview) "Delete “${project.name}” from the local preview? This cannot be undone."
+                                else "Delete “${project.name}” from your projects? This cannot be undone.")
+                            if (!preview) workspace?.mutationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        } },
+                        confirmButton = { TextButton(enabled = !busy, onClick = {
+                            if (preview) { projects = projects.filterNot { it.id == project.id }; deleting = null }
+                            else workspace?.delete(project) { deleting = null }
+                        }) { Text(if (busy) "Deleting…" else "Delete project") } },
+                        dismissButton = { TextButton(enabled = !busy, onClick = dismiss) { Text("Cancel") } })
                 }
                 (auth.error ?: auth.notice ?: message)?.let { text ->
                     val dismiss = { message = null; auth.dismissError(); auth.dismissNotice() }
@@ -134,25 +155,13 @@ private fun NavItem(label: String, icon: AppIcon, selected: Boolean, collapsed: 
 }
 
 @Composable
-private fun AppHeader(compact: Boolean, destination: Destination, appearance: Appearance, onAppearance: (Appearance) -> Unit, onExit: () -> Unit,
-    account: AuthUser? = null, onAccount: () -> Unit = {}) {
+private fun AppHeader(compact: Boolean, destination: Destination) {
     val colors = LocalPlotusColors.current
-    var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().height(if (compact) 76.dp else 72.dp).padding(horizontal = if (compact) 24.dp else 32.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (compact) Wordmark(Modifier.weight(1f))
-        else { Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account" }, Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Box {
-                IconAction(AppIcon.ACCOUNT, "Open account menu", { menu = true })
-                DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem(text = { Text(account?.email ?: "Design preview · local sample data", fontSize = 12.sp) }, enabled = false, onClick = {})
-                    if (account != null) DropdownMenuItem(text = { Text("Account") }, onClick = { menu = false; onAccount() })
-                    Appearance.entries.forEach { option -> DropdownMenuItem(text = { Text("${if (appearance == option) "✓ " else ""}${option.name.lowercase().replaceFirstChar { it.uppercase() }} theme") },
-                        onClick = { onAppearance(option); menu = false }) }
-                    DropdownMenuItem(text = { Text(if (account == null) "Back to sign in" else "Sign out") }, onClick = { menu = false; onExit() })
-                }
-            }
-        }
+        else Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account" },
+            Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
     if (!compact) HorizontalDivider(color = colors.line)
 }

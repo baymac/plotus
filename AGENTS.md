@@ -9,4 +9,5 @@
 - The newly authored Go auth service belongs in public `services/auth`. It owns its accounts, sessions and key; do not reuse private-product auth source or credentials.
 - Never simulate authenticated sessions. The design preview is local sample data and must stay separate from future real accounts.
 - Do not add CI or workflow templates. Run verification locally.
+- Project data belongs to the verified account. Keep the demo isolated; never accept ownership from request data. Use `services/api/scripts/check.sh` with the local project database to include PostgreSQL ownership and revision tests.
 - Run `./gradlew :shared:jvmTest :server:test :composeApp:compileKotlinJvm :composeApp:wasmJsBrowserDistribution` before committing. Native builds need macOS/Xcode; report them accurately.

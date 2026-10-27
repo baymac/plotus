@@ -13,17 +13,20 @@ data class Project(
     val areaSqFt: Int? = null,
     val lastEdited: String = "Just now",
     val client: Client? = null,
+    val revision: Long = 0,
+    val updatedAt: String = "",
 )
 
 @Serializable
 data class Health(val status: String = "ok", val service: String = "plotus-api", val version: String = "0.1.0")
 
 @Serializable
-data class ErrorDetail(val code: String, val message: String)
+data class ErrorDetail(val code: String, val message: String, val fields: Map<String, String> = emptyMap())
 
 @Serializable
 data class ApiError(val error: ErrorDetail)
 
+@Serializable
 data class ProjectDraft(
     val name: String = "",
     val location: String = "",
@@ -36,15 +39,17 @@ data class ProjectDraft(
         if (name.isBlank() || name.length > 120) put("name", "Enter a project name (up to 120 characters).")
         if (location.isBlank() || location.length > 200) put("location", "Enter a location (up to 200 characters).")
         if (isClient) {
-            if (clientName.isBlank()) put("clientName", "Enter the client’s name.")
-            if (!Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(email.trim())) put("email", "Enter a valid email address.")
+            if (clientName.isBlank() || clientName.length > 120) put("clientName", "Enter the client’s name (up to 120 characters).")
+            if (phone.length > 40) put("phone", "Enter a phone number up to 40 characters.")
+            if (email.length > 254 || !Regex("""^[^\s@]+@[^\s@]+\.[^\s@]+$""").matches(email.trim())) put("email", "Enter a valid email address.")
         }
     }
 
     fun toProject(id: String, existing: Project? = null): Project {
         require(errors().isEmpty()) { "Project details are invalid." }
         return Project(id, name.trim(), location.trim(), existing?.areaSqFt, "Just now",
-            if (isClient) Client(clientName.trim(), email.trim(), phone.trim()) else null)
+            if (isClient) Client(clientName.trim(), email.trim(), phone.trim()) else null,
+            existing?.revision ?: 0, existing?.updatedAt.orEmpty())
     }
 
     companion object {
@@ -54,6 +59,10 @@ data class ProjectDraft(
 }
 
 enum class ProjectSort { RECENT, NAME }
+
+@Serializable data class ProjectList(val projects: List<Project>)
+@Serializable data class SaveProjectRequest(val details: ProjectDraft, val revision: Long? = null)
+@Serializable data class DeleteProjectRequest(val revision: Long)
 
 // Local design fixtures only. Never exposed as authenticated API data.
 fun sampleProjects() = listOf(

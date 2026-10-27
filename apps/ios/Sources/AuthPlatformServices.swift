@@ -27,7 +27,7 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationContr
     }
 
     func request(method: String, path: String, body: String?, bearer: String?, csrf: String?, completion: @escaping (String?, String?) -> Void) {
-        guard path.hasPrefix("/api/auth/"), let origin = setting("PlotusAuthURL"), let base = URL(string: origin),
+        guard (path.hasPrefix("/api/auth/") || path.hasPrefix("/v1/")), let origin = setting("PlotusAuthURL"), let base = URL(string: origin),
               base.scheme == "https" || ["localhost", "127.0.0.1", "::1"].contains(base.host ?? ""),
               let url = URL(string: path, relativeTo: base)?.absoluteURL else {
             complete(completion, nil, "Sign-in isn’t configured on this device."); return

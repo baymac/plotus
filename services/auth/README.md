@@ -5,15 +5,14 @@ A separate Go authentication service, freshly written for Plotus and kept in thi
 ## Local setup
 
 ```sh
-cd services/auth
-./scripts/init-local.sh
-cd ../../docker-local
+./docker-local/init.sh
+cd docker-local
 docker compose up --build -d
 curl http://localhost:4001/health
 curl http://localhost:4001/api/auth/config
 ```
 
-The script creates ignored `docker-local/.env` and `services/auth/.local/signing-key.pem` files, preserving existing ones. Loopback ports: auth 4001, PostgreSQL 5441, Redis 6381. These containers and volumes are separate from the existing private product. Migrations run before startup. Local Compose uses the invoking user's UID/GID to read the protected key; provision the key for a non-root service account in deployment.
+Local setup creates ignored `docker-local/.env` and `services/auth/.local/signing-key.pem` files, preserving existing ones. Loopback ports: auth 4001, PostgreSQL 5441, Redis 6381. Port 4001 is the local gateway, which also routes project requests for iPhone testing. These containers and volumes are separate from the existing private product. Migrations run before startup. Local Compose uses the invoking user's UID/GID to read the protected key; provision the key for a non-root service account in deployment.
 
 Google is disabled until this service's client ID and secret are set in the ignored `docker-local/.env`. Register the exact callback `http://localhost:4001/api/auth/login/google/callback` locally, or `${AUTH_PUBLIC_URL}/api/auth/login/google/callback` in deployment. Never put the secret in the apps. Deployment requires HTTPS, a fixed web origin, `AUTH_ENV=production`. Browser and auth origins must be on the same site for refresh cookies. Configure proxy rate limits separately; this service deliberately ignores forwarded-IP headers.
 

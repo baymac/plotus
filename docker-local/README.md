@@ -3,12 +3,12 @@
 From the project root:
 
 ```sh
-./services/auth/scripts/init-local.sh
+./docker-local/init.sh
 cd docker-local
 docker compose up --build -d
 ```
 
-Open the web app at **http://localhost:8081**. API: port 4000; auth: 4001. PostgreSQL and Redis are available only on loopback ports 5441 and 6381.
+Open the web app at **http://localhost:8081**. The gateway also listens on loopback port 4001 for existing OAuth callbacks and iPhone testing; it routes both auth and project requests internally. The API is available on port 4000. The separate project and auth databases use loopback ports 5440 and 5441; Redis uses 6381.
 
 Put local Google credentials in the ignored `.env`. The registered callback is `http://localhost:4001/api/auth/login/google/callback`. Rebuild a changed app/service with `docker compose up --build -d web` (or `api` / `auth`).
 

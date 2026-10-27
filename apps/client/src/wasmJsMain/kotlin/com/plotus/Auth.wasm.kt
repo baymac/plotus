@@ -10,7 +10,7 @@ import kotlin.js.Promise
 
 @JsFun("""(method,path,body,bearer,csrf) => {
  const configured=document.querySelector('meta[name="plotus-auth-url"]')?.content;
- const base=configured || (['localhost','127.0.0.1','[::1]'].includes(location.hostname) ? 'http://localhost:4001' : location.origin);
+ const base=path.startsWith('/v1/') ? location.origin : (configured || (['localhost','127.0.0.1','[::1]'].includes(location.hostname) ? 'http://localhost:4001' : location.origin));
  const url=new URL(path,base);
  if(url.protocol!=='https:' && !['localhost','127.0.0.1','[::1]'].includes(url.hostname)) return Promise.reject(new Error('HTTPS required'));
  const headers={'Accept':'application/json','Content-Type':'application/json'};

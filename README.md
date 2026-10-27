@@ -1,8 +1,8 @@
 # Plotus
 
-Kotlin Multiplatform app for iOS and web, with one shared Compose Multiplatform UI and shared Kotlin models. The backend scaffold also uses Kotlin (Ktor).
+Kotlin Multiplatform app for iOS and web, with shared Compose UI and Kotlin models, a Kotlin/Ktor domain API, and a separate Go auth service.
 
-Fresh public submission repository for the [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details), started on 27 October 2026. No private product source or Git history is imported.
+Fresh public submission repository for the [Meta Global AI Developer Hackathon](https://cerebralvalley.ai/e/meta-ai-developer-hackathon/details), started on 27 October 2026. Private product source and history are excluded from public commits. The pre-existing engine is referenced only by an optional private submodule.
 
 ## Run
 
@@ -51,23 +51,24 @@ See [Mac testing](docs/MAC-TESTING.md) for the cmux connection.
 - `shared` — Kotlin models, project validation and preview operations; shared by every client and the server.
 - `iosApp` — minimal iOS host and XcodeGen configuration.
 - `services/api` — Kotlin/Ktor API scaffold.
-- `services/auth` — reserved authentication integration boundary.
+- `services/auth` — separate Go auth service with Google/OIDC, browser sessions, native PKCE exchange and passkeys.
+- `services/engine-private` — optional private Python engine submodule; public builds do not initialize or require it.
 - `assets/design` — supplied Figma SVG exports, retained as the source for shared image resources.
 
 ## Current milestone
 
 Shared screens cover sign-in UI, Projects, General settings, New/Edit project forms with optional client details, delete confirmation, search, sorting and light/dark themes. Desktop has a collapsing sidebar; narrow layouts use two bottom destinations. Project rows edit metadata until the planning editor is added.
 
-Choose **Explore design preview** on the sign-in screen to review local sample projects. Google and passkey buttons do not authenticate. Preview projects exist only in memory; only appearance and sidebar preferences persist. API `/v1/*` routes return `501` instead of sample account data.
+Choose **View demo** on the sign-in screen to review local sample projects. Google and passkey actions still need client/session configuration. Preview projects exist only in memory; only appearance and sidebar preferences persist. API `/v1/*` routes return `501` instead of sample account data.
 
-Live auth, backend persistence, plot editing, floor-plan generation and Meta AI integration are subsequent milestones. This is an initial scaffold, not a completed event submission. Check [validation](docs/VALIDATION.md) for the current build/device evidence.
+The separate auth service owns its database, Redis and signing key; see [auth setup](services/auth/README.md). Google configuration, the passkey RP domain and client session integration are still required for live sign-in. Backend persistence, plot editing, generation and Meta AI integration are subsequent milestones. Check [validation](docs/VALIDATION.md) for build/device evidence.
 
 ## Event work and prior inputs
 
-All application source here was newly written during the event. Commit history includes an initial React/SwiftUI implementation that was replaced after the stack correction; the current implementation is Kotlin Multiplatform with shared Compose UI.
+The public app, domain API and auth source were newly written during the event. Commit history includes an initial React/SwiftUI implementation replaced after the stack correction; current app UI is Kotlin Multiplatform with shared Compose.
 
 The [supplied Plotus Figma design](https://www.figma.com/design/0AIbJahPpgu09bT3AqguPx/Plotus--Mobile--Desktop?node-id=349-144623) is a pre-existing input, not event-created design work. Exported icons and third-party fonts are disclosed in [provenance](docs/PROVENANCE.md).
 
-The existing private Plotus/Naksha product, source, planning engine, generated plans, datasets and credentials are excluded. The Mac checkout was inspected only to confirm build/toolchain conventions. No private hosted service is connected. If one is integrated later, document the service and distinguish the event-written integration from its pre-existing implementation. Fresh Git history alone does not establish eligibility.
+The pre-existing Python engine and required CAD assets were extracted unchanged to [private `baymac/plotus-engine`](https://github.com/baymac/plotus-engine), referenced through optional `services/engine-private`. Public commits contain only its URL and commit pointer. Ordinary clones, app builds and auth setup work without private access. See [engine boundaries and service contract](docs/ENGINE.md).
 
-The CI configuration is a template under `docs/ci/` because the available GitHub token cannot create workflow files. Local Gradle checks remain available.
+The engine predates the event; its private HTTP wrapper was written during the event. No app-to-engine integration is connected yet. Other private product code, generated plans, databases and credentials remain excluded. Submitted use of a hosted engine must disclose that dependency and identify the new integration code. Fresh Git history alone does not establish eligibility.

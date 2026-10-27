@@ -274,6 +274,36 @@
         "364:30962",
         "364:31087"
       ]
+    },
+    {
+      "file": "assets/design/plotus-symbol.svg",
+      "width": "256",
+      "height": "256",
+      "sha256": "313628b77ae503420ec94abe9a8ea2e474f7527171041b2de47a8dabe3e9f5cc",
+      "sourceNodes": [
+        "463:18",
+        "463:21"
+      ]
+    },
+    {
+      "file": "assets/design/plotus-symbol-dark.svg",
+      "width": "256",
+      "height": "256",
+      "sha256": "41cf9bce48fee1b4cb8277cb84b52094739b4133aeff0ad198e6b1e34847d9da",
+      "sourceNodes": [
+        "463:18",
+        "463:24"
+      ]
+    },
+    {
+      "file": "assets/design/plotus-symbol-paper.svg",
+      "width": "64",
+      "height": "64",
+      "sha256": "93a66aa0b56fd38ddd9c3dee7cdee03f27937a3b2c7d7e5bf2bb136e5f7fff3d",
+      "sourceNodes": [
+        "463:31",
+        "463:15"
+      ]
     }
   ]
 }

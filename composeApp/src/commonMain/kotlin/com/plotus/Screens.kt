@@ -17,43 +17,6 @@ import com.plotus.shared.*
 import org.jetbrains.compose.resources.*
 
 @Composable
-fun SignInScreen(compact: Boolean, onAuth: () -> Unit, onPreview: () -> Unit) {
-    val colors = LocalPlotusColors.current
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val minHeight = maxHeight
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (!compact) Spacer(Modifier.height(132.dp))
-            Column(Modifier.then(if (compact) Modifier.fillMaxWidth().heightIn(min = minHeight) else Modifier.width(420.dp)
-                .background(colors.surface, RoundedCornerShape(18.dp)).border(1.dp, colors.line, RoundedCornerShape(18.dp)).padding(28.dp)),
-                verticalArrangement = if (compact) Arrangement.Top else Arrangement.spacedBy(20.dp)) {
-                if (compact) Spacer(Modifier.height(24.dp))
-                Wordmark()
-                if (compact) Spacer(Modifier.height(76.dp))
-                else Image(painterResource(if (colors.dark) Res.drawable.motif_dark else Res.drawable.motif), "A measured floor-plan outline", Modifier.size(340.dp, 160.dp))
-                if (compact) { Text("Sign in to Plotus", fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.7).sp); Spacer(Modifier.height(16.dp)) }
-                Text("Create and compare floor plans", fontSize = if (compact) 20.sp else 32.sp,
-                    lineHeight = if (compact) 28.sp else 40.sp, fontWeight = if (compact) FontWeight.SemiBold else FontWeight.Bold,
-                    letterSpacing = if (compact) 0.sp else (-0.7).sp)
-                if (compact) Spacer(Modifier.height(16.dp))
-                Text("Draw your plot, add your priorities and compare floor-plan concepts.", color = colors.muted,
-                    fontSize = if (compact) 16.sp else 14.sp, lineHeight = if (compact) 26.sp else 21.sp)
-                if (compact) Spacer(Modifier.weight(1f).heightIn(min = 48.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PlotusButton("Continue with Google", onAuth, Modifier.fillMaxWidth().height(48.dp), icon = AppIcon.GOOGLE)
-                    PlotusButton("Use a passkey", onAuth, Modifier.fillMaxWidth().height(48.dp), outline = true, icon = AppIcon.PASSKEY)
-                }
-                if (compact) {
-                    Spacer(Modifier.height(32.dp))
-                    Text("Concepts for early planning. Have a qualified architect review before building.", color = colors.muted, fontSize = 12.sp, lineHeight = 18.sp)
-                    TextButton(onPreview, Modifier.align(Alignment.CenterHorizontally).heightIn(min = 44.dp)) { Text("Explore design preview", fontSize = 12.sp, color = colors.muted) }
-                }
-            }
-            if (!compact) TextButton(onPreview, Modifier.padding(top = 8.dp, bottom = 24.dp)) { Text("Explore design preview", fontSize = 12.sp, color = colors.muted) }
-        }
-    }
-}
-
-@Composable
 fun ProjectsScreen(projects: List<Project>, compact: Boolean, onNew: () -> Unit, onEdit: (Project) -> Unit, onDelete: (Project) -> Unit) {
     val colors = LocalPlotusColors.current
     var query by remember { mutableStateOf("") }

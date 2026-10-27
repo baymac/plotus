@@ -11,6 +11,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import com.plotus.resources.*
 import org.jetbrains.compose.resources.*
@@ -50,6 +51,12 @@ fun PlotusTheme(appearance: Appearance, content: @Composable () -> Unit) {
 }
 
 enum class AppIcon { SEARCH, SIDEBAR, PROJECTS, MOBILE_PROJECTS, SETTINGS, ACCOUNT, SORT, MORE, CLOSE, PASSKEY, GOOGLE, ARROW }
+
+@Composable
+fun BrandMark(size: Dp, modifier: Modifier = Modifier) {
+    val resource = if (LocalPlotusColors.current.dark) Res.drawable.plotus_symbol_dark else Res.drawable.plotus_symbol
+    Image(painterResource(resource), "Plotus", modifier.size(size))
+}
 
 @Composable
 fun PlotusIcon(icon: AppIcon, description: String? = null) {

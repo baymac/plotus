@@ -36,7 +36,8 @@ fun PlotusApp() {
             BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).windowInsetsPadding(WindowInsets.safeDrawing)) {
                 val compact = maxWidth < 1000.dp
                 if (!preview) SignInScreen(compact,
-                    onAuth = { message = "Sign-in is not connected yet. Explore the local design preview to review the app." },
+                    onGoogle = { message = "Google sign-in needs this app’s authentication endpoint configured." },
+                    onPasskey = { message = "Passkey sign-in needs this app’s authentication endpoint configured." },
                     onPreview = { preview = true })
                 else Row(Modifier.fillMaxSize()) {
                     if (!compact) Sidebar(destination, collapsed, onCollapse = {
@@ -155,5 +156,8 @@ private fun MobileNavigation(destination: Destination, onNavigate: (Destination)
 
 @Composable
 fun Wordmark(modifier: Modifier = Modifier) {
-    Text("Plotus", modifier, fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.7).sp)
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        BrandMark(26.dp)
+        Text("Plotus", fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = (-0.7).sp)
+    }
 }

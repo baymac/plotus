@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.sp
 import com.plotus.shared.*
 import kotlinx.coroutines.delay
 
-enum class Destination { PROJECTS, GENERAL, ACCOUNT }
+enum class Destination { PROJECTS, SETTINGS, GENERAL, ACCOUNT }
 
 @Composable
 fun PlotusApp() {
@@ -64,7 +64,7 @@ fun PlotusApp() {
                         collapsed = !collapsed; writePreference("sidebar", if (collapsed) "collapsed" else "open")
                     }, onNavigate = { destination = it })
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        AppHeader(compact, destination)
+                        if (!compact || destination != Destination.SETTINGS) AppHeader(compact, destination) { destination = Destination.SETTINGS }
                         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) 24.dp else 32.dp,
                             vertical = if (compact) 12.dp else 32.dp)) {
                             if (destination == Destination.PROJECTS) ProjectsScreen(if (preview) projects else workspace?.projects.orEmpty(), compact,
@@ -73,12 +73,15 @@ fun PlotusApp() {
                                 onDelete = { deleting = it; workspace?.clearMutationError() },
                                 loading = !preview && workspace?.loading == true, busy = !preview && workspace?.busy == true,
                                 error = if (preview) null else workspace?.error,
-                                onRefresh = if (preview) null else { { workspace?.reload() } })
-                            else if (destination == Destination.ACCOUNT && !preview && account != null) AccountScreen(account, auth.passkeys, auth.busy,
-                                onAddPasskey = { auth.addPasskey() }, onRemovePasskey = { auth.removePasskey(it) }, onSignOut = { auth.signOut() })
-                            else SettingsScreen(destination, compact, onExit = exit,
-                                accountEmail = if (preview) null else account?.email, onAccount = { destination = Destination.ACCOUNT },
-                                appearance = appearance, onAppearance = { appearance = it; writePreference("appearance", it.name) }, preview = preview)
+                                onRetry = if (preview) null else { { workspace?.reload() } })
+                            else if (destination == Destination.SETTINGS) SettingsHomeScreen { destination = it }
+                            else if (destination == Destination.GENERAL) GeneralSettingsScreen(compact, appearance) {
+                                appearance = it; writePreference("appearance", it.name)
+                            }
+                            else if (!preview && account != null) AccountScreen(account, auth.passkeys, auth.busy,
+                                onAddPasskey = { auth.addPasskey() }, onRemovePasskey = { auth.removePasskey(it) }, onSignOut = { auth.signOut() },
+                                showTitle = !compact)
+                            else PreviewAccountScreen(compact, onSignIn = exit)
                         }
                         if (compact) MobileNavigation(destination) { destination = it }
                     }
@@ -155,12 +158,16 @@ private fun NavItem(label: String, icon: AppIcon, selected: Boolean, collapsed: 
 }
 
 @Composable
-private fun AppHeader(compact: Boolean, destination: Destination) {
+private fun AppHeader(compact: Boolean, destination: Destination, onSettingsBack: () -> Unit) {
     val colors = LocalPlotusColors.current
+    if (compact && destination != Destination.PROJECTS) {
+        SettingsPageHeader(if (destination == Destination.GENERAL) "General" else "Account", onSettingsBack)
+        return
+    }
     Row(Modifier.fillMaxWidth().height(if (compact) 76.dp else 72.dp).padding(horizontal = if (compact) 24.dp else 32.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (compact) Wordmark(Modifier.weight(1f))
-        else Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account" },
+        else Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.SETTINGS -> "Settings"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account" },
             Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
     if (!compact) HorizontalDivider(color = colors.line)
@@ -172,7 +179,7 @@ private fun MobileNavigation(destination: Destination, onNavigate: (Destination)
     Column(Modifier.fillMaxWidth().background(colors.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
         HorizontalDivider(color = colors.line)
         Row(Modifier.fillMaxWidth().height(60.dp).padding(vertical = 4.dp)) {
-            listOf("Projects" to Destination.PROJECTS, "Settings" to Destination.GENERAL).forEach { (label, target) ->
+            listOf("Projects" to Destination.PROJECTS, "Settings" to Destination.SETTINGS).forEach { (label, target) ->
                 val selected = if (target == Destination.PROJECTS) destination == target else destination != Destination.PROJECTS
                 Column(Modifier.weight(1f).fillMaxHeight().clickable { onNavigate(target) }, horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically)) {

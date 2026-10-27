@@ -18,7 +18,7 @@ import org.jetbrains.compose.resources.*
 
 @Composable
 fun ProjectsScreen(projects: List<Project>, compact: Boolean, onNew: () -> Unit, onEdit: (Project) -> Unit, onDelete: (Project) -> Unit,
-    loading: Boolean = false, busy: Boolean = false, error: String? = null, onRefresh: (() -> Unit)? = null) {
+    loading: Boolean = false, busy: Boolean = false, error: String? = null, onRetry: (() -> Unit)? = null) {
     val colors = LocalPlotusColors.current
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf(ProjectSort.RECENT) }
@@ -32,7 +32,7 @@ fun ProjectsScreen(projects: List<Project>, compact: Boolean, onNew: () -> Unit,
             PlotusButton("New project", onNew, enabled = !busy)
         }
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val searchWidth = minOf(360.dp, maxOf(160.dp, maxWidth - 280.dp))
+        val searchWidth = minOf(360.dp, maxOf(160.dp, maxWidth - 208.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(Modifier.then(if (compact) Modifier.weight(1f) else Modifier.width(searchWidth)).heightIn(min = 44.dp)
                 .background(colors.surface, RoundedCornerShape(12.dp)).border(1.dp, colors.line, RoundedCornerShape(12.dp))
@@ -49,7 +49,6 @@ fun ProjectsScreen(projects: List<Project>, compact: Boolean, onNew: () -> Unit,
                     DropdownMenuItem(text = { Text("Name") }, onClick = { sort = ProjectSort.NAME; sortOpen = false })
                 }
             }
-            if (onRefresh != null) TextButton(onClick = onRefresh, enabled = !loading && !busy) { Text(if (loading) "Refreshing…" else "Refresh") }
             if (!compact) { Spacer(Modifier.weight(1f)); PlotusButton("New project", onNew, enabled = !busy) }
         }
         }
@@ -64,7 +63,7 @@ fun ProjectsScreen(projects: List<Project>, compact: Boolean, onNew: () -> Unit,
         if (error != null) Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(error, color = MaterialTheme.colorScheme.error)
-            if (onRefresh != null) PlotusButton("Try again", onRefresh, outline = true, enabled = !loading)
+            if (onRetry != null) PlotusButton("Try again", onRetry, outline = true, enabled = !loading)
         }
         if (loading && projects.isEmpty()) Column(Modifier.fillMaxWidth().padding(vertical = 64.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -109,40 +108,6 @@ private fun ProjectRow(project: Project, compact: Boolean, onEdit: () -> Unit, o
                 DropdownMenuItem(text = { Text("Edit project") }, onClick = { menu = false; onEdit() })
                 DropdownMenuItem(text = { Text("Delete project", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDelete() })
             }
-        }
-    }
-}
-
-@Composable
-fun SettingsScreen(destination: Destination, compact: Boolean, onExit: () -> Unit, accountEmail: String? = null, onAccount: () -> Unit = {},
-    appearance: Appearance = Appearance.SYSTEM, onAppearance: (Appearance) -> Unit = {}, preview: Boolean = true) {
-    val colors = LocalPlotusColors.current
-    val panel = if (compact) Modifier.fillMaxSize() else Modifier.fillMaxWidth().heightIn(min = 540.dp)
-        .background(colors.surface, RoundedCornerShape(18.dp)).border(1.dp, colors.line, RoundedCornerShape(18.dp)).padding(28.dp)
-    Column(panel.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-        if (compact) Text("General", fontSize = 26.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold)
-        if (destination == Destination.GENERAL) {
-            if (accountEmail != null) {
-                Text("Account", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                TextButton(onAccount) { Text(accountEmail.ifBlank { "Account settings" }) }
-            }
-            Text("Appearance", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Appearance.entries.forEach { option -> FilterChip(selected = appearance == option, onClick = { onAppearance(option) },
-                    label = { Text(option.name.lowercase().replaceFirstChar { it.uppercase() }) }) }
-            }
-            Text("About", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            listOf("App" to "Plotus", "Version" to "0.1.0").forEach { (label, value) ->
-                Column(Modifier.widthIn(max = 660.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(vertical = 10.dp)) { Text(label, Modifier.weight(1f), color = colors.muted); Text(value) }
-                    Spacer(Modifier.height(14.dp)); HorizontalDivider(color = colors.line)
-                }
-            }
-            TextButton(onExit) { Text(if (preview) "Back to sign in" else "Sign out") }
-        } else {
-            Text("Design preview", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            Text("Local sample projects. You are not signed in.", color = colors.muted)
-            PlotusButton("Back to sign in", onExit, outline = true)
         }
     }
 }

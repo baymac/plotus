@@ -14,6 +14,45 @@ import org.postgresql.ds.PGSimpleDataSource
 import kotlin.test.*
 
 class FloorPlanIntegrationTest {
+    @Test fun presentationAndExportsUseTheOwnedGenerationSnapshotWithoutRerunningGeneration() {
+        val url=System.getenv("PLOTUS_TEST_DATABASE_URL");assumeTrue(url!=null)
+        val source=PGSimpleDataSource().apply {setURL(url!!);user="plotus";password=System.getenv("PLOTUS_TEST_DATABASE_PASSWORD")}
+        val owner=UUID.randomUUID();val other=UUID.randomUUID();val projects=PostgresProjects(source).also {it.migrate()};val jobs=PostgresPlans(source)
+        val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),vertices=listOf(PlotPoint(0.0,0.0),PlotPoint(18.0,0.0),PlotPoint(18.0,12.0),PlotPoint(0.0,12.0)),roads=listOf(PlotRoad(0)))
+        var presentations=0;var exports=0
+        val engine=object:PlanEngine {
+            override suspend fun preview(project:Project,setup:FloorPlanSetup)=error("No preview required")
+            override suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing> = error("Never regenerate saved drawings")
+            override suspend fun present(saved:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> {
+                presentations++;assertEquals(plot,saved);assertEquals(PlotUnits.METRES,units)
+                return drawings.map {it.copy(presentation=PlanPresentation(plotAreaSquareMetres=saved.areaSquareMetres,perimeterMetres=saved.perimeterMetres,builtUpAreaSquareMetres=100.0,carpetAreaSquareMetres=80.0,units=units,vectorAvailable=true),vectorSvgBase64="dmVjdG9yLWZpeHR1cmU=")}
+            }
+            override suspend fun export(drawing:PlanDrawing,format:String):PlanExport {exports++;assertEquals(PlotUnits.METRES,drawing.presentation?.units);return PlanExport("floor.$format","application/octet-stream","Zml4dHVyZQ==")}
+        }
+        val service=FloorPlans(jobs,engine)
+        try {testApplication {
+            application {plotusModule(projects,IdentityVerifier {if(it=="export-owner")owner else other},floorPlans=service)}
+            var project=runBlocking {
+                var p=projects.create(owner,ProjectDraft("Export fixture","Test city"));p=projects.savePlot(owner,UUID.fromString(p.id),p.revision,plot)
+                projects.saveFloorPlan(owner,UUID.fromString(p.id),p.revision,FloorPlanSetup(units=PlotUnits.METRES))
+            }
+            val job=runBlocking {jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan.also {jobs.finish(owner,UUID.fromString(project.id),it.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","original-drawing",100,100))))}}
+            project=runBlocking {projects.savePlot(owner,UUID.fromString(project.id),project.revision,plot.copy(northDegrees=45.0))}
+            runBlocking {service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id))}
+            val base="/v1/projects/${project.id}/floor-plan/generations/${job.id}"
+            suspend fun get(path:String=base,token:String="export-owner")=client.get(path){bearerAuth(token)}
+            val opened=Json.decodeFromString<GeneratedFloorPlan>(get().bodyAsText());assertEquals("original-drawing",opened.drawings.single().pngBase64)
+            assertEquals(80.0,opened.drawings.single().presentation?.carpetAreaSquareMetres)
+            assertEquals(opened,Json.decodeFromString<GeneratedFloorPlan>(get().bodyAsText()));assertEquals(1,presentations)
+            for(format in listOf("png","pdf","dwg"))assertEquals("floor.$format",Json.decodeFromString<PlanExport>(get("$base/drawings/ground/export/$format").bodyAsText()).filename)
+            assertEquals(3,exports)
+            assertEquals(HttpStatusCode.NotFound,get("$base/drawings/ground/export/pdf",token="export-other").status)
+            assertEquals(HttpStatusCode.Unauthorized,client.get("$base/drawings/ground/export/pdf").status)
+            assertEquals(HttpStatusCode.BadRequest,get("$base/drawings/ground/export/svg").status)
+            assertEquals(HttpStatusCode.NotFound,get("$base/drawings/other/export/pdf").status);assertEquals(3,exports)
+            assertEquals(project.revision,runBlocking {projects.get(owner,UUID.fromString(project.id))}.revision)
+        }}finally {service.close();source.connection.use {c->c.prepareStatement("DELETE FROM plotus.projects WHERE owner_id IN (?,?)").use {it.setObject(1,owner);it.setObject(2,other);it.executeUpdate()}}}
+    }
     @Test fun generationHistoryIsPagedOwnedAndDoesNotDownloadDrawings() {
         val url=System.getenv("PLOTUS_TEST_DATABASE_URL");assumeTrue(url!=null)
         val source=PGSimpleDataSource().apply {setURL(url!!);user="plotus";password=System.getenv("PLOTUS_TEST_DATABASE_PASSWORD")}

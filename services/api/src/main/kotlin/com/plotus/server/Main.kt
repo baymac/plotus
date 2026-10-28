@@ -114,6 +114,11 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
                 val job=try {UUID.fromString(call.parameters["job"])}catch(_:IllegalArgumentException){throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")}
                 call.respond(floorPlans.get(owner,id,job,call.request.queryParameters["by"]=="request"))
             }
+            get("/projects/{id}/floor-plan/generations/{job}/drawings/{drawing}/export/{format}") {
+                val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
+                val job=try {UUID.fromString(call.parameters["job"])}catch(_:IllegalArgumentException){throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")}
+                call.respond(floorPlans.export(owner,id,job,call.parameters["drawing"].orEmpty(),call.parameters["format"].orEmpty()))
+            }
             get("/projects/{id}/sketch/{job}") {
                 val owner=call.attributes[Owner];val project=call.projectID()
                 store.get(owner,project)

@@ -10,6 +10,10 @@ The Floor plan stage saves setbacks, building floors and a single residence’s 
 
 Generation is account-owned and runs behind the project API. Floor plan opens its setup canvas; History lists earlier attempts by local date and time. Opening an entry shows its saved drawing on a read-only canvas with pan, zoom and fit, in the app’s current appearance. A running job continues when the screen is closed. A request ID prevents duplicate jobs if the start response is lost, and a project revision prevents generating against a stale boundary. An interrupted service job is marked failed rather than silently repeated.
 
+The generated-plan view keeps room geometry and furniture, with a separate compass and a bottom summary of plot area, perimeter, built-up area and carpet area. Development review comments, sheet headings and outer overall dimensions are removed. The road is labelled “Road (primary)”. These presentation changes preserve the original saved generation and use its measurements rather than the project's current edits.
+
+Export offers PNG and PDF for saved plans, and genuine DWG for new generations that retain vector artwork. Older image-only history entries need a new generation for DWG. Downloads use the normal verified-account project API; the browser downloads the file and iOS opens the system share sheet. The private hosted service uses [GNU LibreDWG](https://www.gnu.org/software/libredwg/) to write millimetre CAD linework and text. No private engine source is sent to the client.
+
 ## Existing technology
 
 The engine and its CAD assets predate the hackathon and remain private. The public app references them through an optional private submodule and can be built without access to it. The hosted connection keeps the engine and service credential behind the app’s API. Public builds without it can still save requirements; preview and generation report that the service is unavailable.

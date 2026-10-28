@@ -6,6 +6,7 @@ import kotlin.coroutines.resumeWithException
 
 /** Only OS services cross this bridge. UI and session state remain shared Kotlin. */
 interface NativeAuthHost {
+    fun savePlanFile(filename:String,mimeType:String,base64:String,completion:(String?,String?)->Unit)
     fun pickPlotImage(completion: (String?, String?) -> Unit)
     fun request(method: String, path: String, body: String?, bearer: String?, csrf: String?, completion: (String?, String?) -> Unit)
     fun createProof(): String

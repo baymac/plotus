@@ -32,6 +32,28 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, PHPickerViewControll
         DispatchQueue.main.async { _ = completion(value, error) }
     }
 
+    func savePlanFile(filename: String, mimeType: String, base64: String, completion: @escaping (String?, String?) -> Void) {
+        guard filename == (filename as NSString).lastPathComponent, let data = Data(base64Encoded: base64) else {
+            complete(completion, nil, "Couldn’t open the exported file."); return
+        }
+        DispatchQueue.main.async {
+            guard let presenter = self.presenter() else { self.complete(completion, nil, "Couldn’t open sharing."); return }
+            do {
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent("Plotus-" + UUID().uuidString, isDirectory: true)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                let url = directory.appendingPathComponent(filename)
+                try data.write(to: url, options: .atomic)
+                let share = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+                if let popover = share.popoverPresentationController { popover.sourceView = presenter.view; popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 1, height: 1) }
+                share.completionWithItemsHandler = { _, completed, _, error in
+                    try? FileManager.default.removeItem(at: directory)
+                    self.complete(completion, completed ? "saved" : nil, error == nil ? (completed ? nil : "cancelled") : "Couldn’t share this file.")
+                }
+                presenter.present(share, animated: true)
+            } catch { self.complete(completion, nil, "Couldn’t save the exported file.") }
+        }
+    }
+
     func request(method: String, path: String, body: String?, bearer: String?, csrf: String?, completion: @escaping (String?, String?) -> Void) {
         guard (path.hasPrefix("/api/auth/") || path.hasPrefix("/v1/")), let origin = setting("PlotusAuthURL"), let base = URL(string: origin),
               base.scheme == "https" || ["localhost", "127.0.0.1", "::1"].contains(base.host ?? ""),

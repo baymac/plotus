@@ -38,6 +38,8 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     var leaving by remember {mutableStateOf<(() -> Unit)?>(null)}
     var catalogue by remember {mutableStateOf(false)}
     var editing by remember {mutableStateOf<Pair<String?,PlanRoom>?>(null)}
+    var viewedFloor by remember(generationID) {mutableStateOf(0)}
+    var exportOpen by remember(generationID) {mutableStateOf(false)}
     val selected=step ?: FloorStep.SETBACKS
     val active=compact&&step!=null
     val close:(()->Unit)->Unit={action->focus.clearFocus();keyboard?.hide();if(workspace.dirty)leaving=action else action()}
@@ -63,6 +65,16 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 when {editing!=null||catalogue->{editing=null;catalogue=false};generationID!=null->onStep(FloorStep.HISTORY);step!=null->onStep(null);else->close(onExit)}
             }
             if(keyboardVisible)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard") {hideKeyboard()}
+            if(generationID!=null&&viewed?.status=="ready")Box {
+                TextButton({exportOpen=true},enabled=!workspace.exporting) {Text(if(workspace.exporting)"Exporting…" else "Export")}
+                DropdownMenu(exportOpen,{exportOpen=false},containerColor=c.surface,tonalElevation=0.dp) {
+                    listOf("png","pdf","dwg").forEach {format->
+                        val available=format!="dwg"||viewed.drawings.getOrNull(viewedFloor)?.presentation?.vectorAvailable==true
+                        DropdownMenuItem(text={Text(format.uppercase(),color=if(available)c.ink else c.subtle)},onClick={exportOpen=false;viewed.drawings.getOrNull(viewedFloor)?.let {workspace.exportPlan(viewed.id,it.id,format)}},enabled=available)
+                    }
+                    if(viewed.drawings.getOrNull(viewedFloor)?.presentation?.vectorAvailable!=true)Text("Generate a new plan for DWG",Modifier.widthIn(max=220.dp).padding(16.dp),fontSize=12.sp,color=c.muted)
+                }
+            }
             if(step!=FloorStep.HISTORY)TextButton({hideKeyboard();workspace.save()},enabled=!busy&&canSave) {Text(if(workspace.saving)"Saving…" else "Save",color=if(!busy&&canSave)c.primary else c.muted)}
         }
         if(workspace.loading)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
@@ -71,9 +83,10 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             PlotusButton("Plot setup",onPlot)
             TextButton({scope.launch {workspace.load(id)}}) {Text("Try again")}
         } else if(generationID!=null) {
+            workspace.exportError?.let {message->Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Text(message,Modifier.weight(1f),fontSize=13.sp,color=MaterialTheme.colorScheme.error);PlotToolButton(PlotSymbol.CLOSE,"Dismiss export error"){workspace.dismissExportError()}}}
             val plan=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
             if(workspace.viewLoading&&plan==null)Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
-            else GenerationView(workspace,plan,compact,Modifier.weight(1f),{workspace.newAttempt();onStep(FloorStep.REQUIREMENTS)},{scope.launch {workspace.openPlan(generationID)}})
+            else GenerationView(workspace,plan,compact,Modifier.weight(1f),{workspace.newAttempt();onStep(FloorStep.REQUIREMENTS)},{scope.launch {workspace.openPlan(generationID)}},viewedFloor,{viewedFloor=it})
         } else if(step==FloorStep.HISTORY) {
             PlanHistory(workspace,Modifier.weight(1f),onGeneration)
         } else {
@@ -207,8 +220,6 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             }
         }}
     }
-    FloorLabel("Floors")
-    NumberChoices((1..6).toList(),setup.buildingFloors,enabled,::buildingLabel) {workspace.change(setup.copy(buildingFloors=it))}
     workspace.previewError?.let {FloorError(it)}
     workspace.preview?.findings?.filter {it.field=="setbacks"}?.forEach {FloorError(it.message)}
 }
@@ -216,6 +227,8 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
 @Composable private fun RequirementControls(workspace:FloorWorkspace,enabled:Boolean,onAdd:()->Unit,onRoom:(String?,PlanRoom)->Unit) {
     val setup=workspace.draft
     val home=setup.homes.first()
+    FloorLabel("Floors")
+    NumberChoices((1..6).toList(),setup.buildingFloors,enabled,::buildingLabel) {workspace.change(setup.copy(buildingFloors=it))}
     FloorLabel("BHK")
     NumberChoices((1..6).toList(),home.bhk,enabled) {workspace.change(setup.withHome(home.copy(bhk=it)))}
     YesNo("Vastu compliant",home.vastu,enabled){workspace.change(setup.withHome(home.copy(vastu=it)))}
@@ -307,17 +320,16 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     }
 }
 
-@Composable private fun GenerationView(workspace:FloorWorkspace,plan:GeneratedFloorPlan?,compact:Boolean,modifier:Modifier,onEdit:()->Unit,onRetry:()->Unit) {
+@Composable private fun GenerationView(workspace:FloorWorkspace,plan:GeneratedFloorPlan?,compact:Boolean,modifier:Modifier,onEdit:()->Unit,onRetry:()->Unit,floor:Int,onFloor:(Int)->Unit) {
     val c=LocalPlotusColors.current
     if(plan?.status in listOf("running","queued"))Column(modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
         CircularProgressIndicator();Spacer(Modifier.height(24.dp));FloorTitle("Creating your floor plan")
         Text("You can leave this screen and come back.",Modifier.padding(top=8.dp),fontSize=14.sp,color=c.muted,textAlign=TextAlign.Center)
         workspace.error?.let {FloorError(it)}
     } else if(plan?.status=="ready") {
-        var floor by remember(plan.id) {mutableStateOf(0)}
         Column(modifier.fillMaxWidth()) {
             if(plan.drawings.size>1)Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=16.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                plan.drawings.forEachIndexed {i,_->FloorChip(floorName(i),floor==i,true){floor=i}}
+                plan.drawings.forEachIndexed {i,_->FloorChip(floorName(i),floor==i,true){onFloor(i)}}
             }
             val drawing=plan.drawings.getOrNull(floor)
             if(drawing!=null)GeneratedPlanCanvas(drawing,compact,Modifier.fillMaxWidth().weight(1f))

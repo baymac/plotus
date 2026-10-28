@@ -17,6 +17,8 @@ import kotlin.math.roundToInt
 interface PlanEngine {
     suspend fun preview(project:Project,setup:FloorPlanSetup):FloorPlanPreview
     suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing>
+    suspend fun present(plot:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> = drawings
+    suspend fun export(drawing:PlanDrawing,format:String):PlanExport = throw ApiFailure(503,"EXPORT_UNAVAILABLE","Export is temporarily unavailable.")
 }
 
 /** The private service URL and bearer credential never leave the API process. */
@@ -38,6 +40,8 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
         if(bytes.size>24*1024*1024)throw ApiFailure(502,"PLAN_TOO_LARGE","The plan preview is too large. Try fewer floors.")
         if(response.statusCode()==429)throw ApiFailure(429,"ENGINE_BUSY","A plan is being generated. Try again shortly.")
         if(response.statusCode()==422) {
+            val upstream=runCatching {Json.parseToJsonElement(bytes.decodeToString()).jsonObject["error"]?.jsonObject}.getOrNull()
+            if(upstream?.get("code")?.jsonPrimitive?.contentOrNull=="DRAWING_UNAVAILABLE")throw ApiFailure(422,"EXPORT_UNAVAILABLE",upstream["message"]?.jsonPrimitive?.contentOrNull ?: "This drawing couldn’t be exported.")
             val code=runCatching {Json.parseToJsonElement(bytes.decodeToString()).jsonObject["error"]?.jsonObject?.get("code")?.jsonPrimitive?.contentOrNull}.getOrNull()
             throw when(code) {
                 "search_budget_exhausted"->ApiFailure(422,"PLAN_SEARCH_LIMIT","Search limit reached. Try again or simplify the requirements.")
@@ -80,8 +84,14 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
         val drawings=Json.decodeFromJsonElement<List<PlanDrawing>>(result["drawings"] ?: throw ApiFailure(502,"PLAN_INVALID","No floor drawing was returned."))
         if(drawings.isEmpty()||drawings.size>6||drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||it.pngBase64.length>6_000_000})
             throw ApiFailure(502,"PLAN_INVALID","The plan preview couldn’t be opened.")
-        return drawings
+        return drawings.map {it.copy(presentation=it.presentation?.copy(units=setup.units))}
     }
+    override suspend fun present(plot:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> = Json.decodeFromJsonElement(request("/v1/drawings/present",buildJsonObject {
+        put("plot",Json.encodeToJsonElement(plot));put("units",units.name);put("drawings",Json.encodeToJsonElement(drawings))
+    })["drawings"] ?: throw ApiFailure(502,"PLAN_INVALID","The drawing couldn’t be opened."))
+    override suspend fun export(drawing:PlanDrawing,format:String):PlanExport = Json.decodeFromJsonElement(request("/v1/drawings/export",buildJsonObject {
+        put("drawing",Json.encodeToJsonElement(drawing));put("format",format)
+    }))
     companion object {
         fun configured():PlanEngine? {
             val url=System.getenv("PLOTUS_ENGINE_URL")?.trim().orEmpty();val token=System.getenv("PLOTUS_ENGINE_SERVICE_TOKEN")?.trim().orEmpty()
@@ -160,6 +170,12 @@ internal fun programme(project:Project,setup:FloorPlanSetup):JsonObject {
 /** Durable, owner-scoped jobs. The unique request ID makes a lost HTTP response safe to recover. */
 data class StartedPlan(val plan:GeneratedFloorPlan,val created:Boolean)
 class PostgresPlans(private val source:DataSource) {
+    suspend fun snapshot(owner:UUID,project:UUID,id:UUID):SavedFloorPlan?=db {c->c.prepareStatement("SELECT snapshot->'floorPlan' AS brief FROM plotus.plan_generations WHERE owner_id=? AND project_id=? AND id=?").use {
+        it.setObject(1,owner);it.setObject(2,project);it.setObject(3,id);it.executeQuery().use {r->if(r.next())r.getString("brief")?.let {json->Json.decodeFromString<SavedFloorPlan>(json)} else null}
+    }}
+    suspend fun cachePresentation(owner:UUID,project:UUID,id:UUID,drawings:List<PlanDrawing>)=db {c->c.prepareStatement("UPDATE plotus.plan_generations SET result=jsonb_set(result,'{drawings}',?::jsonb) WHERE owner_id=? AND project_id=? AND id=? AND status='ready' AND result IS NOT NULL").use {
+        it.setString(1,Json.encodeToString(drawings));it.setObject(2,owner);it.setObject(3,project);it.setObject(4,id);it.executeUpdate()
+    };Unit}
     /** List lightweight summaries; fetch a drawing only when its history entry is opened. */
     suspend fun history(owner:UUID,project:UUID,before:UUID?=null):PlanGenerations=db {c->
         val cursor=if(before==null)"" else " AND (created_at,id)<(SELECT created_at,id FROM plotus.plan_generations WHERE owner_id=? AND project_id=? AND id=?)"
@@ -212,8 +228,24 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
     }
     suspend fun latest(owner:UUID,project:UUID)=jobs?.latest(owner,project)
     suspend fun history(owner:UUID,project:UUID,before:UUID?=null)=jobs?.history(owner,project,before) ?: PlanGenerations(emptyList())
-    suspend fun get(owner:UUID,project:UUID,id:UUID,byRequest:Boolean=false)=jobs?.find(owner,project,id,byRequest)
-        ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
+    suspend fun get(owner:UUID,project:UUID,id:UUID,byRequest:Boolean=false):GeneratedFloorPlan {
+        val plan=jobs?.find(owner,project,id,byRequest) ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
+        if(plan.status!="ready"||plan.drawings.all {it.presentation!=null}||engine==null)return plan
+        val key=UUID.fromString(plan.id)
+        val brief=jobs.snapshot(owner,project,key) ?: return plan
+        val drawings=engine.present(brief.plot,brief.setup.units,plan.drawings)
+        require(drawings.map {it.id}==plan.drawings.map {it.id}) {"Drawing identities changed during presentation"}
+        jobs.cachePresentation(owner,project,key,drawings)
+        return plan.copy(drawings=drawings)
+    }
+    suspend fun export(owner:UUID,project:UUID,id:UUID,drawingID:String,format:String):PlanExport {
+        if(format !in listOf("png","pdf","dwg"))throw ApiFailure(400,"INVALID_FORMAT","Choose PNG, PDF or DWG.")
+        val plan=get(owner,project,id)
+        if(plan.status!="ready")throw ApiFailure(409,"PLAN_NOT_READY","Wait for this plan to finish.")
+        val drawing=plan.drawings.firstOrNull {it.id==drawingID} ?: throw ApiFailure(404,"DRAWING_NOT_FOUND","This floor drawing could not be found.")
+        if(format=="dwg"&&drawing.vectorSvgBase64==null)throw ApiFailure(422,"VECTOR_UNAVAILABLE","Generate a new plan to export DWG. This older plan has a saved image only.")
+        return connected().export(drawing,format)
+    }
     suspend fun start(owner:UUID,project:Project,request:StartPlanRequest):GeneratedFloorPlan {
         val store=jobs ?: throw unavailable()
         val requestID=try {UUID.fromString(request.requestID)}catch(_:IllegalArgumentException){throw ApiFailure(400,"INVALID_REQUEST_ID","Reopen Floor plan and try again.")}

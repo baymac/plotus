@@ -38,7 +38,7 @@ import com.plotus.shared.decimal
 import com.plotus.shared.measureLabel
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import kotlin.io.encoding.Base64
-import kotlin.math.pow
+import kotlin.math.roundToInt
 import org.jetbrains.skia.Data
 import org.jetbrains.skia.svg.SVGDOM
 import org.jetbrains.skia.svg.SVGLengthContext
@@ -67,8 +67,7 @@ import org.jetbrains.skia.svg.SVGLengthContext
     val drawingHeight=vector?.height ?: bitmap?.height?.toFloat() ?: 1f
     val maximumZoom=if(vector!=null)32f else 8f
     var size by remember {mutableStateOf(IntSize(1,1))}
-    var zoom by remember(drawing.id) {mutableStateOf(1f)}
-    var pan by remember(drawing.id) {mutableStateOf(Offset.Zero)}
+    val viewport=rememberCanvasZoom(drawing.id)
     var grid by remember {mutableStateOf(true)}
     val density=LocalDensity.current.density
     val filter=remember(c.ink) {
@@ -82,16 +81,16 @@ import org.jetbrains.skia.svg.SVGLengthContext
     Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().onSizeChanged {size=it}) {
         if(vector!=null||bitmap!=null)Canvas(Modifier.fillMaxSize().semantics {contentDescription="Generated floor plan. Read-only canvas. Drag to pan, pinch or use the toolbar to zoom."+(if(vector!=null)" Vector drawing." else " Image drawing.")}
             .pointerInput(drawing.id,maximumZoom){detectTransformGestures {centre,delta,factor,_->
-                val next=(zoom*factor).coerceIn(.5f,maximumZoom)
                 val origin=Offset(size.width/2f,(size.height+72*density)/2f)
-                pan=(pan+origin-centre)*(next/zoom)+centre-origin+delta
-                zoom=next
+                viewport.gesture(centre,delta,factor,origin,maximumZoom)
             }}.onPointerEvent(PointerEventType.Scroll) {event->
                 val change=event.changes.firstOrNull() ?: return@onPointerEvent
-                val next=(zoom*1.12f.pow(-change.scrollDelta.y)).coerceIn(.5f,maximumZoom)
-                val origin=Offset(size.width/2f,(size.height+72*density)/2f)
-                pan=(pan+origin-change.position)*(next/zoom)+change.position-origin
-                zoom=next;change.consume()
+                val pixels=canvasWheelPixels(event,density)
+                if(pixels!=0f) {
+                    val origin=Offset(size.width/2f,(size.height+72*density)/2f)
+                    viewport.scroll(pixels,change.position,origin,maximumZoom)
+                    change.consume()
+                }
             }) {
                 if(grid) {
                     val spacing=24*density
@@ -101,8 +100,9 @@ import org.jetbrains.skia.svg.SVGLengthContext
                 val top=96*density
                 val sideMargin=if(presentation?.roadPosition in listOf("west","east"))80 else 32
                 val fit=minOf((size.width-sideMargin*density)/drawingWidth,(size.height-top-24*density)/drawingHeight).coerceAtLeast(.01f)
-                val scale=fit*zoom
-                val centre=Offset(size.width/2f,(size.height+72*density)/2f)+pan
+                val view=viewport.view
+                val scale=fit*view.zoom
+                val centre=Offset(size.width/2f,(size.height+72*density)/2f)+view.pan
                 withTransform({translate(centre.x-drawingWidth*scale/2,centre.y-drawingHeight*scale/2);scale(scale,scale,pivot=Offset.Zero)}) {
                     if(vector!=null) {
                         vector.render(drawContext.canvas.nativeCanvas,c.ink.toArgb())
@@ -125,10 +125,10 @@ import org.jetbrains.skia.svg.SVGLengthContext
             .border(1.dp,c.line,RoundedCornerShape(12.dp)).padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
             PlotToolButton(PlotSymbol.HAND,"Pan plan",selected=true) {}
             PlotToolButton(PlotSymbol.GRID,"Toggle guide dots",selected=grid){grid=!grid}
-            PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in"){zoom=(zoom*1.3f).coerceAtMost(maximumZoom)}
-            PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out"){zoom=(zoom/1.3f).coerceAtLeast(.5f)}
-            Text("${(zoom*100).toInt()}%",Modifier.weight(1f),fontSize=11.sp,color=c.muted)
-            PlotToolButton(PlotSymbol.FIT,"Fit plan to canvas"){zoom=1f;pan=Offset.Zero}
+            PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in"){viewport.step(1.15f,maximumZoom)}
+            PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out"){viewport.step(1f/1.15f,maximumZoom)}
+            Text("${(viewport.view.zoom*100).roundToInt()}%",Modifier.weight(1f),fontSize=11.sp,color=c.muted)
+            PlotToolButton(PlotSymbol.FIT,"Fit plan to canvas"){viewport.reset()}
             Box {
                 PlotToolButton(PlotSymbol.MORE,"Plan canvas options") {optionsOpen=true}
                 DropdownMenu(optionsOpen,{optionsOpen=false},containerColor=c.surface,tonalElevation=0.dp) {

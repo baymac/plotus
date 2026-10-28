@@ -32,8 +32,10 @@ class FloorWorkspace(
     var starting by mutableStateOf(false);private set
     private var requestID:String?=null
     private var polling:Job?=null
-    val dirty get()=draft!=saved
-    val needsReview get()=project?.floorPlan?.let {it.plot!=project?.plotSetup}==true
+    private val areas=mutableMapOf<BuildableAreaKey,SavedBuildableArea>()
+    val footprintKey get()=project?.plotSetup?.let {draft.buildableKey(it)}
+    val dirty get()=draft!=saved.singleResidence()
+    val needsReview get()=project?.floorPlan?.let {it.plot!=project?.plotSetup||it.setup!=it.setup.singleResidence()}==true
     val generating get()=starting||generation?.status in listOf("queued","running")
     private val base get()="/v1/projects/${project!!.id}/floor-plan"
     suspend fun load(id:String) {
@@ -41,7 +43,8 @@ class FloorWorkspace(
         loading=true;error=null
         try {
             val p=authJson.decodeFromJsonElement<Project>(request("GET","/v1/projects/$id",null))
-            project=p;saved=p.floorPlan?.setup ?: FloorPlanSetup(units=p.plotSetup?.units ?: PlotUnits.FEET_INCHES);draft=saved;accepted(p)
+            project=p;saved=p.floorPlan?.setup ?: FloorPlanSetup(units=p.plotSetup?.units ?: PlotUnits.FEET_INCHES);draft=saved.singleResidence();accepted(p)
+            p.buildableArea?.let {areas[it.key]=it};restoreArea()
             validation=emptyMap();conflict=false
             generation=authJson.decodeFromJsonElement<PlanGenerations>(request("GET","$base/generations",null)).plans.firstOrNull()
             generation?.takeIf {it.status in listOf("running","queued")}?.let {poll(it)}
@@ -50,21 +53,32 @@ class FloorWorkspace(
         finally {loading=false}
     }
     fun change(next:FloorPlanSetup) {
-        if(saving||generating||next==draft)return
-        draft=next;preview=null;previewError=null;error=null
-        requestID=null;validation=next.errors(project?.plotSetup)
+        val updated=next.singleResidence()
+        if(saving||generating||updated==draft)return
+        val previousKey=footprintKey
+        draft=updated;error=null
+        if(previousKey!=footprintKey)restoreArea()
+        requestID=null;validation=updated.errors(project?.plotSetup)
     }
-    fun discard(){draft=saved;validation=emptyMap();error=null;preview=null;requestID=null;conflict=false}
+    fun discard(){draft=saved.singleResidence();validation=emptyMap();error=null;restoreArea();requestID=null;conflict=false}
+    private fun restoreArea() {
+        preview=footprintKey?.let {areas[it]}?.asPreview();previewError=null
+    }
+    private fun SavedBuildableArea.asPreview()=FloorPlanPreview(envelope,
+        if(envelope.empty)listOf(PlanFinding("These setbacks leave no buildable area.","setbacks")) else emptyList())
     suspend fun refreshPreview() {
         val p=project ?: return
-        if(loading||generating||generation!=null||draft.errors(p.plotSetup,true).isNotEmpty())return
+        val key=footprintKey ?: return
+        areas[key]?.let {preview=it.asPreview();previewError=null;return}
+        if(loading||generating||generation!=null||draft.geometrySetup().errors(p.plotSetup,true).isNotEmpty())return
         val snapshot=draft;val revision=p.revision
         previewing=true
         try {
-            val result=authJson.decodeFromJsonElement<FloorPlanPreview>(request("POST","$base/preview",authJson.encodeToString(PreviewFloorPlanRequest(snapshot,revision))))
-            if(draft==snapshot&&project?.revision==revision){preview=result;previewError=null}
+            val result=authJson.decodeFromJsonElement<SavedBuildableArea>(request("POST","$base/envelope",authJson.encodeToString(PreviewFloorPlanRequest(snapshot,revision))))
+            if(result.key==key)areas[key]=result
+            if(footprintKey==key&&result.key==key){preview=result.asPreview();previewError=null}
         }catch(cancelled:CancellationException){throw cancelled}
-        catch(failure:Exception){if(draft==snapshot)previewError=failure.message ?: "Couldn’t preview the buildable area."}
+        catch(failure:Exception){if(footprintKey==key)previewError=failure.message ?: "Couldn’t preview the buildable area."}
         finally {previewing=false}
     }
     fun save(complete:Boolean=false,setbacks:Boolean=false,onSaved:()->Unit={}) {
@@ -73,7 +87,7 @@ class FloorWorkspace(
         validationAttempt++
         validation=if(setbacks&&!complete)draft.errors(current.plotSetup,true).filterKeys {it=="plot"||it=="floors"||it=="homes"||it.startsWith("setback")} else draft.errors(current.plotSetup,complete)
         if(validation.isNotEmpty())return
-        if(!dirty&&current.floorPlan!=null&&current.floorPlan?.plot==current.plotSetup){onSaved();return}
+        if(!dirty&&current.floorPlan?.setup==draft&&current.floorPlan?.plot==current.plotSetup){onSaved();return}
         val snapshot=draft;saving=true;error=null
         scope.launch {
             try {
@@ -83,7 +97,8 @@ class FloorWorkspace(
                     val confirmed=try {authJson.decodeFromJsonElement<Project>(request("GET","/v1/projects/${current.id}",null))}catch(cancelled:CancellationException){throw cancelled}catch(_:Exception){null}
                     if(confirmed?.floorPlan==SavedFloorPlan(snapshot,current.plotSetup!!))confirmed else throw failure
                 }
-                project=updated;saved=snapshot;conflict=false;accepted(updated);onSaved()
+                project=updated;saved=snapshot;conflict=false
+                updated.buildableArea?.let {areas[it.key]=it};restoreArea();accepted(updated);onSaved()
             }catch(cancelled:CancellationException){throw cancelled}
             catch(failure:Exception){conflict=(failure as? AuthFailure)?.code=="PROJECT_CHANGED";error=if(conflict)"Project changed on another device." else failure.message ?: "Couldn’t save Floor plan."}
             finally {saving=false}

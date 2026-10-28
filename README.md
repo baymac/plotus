@@ -16,7 +16,7 @@ Choose **Start project** at [plotus.app](https://plotus.app) to open your worksp
 
 ## Plan the home
 
-Continue to **Floor plan** to review setbacks and the buildable area, choose the building’s floors and homes, and set each home’s BHK and Vastu preference. Use automatic requirements or add rooms, attached bathrooms, closets and shared spaces. Save the brief to continue on another device.
+Continue to **Floor plan** to review setbacks and the buildable area, choose the building’s floors, BHK and Vastu preference. Use automatic requirements or add rooms, attached bathrooms, closets, parking and circulation. Save the brief to continue on another device.
 
 Choose **Generate plan** to request a checked concept. Generation continues when you leave the screen. If the requirements cannot produce a checked layout, Plotus asks you to adjust them. Detailed design, structural approval and construction documents still need a professional designer.
 

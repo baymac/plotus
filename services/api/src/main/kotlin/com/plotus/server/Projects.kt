@@ -38,7 +38,7 @@ class PostgresProjects(internal val source: DataSource) : ProjectStore {
         }
     }
     fun migrate() {
-        val sql = listOf("001_projects.sql", "002_plot_setup.sql", "003_floor_plan.sql").joinToString("\n") { file ->
+        val sql = listOf("001_projects.sql", "002_plot_setup.sql", "003_floor_plan.sql", "004_buildable_areas.sql").joinToString("\n") { file ->
             javaClass.getResourceAsStream("/migrations/$file")!!.bufferedReader().use { it.readText() }
         }
         source.connection.use { connection -> connection.createStatement().use { it.execute(sql) } }

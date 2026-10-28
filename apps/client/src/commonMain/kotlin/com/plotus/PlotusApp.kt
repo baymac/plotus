@@ -88,7 +88,7 @@ fun PlotusApp() {
                         } else if(destination==Destination.FLOOR_PLAN&&workspace!=null) {
                             val id=navigation.projectID!!
                             Box(Modifier.weight(1f).fillMaxWidth()) {
-                                FloorPlanScreen(workspace.floor(id),id,navigation.floorStep,compact,{navigation.openFloor(id,it)},{navigation.openProject(id)},{navigation.navigate(Destination.PROJECTS)})
+                                FloorPlanScreen(workspace.floor(id),id,navigation.floorStep,compact,{navigation.openFloor(id,it,replace=compact)},{navigation.openProject(id)},{navigation.navigate(Destination.PROJECTS)})
                             }
                         } else {
                         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) 24.dp else 32.dp,

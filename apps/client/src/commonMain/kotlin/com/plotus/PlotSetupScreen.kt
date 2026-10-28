@@ -48,13 +48,18 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
     val editing=compact&&step!=null
     val focus=LocalFocusManager.current
     val keyboardController=LocalSoftwareKeyboardController.current
+    val keyboard=WindowInsets.ime.getBottom(LocalDensity.current)>0
     // safeDrawing includes the keyboard. Applying imePadding as well duplicates it on iOS.
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
         Row(Modifier.fillMaxWidth().height(if(editing)48.dp else 64.dp).padding(start=if(compact)8.dp else 20.dp,end=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            if(compact)PlotToolButton(PlotSymbol.BACK,"Back to projects",enabled=!workspace.saving) {focus.clearFocus();keyboardController?.hide();close(onExit)}
-            Column(Modifier.weight(1f)) {
-                Text(workspace.project?.name ?: "Plot setup",maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=16.sp,fontWeight=FontWeight.SemiBold)
+            if(compact||step!=null)PlotToolButton(PlotSymbol.BACK,if(step==null)"Back to projects" else "Back to plot",enabled=!workspace.saving) {
+                focus.clearFocus();keyboardController?.hide()
+                if(step!=null)onStep(null) else close(onExit)
             }
+            Column(Modifier.weight(1f)) {
+                Text(step?.title() ?: workspace.project?.name ?: "Plot setup",maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=16.sp,fontWeight=FontWeight.SemiBold)
+            }
+            if(keyboard)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard",enabled=!workspace.saving) {focus.clearFocus();keyboardController?.hide()}
             TextButton({focus.clearFocus();keyboardController?.hide();workspace.save(requireBoundary=step==PlotStep.BOUNDARY,requireRoads=step==PlotStep.ROADS)},enabled=workspace.project!=null&&!workspace.loading&&!workspace.saving&&workspace.dirty) {
                 Text(if(workspace.saving)"Saving…" else "Save",fontSize=14.sp,color=if(workspace.dirty&&!workspace.saving)c.primary else c.muted)
             }
@@ -106,12 +111,6 @@ private fun MobilePlotEditor(workspace:PlotWorkspace,step:PlotStep?,onStep:(Plot
                 val canvasHeight=minOf(if(keyboard)160.dp else 280.dp,availableHeight*(if(keyboard).40f else .43f))
                 PlotCanvas(workspace,step,true,Modifier.fillMaxWidth().height(canvasHeight),showToolbar=!keyboard)
                 HorizontalDivider(color=c.line)
-                Row(Modifier.fillMaxWidth().background(c.active).padding(start=20.dp,end=8.dp).height(44.dp),verticalAlignment=Alignment.CenterVertically) {
-                    PlotSymbol(when(step){PlotStep.BOUNDARY->PlotSymbol.BOUNDARY;PlotStep.DIRECTION->PlotSymbol.COMPASS;PlotStep.ROADS->PlotSymbol.ROAD},c.primary,Modifier.size(18.dp))
-                    Text(step.title(),Modifier.weight(1f).padding(start=10.dp),fontSize=15.sp,fontWeight=FontWeight.SemiBold,color=c.primary)
-                    if(keyboard)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard",enabled=!workspace.saving) {focus.clearFocus();keyboardController?.hide()}
-                    TextButton({focus.clearFocus();keyboardController?.hide();workspace.save(requireBoundary=step==PlotStep.BOUNDARY,requireRoads=step==PlotStep.ROADS) {onStep(null)}},enabled=!workspace.saving) {Text(if(workspace.saving)"Saving…" else "Done",color=c.primary)}
-                }
                 PlotFields(workspace,step,Modifier.weight(1f),onReload)
             }
             if(step==null) {
@@ -207,11 +206,12 @@ private fun PlotProblems(workspace:PlotWorkspace,modifier:Modifier=Modifier,onRe
 private fun SketchUpload(workspace:PlotWorkspace,modifier:Modifier=Modifier,onReview:()->Unit) {
     val c=LocalPlotusColors.current
     Column(modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        OutlinedButton({workspace.readSketch()},Modifier.fillMaxWidth().height(48.dp),enabled=!workspace.saving&&!workspace.readingSketch,
+        OutlinedButton({workspace.readSketch()},Modifier.fillMaxWidth().height(48.dp),enabled=!workspace.saving&&!workspace.choosingSketch&&!workspace.readingSketch,
             shape=RoundedCornerShape(10.dp),border=BorderStroke(1.dp,c.line),colors=ButtonDefaults.outlinedButtonColors(containerColor=c.quiet),contentPadding=PaddingValues(12.dp)) {
             if(workspace.readingSketch)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp,color=c.primary) else PlotSymbol(PlotSymbol.IMAGE,c.muted)
             Spacer(Modifier.width(8.dp));Text(if(workspace.readingSketch)"Reading sketch…" else "Upload plot image",color=c.ink,fontSize=14.sp,fontWeight=FontWeight.SemiBold)
         }
+        if(workspace.readingSketch)TextButton({workspace.cancelSketchRead()},Modifier.align(Alignment.End)) {Text("Cancel",color=c.muted)}
         workspace.sketchError?.let {Text(it,fontSize=13.sp,color=MaterialTheme.colorScheme.error)}
         workspace.sketchSuggestion?.let { suggestion ->
             Column(Modifier.fillMaxWidth().background(c.active,RoundedCornerShape(12.dp)).padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {

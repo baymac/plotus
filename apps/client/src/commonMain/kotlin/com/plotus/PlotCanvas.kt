@@ -92,9 +92,9 @@ private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float
 }
 
 @Composable
-internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true, readOnly:Boolean=false, envelope:FloorEnvelope?=null) {
+internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true, readOnly:Boolean=false, envelope:FloorEnvelope?=null,onUnitsChange:((PlotUnits)->Unit)?=null) {
     val c=LocalPlotusColors.current
-    var tool by remember { mutableStateOf(PlotTool.MOVE) }
+    var tool by remember(readOnly) { mutableStateOf(if(readOnly)PlotTool.HAND else PlotTool.MOVE) }
     var toolOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     var grid by remember { mutableStateOf(true) }
@@ -218,6 +218,8 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
         }
         if(showToolbar) Row(Modifier.align(Alignment.TopCenter).padding(horizontal=if(compact)12.dp else 20.dp,vertical=if(compact)6.dp else 12.dp).fillMaxWidth().height(if(compact)44.dp else 52.dp)
             .background(c.surface,RoundedCornerShape(12.dp)).border(1.dp,c.line,RoundedCornerShape(12.dp)).padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
+            if(readOnly)PlotToolButton(PlotSymbol.HAND,"Pan canvas",selected=true) {tool=PlotTool.HAND}
+            else {
             Box {
                 Row(verticalAlignment=Alignment.CenterVertically) {
                     PlotToolButton(if(tool==PlotTool.MOVE)PlotSymbol.POINTER else PlotSymbol.HAND,if(tool==PlotTool.MOVE)"Adjust corner angles" else "Pan canvas",selected=true,enabled=!workspace.saving&&(tool!=PlotTool.MOVE||anglesEnabled)) {toolOpen=!toolOpen}
@@ -230,7 +232,8 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
             }
             PlotToolButton(PlotSymbol.UNDO,"Undo plot change",workspace.canUndo&&!workspace.saving) {workspace.undo()}
             PlotToolButton(PlotSymbol.REDO,"Redo plot change",workspace.canRedo&&!workspace.saving) {workspace.redo()}
-            if(!compact && canvasSize.width/density>600) {
+            }
+            if(readOnly||!compact && canvasSize.width/density>600) {
                 PlotToolButton(PlotSymbol.GRID,"Toggle canvas grid",selected=grid) {grid=!grid}
                 PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in") {zoom=(zoom*1.2f).coerceAtMost(4f)}
                 PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out") {zoom=(zoom/1.2f).coerceAtLeast(.3f)}
@@ -241,7 +244,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
                 PlotToolButton(PlotSymbol.MORE,"Plot canvas options") {moreOpen=true}
                 DropdownMenu(moreOpen,{moreOpen=false}) {
                     Text("Units",Modifier.padding(horizontal=12.dp,vertical=8.dp),fontSize=12.sp,color=c.muted)
-                    PlotUnits.entries.forEach { unit -> DropdownMenuItem(text={Text((if(setup.units==unit)"✓  " else "")+if(unit==PlotUnits.METRES)"Metres" else "Feet & inches")},onClick={workspace.change(setup.copy(units=unit));moreOpen=false},enabled=!workspace.saving) }
+                    PlotUnits.entries.forEach { unit -> DropdownMenuItem(text={Text((if(setup.units==unit)"✓  " else "")+if(unit==PlotUnits.METRES)"Metres" else "Feet & inches")},onClick={if(onUnitsChange!=null)onUnitsChange(unit) else workspace.change(setup.copy(units=unit));moreOpen=false},enabled=!workspace.saving) }
 
                 }
             }

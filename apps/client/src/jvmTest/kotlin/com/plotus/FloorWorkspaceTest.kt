@@ -7,6 +7,27 @@ import kotlinx.serialization.json.*
 import kotlin.test.*
 
 class FloorWorkspaceTest {
+    @Test fun savedEnvelopeAppearsImmediatelyAndFloorOrRoomEditsDoNotReloadIt()=runBlocking<Unit> {
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
+        val area=SavedBuildableArea(FloorPlanSetup().buildableKey(plot),FloorEnvelope(areaSquareMetres=100.0))
+        val loaded=initial.copy(buildableArea=area);var posts=0
+        val workspace=FloorWorkspace(scope,{method,path,_->
+            if(method=="POST")posts++
+            if(path.endsWith("/generations"))authJson.encodeToJsonElement(PlanGenerations(emptyList())) else authJson.encodeToJsonElement(loaded)
+        },{})
+        try {
+            workspace.load(initial.id)
+            assertEquals(area.envelope,workspace.preview?.envelope)
+            workspace.change(workspace.draft.copy(buildingFloors=3,units=PlotUnits.METRES))
+            workspace.change(workspace.draft.withHome(workspace.draft.homes.first().copy(bhk=4,vastu=false)))
+            workspace.refreshPreview()
+            assertEquals(area.envelope,workspace.preview?.envelope)
+            assertFalse(workspace.previewing);assertEquals(0,posts)
+            workspace.change(workspace.draft.copy(setbackMode=PlanMode.CUSTOM,commonSetbackMetres=.9))
+            assertNull(workspace.preview)
+            workspace.discard();assertEquals(area.envelope,workspace.preview?.envelope)
+        }finally {scope.cancel()}
+    }
     private val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(0))).rebuild()
     private val initial=Project("c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a","Home","Test city",revision=2,plotSetup=plot,floorPlan=SavedFloorPlan(FloorPlanSetup(),plot))
     @Test fun lostSaveReplyRequiresTheExactSavedBriefBeforeClearingTheDraft()=runBlocking<Unit> {

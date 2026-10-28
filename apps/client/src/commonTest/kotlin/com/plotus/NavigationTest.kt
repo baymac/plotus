@@ -47,6 +47,18 @@ class NavigationTest {
 
 class PlotNavigationTest {
     private val id = "c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a"
+    @Test fun floorOverviewAndInlineControlsKeepTheirOwnLocations() {
+        val navigation=AppNavigation(AppLocation("/projects")) {_,_->}
+        navigation.openFloor(id)
+        assertNull(navigation.floorStep)
+        assertEquals("/projects/$id/floor-plan",navigation.path)
+        navigation.openFloor(id,com.plotus.shared.FloorStep.SETBACKS,replace=true)
+        assertEquals("/projects/$id/floor-plan/setbacks",navigation.path)
+        navigation.openFloor(id,replace=true)
+        navigation.reconcileSession(false,false);navigation.reconcileSession(true,false)
+        assertNull(navigation.floorStep)
+        assertEquals("/projects/$id/floor-plan",navigation.path)
+    }
     @Test fun floorPlanDeepLinksReturnToTheSameSectionAfterSignIn() {
         val route="/projects/$id/floor-plan/requirements"
         val navigation=AppNavigation(AppLocation(route)) {_,_->}

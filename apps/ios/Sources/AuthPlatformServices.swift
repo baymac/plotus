@@ -9,8 +9,9 @@ import GoogleSignIn
 import PlotusApp
 
 /// OS adapters only. Shared Kotlin owns accounts, sessions and every app screen.
-final class AuthPlatformServices: NSObject, NativeAuthHost, PHPickerViewControllerDelegate, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding, ASWebAuthenticationPresentationContextProviding {
+final class AuthPlatformServices: NSObject, NativeAuthHost, PHPickerViewControllerDelegate, UIAdaptivePresentationControllerDelegate, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding, ASWebAuthenticationPresentationContextProviding {
     private var photoCompletion: ((String?, String?) -> Void)?
+    private weak var photoPicker: PHPickerViewController?
     private let session = URLSession(configuration: .ephemeral)
     private var passkeyCompletion: ((String?, String?) -> Void)?
     private var passkeyOperation: String?
@@ -68,14 +69,19 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, PHPickerViewControll
             let picker = PHPickerViewController(configuration: config)
             picker.delegate = self
             self.photoCompletion = completion
-            presenter.present(picker, animated: true)
+            self.photoPicker = picker
+            picker.presentationController?.delegate = self
+            presenter.present(picker, animated: true) {
+                picker.presentationController?.delegate = self
+            }
         }
     }
 
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        picker.dismiss(animated: true)
-        guard let completion = photoCompletion else { return }
+        guard picker === photoPicker, let completion = photoCompletion else { return }
         photoCompletion = nil
+        photoPicker = nil
+        picker.dismiss(animated: true)
         guard let item = results.first?.itemProvider else { complete(completion, nil, "cancelled"); return }
         guard let type = item.registeredTypeIdentifiers.first(where: { UTType($0)?.conforms(to: .image) == true }) else {
             complete(completion, nil, "Choose a photo of your plot sketch."); return
@@ -97,6 +103,14 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, PHPickerViewControll
             }
             self.complete(completion, value, nil)
         }
+    }
+
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        guard presentationController.presentedViewController === photoPicker,
+              let completion = photoCompletion else { return }
+        photoCompletion = nil
+        photoPicker = nil
+        complete(completion, nil, "cancelled")
     }
 
     private func sketchJPEG(_ thumbnail: CGImage) -> Data? {

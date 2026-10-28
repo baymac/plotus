@@ -61,6 +61,12 @@ import kotlinx.serialization.Serializable
     val sharedRooms:List<PlanRoom> = emptyList(),
     val archivedHomes:List<PlanHome> = emptyList(),
 ) {
+    /** One residence spans the building. Keep earlier residences available in saved data. */
+    fun singleResidence():FloorPlanSetup {
+        val primary=(homes.firstOrNull() ?: PlanHome("home-1")).copy(startFloor=0,floorsOccupied=buildingFloors)
+        val archived=(homes.drop(1)+archivedHomes).filter {it.id!=primary.id}.distinctBy {it.id}
+        return copy(homes=listOf(primary),archivedHomes=archived)
+    }
     fun withHomeCount(count:Int):FloorPlanSetup {
         require(count in 1..5)
         val pool=(archivedHomes+homes).associateBy {it.id}
@@ -112,7 +118,7 @@ import kotlinx.serialization.Serializable
                 if(r.kind.shared)put("room.${r.id}","Move this room to Shared areas.")
                 if(complete&&home.mode==PlanMode.CUSTOM&&r.floor!=null&&r.floor !in home.startFloor until home.startFloor+home.floorsOccupied)put("room.${r.id}","Choose one of this home’s floors.")
             }
-            if(complete&&home.mode==PlanMode.CUSTOM&&home.rooms.count {it.kind==RoomKind.BEDROOM}!=home.bhk)put("$prefix.bhk","Home ${i+1} needs ${home.bhk} bedrooms for ${home.bhk} BHK.")
+            if(complete&&home.mode==PlanMode.CUSTOM&&home.rooms.count {it.kind==RoomKind.BEDROOM}!=home.bhk)put("$prefix.bhk",if(homes.size==1)"Add ${home.bhk} bedrooms for ${home.bhk} BHK." else "Home ${i+1} needs ${home.bhk} bedrooms for ${home.bhk} BHK.")
         }
         if(sharedRooms.size>40)put("shared","Use at most 40 shared spaces.")
         sharedRooms.forEach {room(it,"room.${it.id}");if(!it.kind.shared)put("room.${it.id}","Assign this room to a home.")}
@@ -128,6 +134,16 @@ fun seedRooms(homeID:String,bhk:Int)=List(bhk) {i->PlanRoom("$homeID-bedroom-${i
 @Serializable data class SaveFloorPlanRequest(val setup:FloorPlanSetup,val revision:Long)
 @Serializable data class PreviewFloorPlanRequest(val setup:FloorPlanSetup,val revision:Long)
 @Serializable data class FloorEnvelope(val outlines:List<List<PlotPoint>> = emptyList(),val areaSquareMetres:Double?=null,val edgeSetbacksMetres:List<Double> = emptyList(),val empty:Boolean=false)
+@Serializable data class SetbackInput(val mode:PlanMode=PlanMode.AUTO,val same:Boolean=true,val commonMetres:Double?=null,val edgesMetres:List<Double?> = emptyList())
+@Serializable data class BuildableAreaKey(val plot:PlotSetup,val setbacks:SetbackInput,val version:Int=1)
+@Serializable data class SavedBuildableArea(val key:BuildableAreaKey,val envelope:FloorEnvelope)
+/** Display units, storeys and room programmes do not change a site's buildable footprint. */
+fun FloorPlanSetup.buildableKey(plot:PlotSetup)=BuildableAreaKey(plot.copy(units=PlotUnits.FEET_INCHES),when {
+    setbackMode==PlanMode.AUTO->SetbackInput()
+    sameSetback->SetbackInput(PlanMode.CUSTOM,commonMetres=commonSetbackMetres)
+    else->SetbackInput(PlanMode.CUSTOM,same=false,edgesMetres=edgeSetbacksMetres)
+})
+fun FloorPlanSetup.geometrySetup()=FloorPlanSetup(setbackMode=setbackMode,sameSetback=sameSetback,commonSetbackMetres=commonSetbackMetres,edgeSetbacksMetres=edgeSetbacksMetres,homes=listOf(PlanHome("home-1",vastu=false)))
 @Serializable data class PlanFinding(val message:String,val field:String?=null)
 @Serializable data class FloorPlanPreview(val envelope:FloorEnvelope?=null,val findings:List<PlanFinding> = emptyList(),val canGenerate:Boolean=false)
 @Serializable data class StartPlanRequest(val revision:Long,val requestID:String)

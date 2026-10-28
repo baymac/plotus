@@ -14,6 +14,7 @@ class PlotWorkspace(
     private val write: suspend (Project, PlotSetup) -> Project,
     private val accepted: (Project) -> Unit,
     private val extract: (suspend (SketchImage) -> SketchSuggestion)? = null,
+    private val pickImage: suspend () -> SketchImage? = { pickSketchImage() },
 ) {
     var project by mutableStateOf<Project?>(null); private set
     var draft by mutableStateOf(PlotSetup()); private set
@@ -25,6 +26,9 @@ class PlotWorkspace(
     var validation by mutableStateOf<Map<String,String>>(emptyMap()); private set
     var directionText by mutableStateOf("0"); private set
     var readingSketch by mutableStateOf(false); private set
+    var choosingSketch by mutableStateOf(false); private set
+    private var sketchTask: Job? = null
+    private var sketchAttempt = 0
     var sketchError by mutableStateOf<String?>(null); private set
     var sketchSuggestion by mutableStateOf<SketchSuggestion?>(null); private set
     var sketchNotes by mutableStateOf<List<String>>(emptyList()); private set
@@ -69,19 +73,29 @@ class PlotWorkspace(
         sketchSuggestion=null
     }
     fun readSketch() {
-        if(readingSketch||saving)return
-        if(extract==null) {sketchError="Sign in to read a sketch. You can enter measurements manually in the demo.";return}
-        sketchError=null;readingSketch=true
-        scope.launch {
+        if(choosingSketch||readingSketch||saving)return
+        val reader=extract ?: run {sketchError="Sign in to read a sketch. You can enter measurements manually in the demo.";return}
+        val attempt=++sketchAttempt
+        sketchError=null;choosingSketch=true
+        // Open the browser picker within the user's click, before the first suspension.
+        sketchTask=scope.launch(start=CoroutineStart.UNDISPATCHED) {
             try {
-                val image=pickSketchImage() ?: return@launch
-                sketchSuggestion=null
-                val reader=extract ?: throw AuthFailure(503,"Sign in to read a sketch. You can enter measurements manually in the demo.")
-                sketchSuggestion=reader(image)
+                val image=pickImage() ?: return@launch
+                ensureActive()
+                if(attempt!=sketchAttempt)return@launch
+                choosingSketch=false;readingSketch=true;sketchSuggestion=null
+                val suggestion=reader(image)
+                ensureActive()
+                if(attempt==sketchAttempt)sketchSuggestion=suggestion
             } catch(cancelled:CancellationException) {throw cancelled}
-            catch(failure:Exception) {sketchError=failure.message ?: "Couldn’t read this sketch. Try a clearer photo."}
-            finally {readingSketch=false}
+            catch(failure:Exception) {if(attempt==sketchAttempt)sketchError=failure.message ?: "Couldn’t read this sketch. Try a clearer photo."}
+            finally {if(attempt==sketchAttempt){choosingSketch=false;readingSketch=false;sketchTask=null}}
         }
+    }
+    fun cancelSketchRead() {
+        sketchAttempt++
+        sketchTask?.cancel();sketchTask=null
+        choosingSketch=false;readingSketch=false;sketchError=null
     }
     fun editDirection(text: String) {
         if(saving || !Regex("^-?\\d{0,3}(\\.\\d{0,2})?$").matches(text))return

@@ -21,12 +21,12 @@ import kotlinx.serialization.SerializationException
 
 private val Owner = AttributeKey<UUID>("verified-owner")
 
-fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sketches: SketchImports = SketchImports.configured(), floorPlans:FloorPlans=FloorPlans()) {
+fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sketches: SketchImports = SketchImports.configured(), floorPlans:FloorPlans=FloorPlans(),buildableAreas:BuildableAreas=BuildableAreas()) {
     monitor.subscribe(ApplicationStopped) {sketches.close();floorPlans.close()}
     install(ContentNegotiation) { json() }
     install(RequestBodyLimit) { bodyLimit { call -> when {
         call.request.path().matches(Regex("^/v1/projects/[^/]+/sketch$"))->4*1024*1024L
-        call.request.path().matches(Regex("^/v1/projects/[^/]+/floor-plan(?:/preview)?$"))->128*1024L
+        call.request.path().matches(Regex("^/v1/projects/[^/]+/floor-plan(?:/(preview|envelope))?$"))->128*1024L
         else->16*1024L
     } } }
     install(StatusPages) {
@@ -56,7 +56,7 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
                 call.attributes.put(Owner,identity.user(header.removePrefix("Bearer ")))
             }
             get("/projects") { call.respond(ProjectList(store.list(call.attributes[Owner]))) }
-            get("/projects/{id}") { call.respond(store.get(call.attributes[Owner],call.projectID())) }
+            get("/projects/{id}") { val owner=call.attributes[Owner];call.respond(buildableAreas.enrich(owner,store.get(owner,call.projectID()))) }
             post("/projects") {
                 val request = call.receive<SaveProjectRequest>()
                 request.details.validate()
@@ -87,7 +87,12 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
                 if(project.plotSetup==null)throw ApiFailure(400,"PLOT_REQUIRED","Complete Plot setup first.")
                 val errors=request.setup.errors(project.plotSetup)
                 if(errors.isNotEmpty())throw ApiFailure(400,"VALIDATION_FAILED","Check the floor-plan details.",errors)
-                call.respond(store.saveFloorPlan(owner,id,request.revision,request.setup))
+                call.respond(buildableAreas.enrich(owner,store.saveFloorPlan(owner,id,request.revision,request.setup)))
+            }
+            post("/projects/{id}/floor-plan/envelope") {
+                val owner=call.attributes[Owner];val project=store.get(owner,call.projectID());val request=call.receive<PreviewFloorPlanRequest>()
+                if(project.revision!=request.revision)throw ApiFailure(409,"PROJECT_CHANGED","The project changed. Reopen Floor plan.")
+                call.respond(buildableAreas.get(owner,project,request.setup))
             }
             post("/projects/{id}/floor-plan/preview") {
                 val project=store.get(call.attributes[Owner],call.projectID());val request=call.receive<PreviewFloorPlanRequest>()
@@ -134,6 +139,8 @@ fun main() {
     val identity = AuthServiceIdentity(System.getenv("AUTH_INTERNAL_URL") ?: "http://127.0.0.1:4001")
     val port = System.getenv("PORT")?.toIntOrNull() ?: 4000
     val jobs=PostgresPlans(store.source).also {it.recover()}
-    val plans=FloorPlans(jobs,HttpPlanEngine.configured())
-    embeddedServer(Netty,port=port,host=System.getenv("HOST") ?: "127.0.0.1") { plotusModule(store,identity,floorPlans=plans) }.start(wait=true)
+    val engine=HttpPlanEngine.configured()
+    val plans=FloorPlans(jobs,engine)
+    val areas=BuildableAreas(PostgresBuildableAreas(store.source),engine)
+    embeddedServer(Netty,port=port,host=System.getenv("HOST") ?: "127.0.0.1") { plotusModule(store,identity,floorPlans=plans,buildableAreas=areas) }.start(wait=true)
 }

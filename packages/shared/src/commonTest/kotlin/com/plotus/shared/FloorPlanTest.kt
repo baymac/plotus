@@ -3,6 +3,27 @@ package com.plotus.shared
 import kotlin.test.*
 
 class FloorPlanTest {
+    @Test fun buildableFootprintIgnoresFloorsRoomsAndDisplayUnits() {
+        val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(0))).rebuild()
+        val setup=FloorPlanSetup(setbackMode=PlanMode.CUSTOM,commonSetbackMetres=.6)
+        val revised=setup.copy(buildingFloors=5,units=PlotUnits.METRES,homes=listOf(PlanHome("home-1",bhk=4,vastu=false).custom())).singleResidence()
+        assertEquals(setup.buildableKey(plot),revised.buildableKey(plot.copy(units=PlotUnits.METRES)))
+        assertNotEquals(setup.buildableKey(plot),setup.copy(commonSetbackMetres=.9).buildableKey(plot))
+        assertNotEquals(setup.buildableKey(plot),setup.buildableKey(plot.copy(northDegrees=45.0)))
+        assertEquals(1,revised.geometrySetup().buildingFloors)
+    }
+    @Test fun singleResidenceSpansFloorsAndPreservesEarlierHomes() {
+        val first=PlanHome("home-1",bhk=3).custom()
+        val second=PlanHome("home-2",bhk=2).custom()
+        val parking=PlanRoom("parking",RoomKind.PARKING)
+        val setup=FloorPlanSetup(buildingFloors=3,homes=listOf(first,second),sharedRooms=listOf(parking)).singleResidence()
+        assertEquals(1,setup.homes.size)
+        assertEquals(first.copy(startFloor=0,floorsOccupied=3),setup.homes.single())
+        assertEquals(second,setup.archivedHomes.single())
+        assertEquals(parking,setup.sharedRooms.single())
+        assertEquals(setup,setup.singleResidence())
+        assertEquals(2,setup.copy(buildingFloors=2).singleResidence().homes.single().floorsOccupied)
+    }
     private val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(0))).rebuild()
     @Test fun customSetbacksKeepMeasuredMetresWhenDisplayUnitsChange() {
         val setup=FloorPlanSetup(setbackMode=PlanMode.CUSTOM,commonSetbackMetres=.9144)

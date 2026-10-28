@@ -69,9 +69,7 @@ private fun SettingsChevron(modifier: Modifier = Modifier) {
 @Composable
 fun GeneralSettingsScreen(compact: Boolean, appearance: Appearance, onAppearance: (Appearance) -> Unit) {
     val colors = LocalPlotusColors.current
-    val panel = if (compact) Modifier.fillMaxSize() else Modifier.fillMaxWidth().heightIn(min = 540.dp)
-        .background(colors.surface, RoundedCornerShape(18.dp)).border(1.dp, colors.line, RoundedCornerShape(18.dp)).padding(28.dp)
-    Column(panel.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.widthIn(max=660.dp).fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Appearance", fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
         Column(settingsGroup().selectableGroup()) {
             listOf(Appearance.SYSTEM, Appearance.LIGHT, Appearance.DARK).forEachIndexed { index, option ->

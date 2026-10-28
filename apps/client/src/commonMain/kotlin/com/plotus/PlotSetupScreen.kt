@@ -44,7 +44,6 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
     var leaving by remember { mutableStateOf<(() -> Unit)?>(null) }
     var reloadOpen by remember { mutableStateOf(false) }
     val close: (() -> Unit) -> Unit = { action -> if(workspace.dirty)leaving=action else action() }
-    val selected=step ?: PlotStep.BOUNDARY
     val editing=compact&&step!=null
     val focus=LocalFocusManager.current
     val keyboardController=LocalSoftwareKeyboardController.current
@@ -67,16 +66,7 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
             PlotusButton("Try again",{scope.launch {workspace.load()}})
             TextButton(onExit) {Text("Back to projects")}
         }
-        else if(compact) {
-            MobilePlotEditor(workspace,step,onStep,Modifier.weight(1f),{workspace.save(requireBoundary=true,requireRoads=true,onSaved=onFloor)}) {reloadOpen=true}
-        } else Row(Modifier.fillMaxWidth().weight(1f)) {
-            Column(Modifier.weight(1f).fillMaxHeight()) {
-                PlanningStages(Modifier.padding(horizontal=20.dp).padding(vertical=8.dp),onFloor={workspace.save(requireBoundary=true,requireRoads=true,onSaved=onFloor)})
-                PlotCanvas(workspace,selected,false,Modifier.fillMaxWidth().weight(1f))
-            }
-            VerticalDivider(color=c.line)
-            PlotInspector(workspace,selected,{onStep(it)},{close(onExit)},onFloor,Modifier.width(408.dp).fillMaxHeight(),{reloadOpen=true})
-        }
+        else PlotEditor(workspace,step,compact,onStep,Modifier.weight(1f),{workspace.save(requireBoundary=true,requireRoads=true,onSaved=onFloor)}) {reloadOpen=true}
     }
     leaving?.let { action ->
         AlertDialog(onDismissRequest={if(!workspace.saving)leaving=null},title={
@@ -92,38 +82,33 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
 }
 
 @Composable
-private fun MobilePlotEditor(workspace:PlotWorkspace,step:PlotStep?,onStep:(PlotStep?)->Unit,modifier:Modifier,onFloor:()->Unit,onReload:()->Unit) {
+private fun PlotEditor(workspace:PlotWorkspace,step:PlotStep?,compact:Boolean,onStep:(PlotStep?)->Unit,modifier:Modifier,onFloor:()->Unit,onReload:()->Unit) {
     val c=LocalPlotusColors.current
     val keyboard=WindowInsets.ime.getBottom(LocalDensity.current)>0
-    val focus=LocalFocusManager.current
-    val keyboardController=LocalSoftwareKeyboardController.current
-    BoxWithConstraints(modifier.fillMaxWidth()) {
+    if(step==null)EditorOverview(compact,modifier,content={
+        PlanningStages(Modifier.padding(horizontal=16.dp,vertical=8.dp),onFloor=onFloor)
+        PlotCanvas(workspace,null,compact,Modifier.fillMaxWidth().weight(1f))
+        PlotProblems(workspace,Modifier.padding(horizontal=16.dp,vertical=4.dp),onReload)
+    },options={divider->
+        EditorOptions(divider) {
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                PlotStep.entries.forEach {item->
+                    EditorOption(item.title(),when(item){PlotStep.BOUNDARY->PlotSymbol.BOUNDARY;PlotStep.DIRECTION->PlotSymbol.COMPASS;PlotStep.ROADS->PlotSymbol.ROAD},!workspace.saving,Modifier.weight(1f)) {onStep(item)}
+                }
+            }
+            if(!keyboard)SketchUpload(workspace) {onStep(PlotStep.BOUNDARY)}
+        }
+    }) else if(!compact)Row(modifier.fillMaxWidth()) {
+        PlotCanvas(workspace,step,false,Modifier.weight(1f).fillMaxHeight())
+        VerticalDivider(color=c.line)
+        PlotFields(workspace,step,Modifier.width(408.dp).fillMaxHeight(),onReload)
+    } else BoxWithConstraints(modifier.fillMaxWidth()) {
         val availableHeight=maxHeight
         Column(Modifier.fillMaxSize()) {
-            if(step==null) {
-                PlanningStages(Modifier.padding(horizontal=16.dp,vertical=8.dp),onFloor=onFloor)
-                PlotCanvas(workspace,null,true,Modifier.fillMaxWidth().weight(1f))
-                PlotProblems(workspace,Modifier.padding(horizontal=16.dp,vertical=4.dp),onReload)
-            } else {
-                val canvasHeight=minOf(if(keyboard)160.dp else 280.dp,availableHeight*(if(keyboard).40f else .43f))
-                PlotCanvas(workspace,step,true,Modifier.fillMaxWidth().height(canvasHeight),showToolbar=!keyboard)
-                HorizontalDivider(color=c.line)
-                PlotFields(workspace,step,Modifier.weight(1f),onReload)
-            }
-            if(step==null) {
-                HorizontalDivider(color=c.line)
-                Row(Modifier.fillMaxWidth().background(c.surface).padding(horizontal=16.dp,vertical=6.dp).height(60.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    PlotStep.entries.forEach { item ->
-                        Column(Modifier.weight(1f).fillMaxHeight().background(c.surface,RoundedCornerShape(10.dp))
-                            .border(1.dp,c.line,RoundedCornerShape(10.dp)).clickable(enabled=!workspace.saving,role=Role.Button) {onStep(item)},
-                            horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
-                            PlotSymbol(when(item){PlotStep.BOUNDARY->PlotSymbol.BOUNDARY;PlotStep.DIRECTION->PlotSymbol.COMPASS;PlotStep.ROADS->PlotSymbol.ROAD},c.muted,Modifier.size(18.dp))
-                            Text(item.title(),fontSize=12.sp,color=c.muted)
-                        }
-                    }
-                }
-                if(!keyboard)SketchUpload(workspace,Modifier.background(c.surface).padding(horizontal=16.dp).padding(bottom=12.dp)) {onStep(PlotStep.BOUNDARY)}
-            }
+            val canvasHeight=minOf(if(keyboard)160.dp else 280.dp,availableHeight*(if(keyboard).40f else .43f))
+            PlotCanvas(workspace,step,true,Modifier.fillMaxWidth().height(canvasHeight),showToolbar=!keyboard)
+            HorizontalDivider(color=c.line)
+            PlotFields(workspace,step,Modifier.weight(1f),onReload)
         }
     }
 }
@@ -133,7 +118,8 @@ private fun PlotStep.title()=segment.replaceFirstChar {it.uppercase()}
 @Composable
 internal fun PlanningStages(modifier: Modifier, selected:Int=0,onPlot:()->Unit={},onFloor:()->Unit={}) {
     val c=LocalPlotusColors.current
-    Row(modifier.fillMaxWidth().height(44.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+    Box(modifier.fillMaxWidth(),contentAlignment=Alignment.Center) {
+    Row(Modifier.widthIn(max=560.dp).fillMaxWidth().height(44.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         listOf("Plot setup","Floor plan").forEachIndexed { i,label ->
             Row(Modifier.weight(1f).fillMaxHeight().background(if(i==selected)c.active else c.background,RoundedCornerShape(8.dp)).selectable(i==selected,role=Role.Tab,onClick=if(i==0)onPlot else onFloor).padding(8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.size(24.dp).background(if(i==selected)c.primary else c.quiet,CircleShape),contentAlignment=Alignment.Center) {Text("${i+1}",fontSize=12.sp,color=if(i==selected)c.onPrimary else c.muted)}
@@ -142,30 +128,6 @@ internal fun PlanningStages(modifier: Modifier, selected:Int=0,onPlot:()->Unit={
         }
     }
 }
-
-@Composable
-private fun PlotInspector(workspace: PlotWorkspace,step: PlotStep,onStep:(PlotStep)->Unit,onBack:()->Unit,onComplete:()->Unit,modifier:Modifier,onReload:()->Unit) {
-    val c=LocalPlotusColors.current
-    Column(modifier.background(c.surface)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=8.dp).height(44.dp),horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-            PlotStep.entries.forEach { item ->
-                Box(Modifier.weight(1f).fillMaxHeight().background(if(step==item)c.quiet else c.surface,RoundedCornerShape(8.dp)).selectable(step==item,enabled=!workspace.saving,role=Role.Tab) {onStep(item)},contentAlignment=Alignment.Center) {
-                    Text(item.title(),fontSize=13.sp,color=if(step==item)c.ink else c.muted)
-                }
-            }
-        }
-        SketchUpload(workspace,Modifier.padding(horizontal=20.dp).padding(bottom=8.dp)) {onStep(PlotStep.BOUNDARY)}
-        HorizontalDivider(color=c.line)
-        PlotProblems(workspace,Modifier.padding(horizontal=20.dp,vertical=8.dp),onReload)
-        PlotFields(workspace,step,Modifier.weight(1f))
-        HorizontalDivider(color=c.line)
-        Row(Modifier.fillMaxWidth().padding(20.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            PlotusButton("Back",{if(step==PlotStep.BOUNDARY)onBack() else onStep(PlotStep.entries[step.ordinal-1])},Modifier.width(100.dp).height(48.dp),outline=true,enabled=!workspace.saving)
-            PlotusButton(if(workspace.saving)"Saving…" else if(step==PlotStep.ROADS)"Floor plan" else "Next",{
-                workspace.save(requireBoundary=true,requireRoads=step==PlotStep.ROADS) {if(step==PlotStep.ROADS)onComplete() else onStep(PlotStep.entries[step.ordinal+1])}
-            },Modifier.weight(1f).height(48.dp),enabled=!workspace.saving)
-        }
-    }
 }
 
 @Composable

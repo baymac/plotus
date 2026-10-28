@@ -131,13 +131,12 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 }
             }
             if(step==null) {
-                Column(Modifier.weight(1f)) {
+                EditorOverview(compact,Modifier.weight(1f),content={
                     PlanningStages(Modifier.padding(horizontal=16.dp,vertical=8.dp),1,{close(onPlot)})
                     FloorPreview(workspace,compact,Modifier.fillMaxWidth().weight(1f),!keyboardVisible)
                     workspace.error?.let {FloorError(it)}
                     workspace.generation?.takeIf {it.status in listOf("running","queued")}?.let {job->TextButton({onGeneration(job.id)},Modifier.align(Alignment.CenterHorizontally)){Text("View generation in progress")}}
-                    FloorOptions(null,!busy,Modifier.fillMaxWidth(),select)
-                }
+                },options={divider->FloorOptions(!busy,divider,select)})
             }else if(compact) {
                 BoxWithConstraints(Modifier.weight(1f)) {
                     val availableHeight=maxHeight
@@ -149,10 +148,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                     }
                 }
             }else Row(Modifier.fillMaxWidth().weight(1f)) {
-                Column(Modifier.weight(1f).fillMaxHeight()) {
-                    PlanningStages(Modifier.padding(horizontal=20.dp,vertical=8.dp),1,{close(onPlot)})
-                    FloorPreview(workspace,false,Modifier.fillMaxWidth().weight(1f))
-                }
+                FloorPreview(workspace,false,Modifier.weight(1f).fillMaxHeight())
                 VerticalDivider(color=c.line)
                 inspector(Modifier.width(408.dp).fillMaxHeight())
             }
@@ -164,21 +160,14 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     }},confirmButton={TextButton({leaving=null;workspace.save {action()}}){Text("Save")}},dismissButton={TextButton({workspace.discard();leaving=null;action()}){Text("Discard")}})}
 }
 
-@Composable private fun FloorOptions(selected:FloorStep?,enabled:Boolean,modifier:Modifier,onSelect:(FloorStep)->Unit) {
+@Composable private fun FloorOptions(enabled:Boolean,showDivider:Boolean,onSelect:(FloorStep)->Unit) {
     val c=LocalPlotusColors.current
-    HorizontalDivider(color=c.line)
-    Column(modifier.background(c.surface).padding(horizontal=16.dp,vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.widthIn(max=560.dp).fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        listOf(FloorStep.SETBACKS,FloorStep.REQUIREMENTS).forEach {item->
-            Column(Modifier.weight(1f).height(60.dp).background(if(selected==item)c.active else c.surface,RoundedCornerShape(10.dp))
-                .border(1.dp,if(selected==item)c.primary else c.line,RoundedCornerShape(10.dp)).selectable(selected==item,enabled,Role.Tab) {onSelect(item)},
-                horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
-                PlotSymbol(if(item==FloorStep.SETBACKS)PlotSymbol.BOUNDARY else PlotSymbol.GRID,if(selected==item)c.primary else c.muted,Modifier.size(18.dp))
-                Text(if(item==FloorStep.SETBACKS)"Setback" else "Requirements",fontSize=13.sp,color=if(selected==item)c.primary else c.muted)
-            }
+    EditorOptions(showDivider) {
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            EditorOption("Setback",PlotSymbol.BOUNDARY,enabled,Modifier.weight(1f)) {onSelect(FloorStep.SETBACKS)}
+            EditorOption("Requirements",PlotSymbol.GRID,enabled,Modifier.weight(1f)) {onSelect(FloorStep.REQUIREMENTS)}
         }
-        }
-        Row(Modifier.widthIn(max=560.dp).fillMaxWidth().height(48.dp).border(1.dp,c.line,RoundedCornerShape(10.dp)).clickable(role=Role.Button){onSelect(FloorStep.HISTORY)},horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(48.dp).border(1.dp,c.line,RoundedCornerShape(10.dp)).clickable(enabled=enabled,role=Role.Button){onSelect(FloorStep.HISTORY)},horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
             PlotSymbol(PlotSymbol.HISTORY,c.muted,Modifier.size(18.dp));Spacer(Modifier.width(8.dp));Text("History",fontSize=13.sp,color=c.muted)
         }
     }

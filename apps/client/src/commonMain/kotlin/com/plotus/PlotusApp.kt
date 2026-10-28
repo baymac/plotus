@@ -74,7 +74,7 @@ fun PlotusApp() {
                         collapsed = !collapsed; writePreference("sidebar", if (collapsed) "collapsed" else "open")
                     }, onNavigate = { navigation.navigate(it) })
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        if (destination !in listOf(Destination.PLOT,Destination.FLOOR_PLAN) && (!compact || destination != Destination.SETTINGS)) AppHeader(compact, destination) { navigation.navigate(Destination.SETTINGS) }
+                        if (destination in listOf(Destination.GENERAL,Destination.ACCOUNT) || (compact && destination == Destination.PROJECTS)) AppHeader(compact, destination) { navigation.navigate(Destination.SETTINGS) }
                         if (destination == Destination.PLOT) {
                             val id = navigation.projectID!!
                             val plot = if (preview) previewPlots.getOrPut(id) {
@@ -92,7 +92,8 @@ fun PlotusApp() {
                             }
                         } else {
                         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) 24.dp else 32.dp,
-                            vertical = if (compact) 12.dp else 32.dp)) {
+                            vertical = if (compact) 12.dp else 32.dp), contentAlignment=Alignment.TopCenter) {
+                            Box(Modifier.widthIn(max=if(destination==Destination.PROJECTS)1120.dp else 660.dp).fillMaxSize()) {
                             if (destination == Destination.PROJECTS) ProjectsScreen(if (preview) projects else workspace?.projects.orEmpty(), compact,
                                 onNew = { editing = null; workspace?.clearMutationError(); showForm = true },
                                 onEdit = { editing = it; workspace?.clearMutationError(); showForm = true },
@@ -107,8 +108,9 @@ fun PlotusApp() {
                             }
                             else if (!preview && account != null) AccountScreen(account, auth.passkeys, auth.busy,
                                 onAddPasskey = { auth.addPasskey() }, onRemovePasskey = { auth.removePasskey(it) }, onSignOut = { auth.signOut() },
-                                showTitle = !compact)
-                            else PreviewAccountScreen(compact, onSignIn = exit)
+                                showTitle = false)
+                            else PreviewAccountScreen(true, onSignIn = exit)
+                            }
                         }
                         if (compact) MobileNavigation(destination) { navigation.navigate(it) }
                         }
@@ -165,18 +167,13 @@ private fun Sidebar(destination: Destination, collapsed: Boolean, onCollapse: ()
         }
         HorizontalDivider(color = colors.line)
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (destination in listOf(Destination.PROJECTS,Destination.PLOT,Destination.FLOOR_PLAN)) NavItem("Projects", AppIcon.PROJECTS, true, collapsed) { onNavigate(Destination.PROJECTS) }
-            else {
-                NavItem("Back to app", AppIcon.ARROW, false, collapsed) { onNavigate(Destination.PROJECTS) }
-                NavItem("General", AppIcon.SETTINGS, destination == Destination.GENERAL, collapsed) { onNavigate(Destination.GENERAL) }
-                NavItem("Account", AppIcon.ACCOUNT, destination == Destination.ACCOUNT, collapsed) { onNavigate(Destination.ACCOUNT) }
-            }
+            NavItem("Projects", AppIcon.PROJECTS, destination in listOf(Destination.PROJECTS,Destination.PLOT,Destination.FLOOR_PLAN), collapsed) { onNavigate(Destination.PROJECTS) }
         }
         Spacer(Modifier.weight(1f))
-        if (destination in listOf(Destination.PROJECTS,Destination.PLOT,Destination.FLOOR_PLAN)) Column(Modifier.padding(12.dp)) {
+        Column(Modifier.padding(12.dp)) {
             HorizontalDivider(color = colors.line)
             Spacer(Modifier.height(8.dp))
-            NavItem("Settings", AppIcon.SETTINGS, false, collapsed) { onNavigate(Destination.GENERAL) }
+            NavItem("Settings", AppIcon.SETTINGS, destination in listOf(Destination.SETTINGS,Destination.GENERAL,Destination.ACCOUNT), collapsed) { onNavigate(Destination.SETTINGS) }
         }
     }
 }
@@ -195,7 +192,7 @@ private fun NavItem(label: String, icon: AppIcon, selected: Boolean, collapsed: 
 @Composable
 private fun AppHeader(compact: Boolean, destination: Destination, onSettingsBack: () -> Unit) {
     val colors = LocalPlotusColors.current
-    if (compact && destination != Destination.PROJECTS) {
+    if (destination in listOf(Destination.GENERAL,Destination.ACCOUNT)) {
         SettingsPageHeader(if (destination == Destination.GENERAL) "General" else "Account", onSettingsBack)
         return
     }

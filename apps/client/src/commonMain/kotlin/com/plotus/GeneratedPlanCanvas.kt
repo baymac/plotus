@@ -7,6 +7,8 @@ import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -16,6 +18,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
@@ -35,6 +39,9 @@ import com.plotus.shared.measureLabel
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import kotlin.io.encoding.Base64
 import kotlin.math.pow
+import org.jetbrains.skia.Data
+import org.jetbrains.skia.svg.SVGDOM
+import org.jetbrains.skia.svg.SVGLengthContext
 
 /** Read-only drawing on the same canvas as the editor, with independent pan and zoom.
  * Map paper/ink to the active palette without changing the saved engine output.
@@ -43,8 +50,22 @@ import kotlin.math.pow
 @Composable internal fun GeneratedPlanCanvas(drawing:PlanDrawing,compact:Boolean,modifier:Modifier=Modifier) {
     val c=LocalPlotusColors.current
     val presentation=drawing.presentation
+    var units by remember(drawing.id) {mutableStateOf(PlotUnits.entries.firstOrNull {it.name==readPreference("plan-units")} ?: presentation?.units ?: PlotUnits.FEET_INCHES)}
+    var optionsOpen by remember {mutableStateOf(false)}
     val content=presentation?.pngBase64 ?: drawing.pngBase64
-    val bitmap=remember(drawing.id,content) {runCatching {Base64.decode(content).decodeToImageBitmap()}.getOrNull()}
+    val fonts by produceState<PlanVectorFonts?>(null,drawing.vectorSvgBase64!=null) {
+        if(drawing.vectorSvgBase64!=null) {
+            val loaded=runCatching {PlanVectorFonts.load()}.getOrNull()
+            value=loaded
+            awaitDispose {loaded?.close()}
+        }
+    }
+    val vector=remember(drawing.id,drawing.vectorSvgBase64,fonts,units) {VectorPlan.decode(drawing.vectorSvgBase64,fonts,units)}
+    DisposableEffect(vector) {onDispose {vector?.close()}}
+    val bitmap=remember(drawing.id,content,vector) {if(vector==null)runCatching {Base64.decode(content).decodeToImageBitmap()}.getOrNull() else null}
+    val drawingWidth=vector?.width ?: bitmap?.width?.toFloat() ?: 1f
+    val drawingHeight=vector?.height ?: bitmap?.height?.toFloat() ?: 1f
+    val maximumZoom=if(vector!=null)32f else 8f
     var size by remember {mutableStateOf(IntSize(1,1))}
     var zoom by remember(drawing.id) {mutableStateOf(1f)}
     var pan by remember(drawing.id) {mutableStateOf(Offset.Zero)}
@@ -59,15 +80,15 @@ import kotlin.math.pow
     }
     Column(modifier.background(c.background)) {
     Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().onSizeChanged {size=it}) {
-        if(bitmap!=null)Canvas(Modifier.fillMaxSize().semantics {contentDescription="Generated floor plan. Read-only canvas. Drag to pan, pinch or use the toolbar to zoom."}
-            .pointerInput(drawing.id){detectTransformGestures {centre,delta,factor,_->
-                val next=(zoom*factor).coerceIn(.5f,8f)
+        if(vector!=null||bitmap!=null)Canvas(Modifier.fillMaxSize().semantics {contentDescription="Generated floor plan. Read-only canvas. Drag to pan, pinch or use the toolbar to zoom."+(if(vector!=null)" Vector drawing." else " Image drawing.")}
+            .pointerInput(drawing.id,maximumZoom){detectTransformGestures {centre,delta,factor,_->
+                val next=(zoom*factor).coerceIn(.5f,maximumZoom)
                 val origin=Offset(size.width/2f,(size.height+72*density)/2f)
                 pan=(pan+origin-centre)*(next/zoom)+centre-origin+delta
                 zoom=next
             }}.onPointerEvent(PointerEventType.Scroll) {event->
                 val change=event.changes.firstOrNull() ?: return@onPointerEvent
-                val next=(zoom*1.12f.pow(-change.scrollDelta.y)).coerceIn(.5f,8f)
+                val next=(zoom*1.12f.pow(-change.scrollDelta.y)).coerceIn(.5f,maximumZoom)
                 val origin=Offset(size.width/2f,(size.height+72*density)/2f)
                 pan=(pan+origin-change.position)*(next/zoom)+change.position-origin
                 zoom=next;change.consume()
@@ -79,11 +100,13 @@ import kotlin.math.pow
                 }
                 val top=96*density
                 val sideMargin=if(presentation?.roadPosition in listOf("west","east"))80 else 32
-                val fit=minOf((size.width-sideMargin*density)/bitmap.width,(size.height-top-24*density)/bitmap.height).coerceAtLeast(.01f)
+                val fit=minOf((size.width-sideMargin*density)/drawingWidth,(size.height-top-24*density)/drawingHeight).coerceAtLeast(.01f)
                 val scale=fit*zoom
                 val centre=Offset(size.width/2f,(size.height+72*density)/2f)+pan
-                withTransform({translate(centre.x-bitmap.width*scale/2,centre.y-bitmap.height*scale/2);scale(scale,scale,pivot=Offset.Zero)}) {
-                    drawImage(bitmap,colorFilter=filter)
+                withTransform({translate(centre.x-drawingWidth*scale/2,centre.y-drawingHeight*scale/2);scale(scale,scale,pivot=Offset.Zero)}) {
+                    if(vector!=null) {
+                        vector.render(drawContext.canvas.nativeCanvas,c.ink.toArgb())
+                    } else if(bitmap!=null)drawImage(bitmap,colorFilter=filter)
                 }
             }
         else Text("This floor drawing couldn’t be opened.",Modifier.align(Alignment.Center),color=c.muted)
@@ -102,16 +125,22 @@ import kotlin.math.pow
             .border(1.dp,c.line,RoundedCornerShape(12.dp)).padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
             PlotToolButton(PlotSymbol.HAND,"Pan plan",selected=true) {}
             PlotToolButton(PlotSymbol.GRID,"Toggle guide dots",selected=grid){grid=!grid}
-            PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in"){zoom=(zoom*1.3f).coerceAtMost(8f)}
+            PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in"){zoom=(zoom*1.3f).coerceAtMost(maximumZoom)}
             PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out"){zoom=(zoom/1.3f).coerceAtLeast(.5f)}
             Text("${(zoom*100).toInt()}%",Modifier.weight(1f),fontSize=11.sp,color=c.muted)
             PlotToolButton(PlotSymbol.FIT,"Fit plan to canvas"){zoom=1f;pan=Offset.Zero}
+            Box {
+                PlotToolButton(PlotSymbol.MORE,"Plan canvas options") {optionsOpen=true}
+                DropdownMenu(optionsOpen,{optionsOpen=false},containerColor=c.surface,tonalElevation=0.dp) {
+                    Text("Units",Modifier.padding(horizontal=12.dp,vertical=8.dp),fontSize=12.sp,color=c.muted)
+                    PlotUnits.entries.forEach {unit->DropdownMenuItem(text={Text((if(units==unit)"✓  " else "")+if(unit==PlotUnits.METRES)"Metres" else "Feet & inches")},onClick={units=unit;writePreference("plan-units",unit.name);optionsOpen=false})}
+                }
+            }
         }
     }
     if(presentation!=null) {
         androidx.compose.material3.HorizontalDivider(color=c.line)
         Row(Modifier.fillMaxWidth().background(c.surface).padding(horizontal=if(compact)16.dp else 24.dp,vertical=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(16.dp)) {
-            val units=presentation.units
             fun area(value:Double?)=value?.let {if(units==PlotUnits.METRES)"${decimal(kotlin.math.round(it*10)/10)} m²" else "${decimal(kotlin.math.round(it/(METRES_PER_FOOT*METRES_PER_FOOT)*10)/10)} sq ft"} ?: "—"
             val values=listOf("Plot area" to area(presentation.plotAreaSquareMetres),"Perimeter" to measureLabel(presentation.perimeterMetres,units),"Built-up area" to area(presentation.builtUpAreaSquareMetres),"Carpet area" to area(presentation.carpetAreaSquareMetres))
             Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(14.dp)) {
@@ -129,3 +158,49 @@ import kotlin.math.pow
 }
 
 internal expect fun planTimestamp(iso:String):String
+
+/** A retained SVG document; each draw replays real geometry at the canvas transform. */
+internal class VectorPlan private constructor(private val document:SVGDOM,val width:Float,val height:Float) {
+    private val bounds=org.jetbrains.skia.Rect.makeWH(width,height)
+    private val paper=org.jetbrains.skia.Paint().apply {color=-1}
+    private val ink=org.jetbrains.skia.Paint()
+    private var inkColor:Int?=null
+
+    fun render(canvas:org.jetbrains.skia.Canvas,color:Int=0xff000000.toInt()) {
+        if(inkColor!=color) {
+            val channels=listOf((color ushr 16 and 255)/255f,(color ushr 8 and 255)/255f,(color and 255)/255f)
+            val rows=channels.flatMap {listOf(0f,0f,0f,0f,it)}+listOf(-.2126f,-.7152f,-.0722f,0f,1f)
+            val filter=org.jetbrains.skia.ColorFilter.makeMatrix(org.jetbrains.skia.ColorMatrix(*rows.toFloatArray()))
+            try {ink.colorFilter=filter} finally {filter.close()}
+            inkColor=color
+        }
+        val saved=canvas.save()
+        try {
+            canvas.clipRect(bounds)
+            canvas.saveLayer(bounds,ink)
+            // A white base keeps empty SVG space transparent after the ink filter.
+            // The layer uses the current viewport transform, never a cached raster.
+            canvas.drawRect(bounds,paper)
+            document.render(canvas)
+        }finally {canvas.restoreToCount(saved)}
+    }
+    fun close() {ink.close();paper.close();document.close()}
+
+    companion object {
+        fun decode(encoded:String?,fonts:PlanVectorFonts?=null,units:PlotUnits?=null):VectorPlan? {
+            if(encoded.isNullOrBlank())return null
+            return runCatching {
+                val svg=Base64.decode(encoded).decodeToString()
+                val display=if(Regex("<text\\b").containsMatchIn(svg))requireNotNull(fonts).outline(svg,units) else svg
+                val data=Data.makeFromBytes(display.encodeToByteArray())
+                val document=try {SVGDOM(data)} finally {data.close()}
+                try {
+                    val root=requireNotNull(document.root) {"Missing SVG root"}
+                    val size=try {root.getIntrinsicSize(SVGLengthContext(0f,0f))} finally {root.close()}
+                    require(size.x.isFinite()&&size.y.isFinite()&&size.x>0&&size.y>0) {"Invalid SVG size"}
+                    VectorPlan(document,size.x,size.y)
+                }catch(error:Throwable) {document.close();throw error}
+            }.getOrNull()
+        }
+    }
+}

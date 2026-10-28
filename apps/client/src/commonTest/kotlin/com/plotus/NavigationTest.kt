@@ -47,6 +47,17 @@ class NavigationTest {
 
 class PlotNavigationTest {
     private val id = "c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a"
+    @Test fun floorPlanDeepLinksReturnToTheSameSectionAfterSignIn() {
+        val route="/projects/$id/floor-plan/requirements"
+        val navigation=AppNavigation(AppLocation(route)) {_,_->}
+        assertEquals(Destination.FLOOR_PLAN,navigation.destination)
+        navigation.reconcileSession(false,false)
+        assertEquals("/login?next=$route",navigation.loginCallbackPath)
+        navigation.reconcileSession(true,false)
+        assertEquals(com.plotus.shared.FloorStep.REQUIREMENTS,navigation.floorStep)
+        assertEquals(route,navigation.path)
+        assertNull(destinationForPath("/projects/$id/floor-plan/../../outside"))
+    }
     @Test fun projectDeepLinksReturnToTheSameStepAfterSignIn() {
         val writes = mutableListOf<String>()
         val route = "/projects/$id/plot/roads"

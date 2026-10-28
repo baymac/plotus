@@ -1,7 +1,7 @@
 {
   "fileKey": "0AIbJahPpgu09bT3AqguPx",
   "pageId": "349:144623",
-  "inspected": "2026-10-27",
+  "inspected": "2026-10-28",
   "assets": [
     {
       "file": "assets/design/0a0c5.svg",
@@ -304,6 +304,61 @@
         "463:31",
         "463:15"
       ]
+    },
+    {
+      "file": "assets/design/floor/bed.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "dc3b1790bf00b1c1d9d65a954eb9f52e70e0af0fd221a0276cc1d8939e0802db",
+      "sourceNodes": [
+        "358:39930"
+      ]
+    },
+    {
+      "file": "assets/design/floor/sofa.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "d9866161dd30ff9e4bee0f6c03e83bc2de5c2b30536116b7f9fad4bdc87cf3d1",
+      "sourceNodes": [
+        "358:39930"
+      ]
+    },
+    {
+      "file": "assets/design/floor/kitchen.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "2f8c6d0c6622e17c0878c29303ccbfc876a9aa4eadf8fd32696241985e1b830e",
+      "sourceNodes": [
+        "358:39930"
+      ]
+    },
+    {
+      "file": "assets/design/floor/dining.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "ca2c10182efa9d332d51475efb4e4b6dd45f265fe8ff629a6a4cfd937658d7c2",
+      "sourceNodes": [
+        "358:39930"
+      ]
+    },
+    {
+      "file": "assets/design/floor/bath.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "21e0947aa6d4298c9f5d52ba4b97250e92af7defb9312bbfdf318f87f0b02801",
+      "sourceNodes": [
+        "358:39930"
+      ]
     }
-  ]
+  ],
+  "floorPlanSources": {
+    "setbacksMobile": "358:39125",
+    "setbacksCustom": "354:12798",
+    "requirementsMobile": "354:13236",
+    "requirementsCustom": "358:39930",
+    "requirementsDesktop": "358:61592",
+    "roomCatalogue": "358:41668",
+    "bedroom": "362:23482",
+    "generation": "374:30342"
+  }
 }

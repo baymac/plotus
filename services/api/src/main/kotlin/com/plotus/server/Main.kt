@@ -21,10 +21,14 @@ import kotlinx.serialization.SerializationException
 
 private val Owner = AttributeKey<UUID>("verified-owner")
 
-fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sketches: SketchImports = SketchImports.configured()) {
-    monitor.subscribe(ApplicationStopped) {sketches.close()}
+fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sketches: SketchImports = SketchImports.configured(), floorPlans:FloorPlans=FloorPlans()) {
+    monitor.subscribe(ApplicationStopped) {sketches.close();floorPlans.close()}
     install(ContentNegotiation) { json() }
-    install(RequestBodyLimit) { bodyLimit { call -> if(call.request.path().matches(Regex("^/v1/projects/[^/]+/sketch$"))) 4 * 1024 * 1024L else 16 * 1024L } }
+    install(RequestBodyLimit) { bodyLimit { call -> when {
+        call.request.path().matches(Regex("^/v1/projects/[^/]+/sketch$"))->4*1024*1024L
+        call.request.path().matches(Regex("^/v1/projects/[^/]+/floor-plan(?:/preview)?$"))->128*1024L
+        else->16*1024L
+    } } }
     install(StatusPages) {
         exception<Throwable> { call, cause ->
             if (cause is CancellationException) throw cause
@@ -76,6 +80,33 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
                 store.get(owner,project)
                 call.respond(HttpStatusCode.Accepted,sketches.start(owner,project,call.receive<SketchImage>()))
             }
+            put("/projects/{id}/floor-plan") {
+                val owner=call.attributes[Owner];val id=call.projectID()
+                val request=call.receive<SaveFloorPlanRequest>();val project=store.get(owner,id)
+                if(request.revision<=0)throw ApiFailure(400,"INVALID_REVISION","Reopen this project before saving changes.")
+                if(project.plotSetup==null)throw ApiFailure(400,"PLOT_REQUIRED","Complete Plot setup first.")
+                val errors=request.setup.errors(project.plotSetup)
+                if(errors.isNotEmpty())throw ApiFailure(400,"VALIDATION_FAILED","Check the floor-plan details.",errors)
+                call.respond(store.saveFloorPlan(owner,id,request.revision,request.setup))
+            }
+            post("/projects/{id}/floor-plan/preview") {
+                val project=store.get(call.attributes[Owner],call.projectID());val request=call.receive<PreviewFloorPlanRequest>()
+                if(project.revision!=request.revision)throw ApiFailure(409,"PROJECT_CHANGED","The project changed. Reopen Floor plan.")
+                call.respond(floorPlans.preview(project,request.setup))
+            }
+            get("/projects/{id}/floor-plan/generations") {
+                val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
+                call.respond(PlanGenerations(listOfNotNull(floorPlans.latest(owner,id))))
+            }
+            post("/projects/{id}/floor-plan/generations") {
+                val owner=call.attributes[Owner];val project=store.get(owner,call.projectID())
+                call.respond(HttpStatusCode.Accepted,floorPlans.start(owner,project,call.receive<StartPlanRequest>()))
+            }
+            get("/projects/{id}/floor-plan/generations/{job}") {
+                val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
+                val job=try {UUID.fromString(call.parameters["job"])}catch(_:IllegalArgumentException){throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")}
+                call.respond(floorPlans.get(owner,id,job,call.request.queryParameters["by"]=="request"))
+            }
             get("/projects/{id}/sketch/{job}") {
                 val owner=call.attributes[Owner];val project=call.projectID()
                 store.get(owner,project)
@@ -102,5 +133,7 @@ fun main() {
     val store = PostgresProjects.configured()
     val identity = AuthServiceIdentity(System.getenv("AUTH_INTERNAL_URL") ?: "http://127.0.0.1:4001")
     val port = System.getenv("PORT")?.toIntOrNull() ?: 4000
-    embeddedServer(Netty,port=port,host=System.getenv("HOST") ?: "127.0.0.1") { plotusModule(store,identity) }.start(wait=true)
+    val jobs=PostgresPlans(store.source).also {it.recover()}
+    val plans=FloorPlans(jobs,HttpPlanEngine.configured())
+    embeddedServer(Netty,port=port,host=System.getenv("HOST") ?: "127.0.0.1") { plotusModule(store,identity,floorPlans=plans) }.start(wait=true)
 }

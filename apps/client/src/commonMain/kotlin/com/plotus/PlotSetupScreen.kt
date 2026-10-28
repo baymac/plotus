@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.*
 
 @Composable
-fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, onStep: (PlotStep?) -> Unit, onExit: () -> Unit) {
+fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, onStep: (PlotStep?) -> Unit, onExit: () -> Unit, onFloor:()->Unit={}) {
     val c=LocalPlotusColors.current
     val scope=rememberCoroutineScope()
     LaunchedEffect(workspace) { workspace.load() }
@@ -66,14 +66,14 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
             TextButton(onExit) {Text("Back to projects")}
         }
         else if(compact) {
-            MobilePlotEditor(workspace,step,onStep,Modifier.weight(1f)) {reloadOpen=true}
+            MobilePlotEditor(workspace,step,onStep,Modifier.weight(1f),{workspace.save(requireBoundary=true,requireRoads=true,onSaved=onFloor)}) {reloadOpen=true}
         } else Row(Modifier.fillMaxWidth().weight(1f)) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                PlanningStages(Modifier.padding(horizontal=20.dp).padding(vertical=8.dp))
+                PlanningStages(Modifier.padding(horizontal=20.dp).padding(vertical=8.dp),onFloor={workspace.save(requireBoundary=true,requireRoads=true,onSaved=onFloor)})
                 PlotCanvas(workspace,selected,false,Modifier.fillMaxWidth().weight(1f))
             }
             VerticalDivider(color=c.line)
-            PlotInspector(workspace,selected,{onStep(it)},{close(onExit)},onExit,Modifier.width(408.dp).fillMaxHeight(),{reloadOpen=true})
+            PlotInspector(workspace,selected,{onStep(it)},{close(onExit)},onFloor,Modifier.width(408.dp).fillMaxHeight(),{reloadOpen=true})
         }
     }
     leaving?.let { action ->
@@ -90,7 +90,7 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
 }
 
 @Composable
-private fun MobilePlotEditor(workspace:PlotWorkspace,step:PlotStep?,onStep:(PlotStep?)->Unit,modifier:Modifier,onReload:()->Unit) {
+private fun MobilePlotEditor(workspace:PlotWorkspace,step:PlotStep?,onStep:(PlotStep?)->Unit,modifier:Modifier,onFloor:()->Unit,onReload:()->Unit) {
     val c=LocalPlotusColors.current
     val keyboard=WindowInsets.ime.getBottom(LocalDensity.current)>0
     val focus=LocalFocusManager.current
@@ -99,7 +99,7 @@ private fun MobilePlotEditor(workspace:PlotWorkspace,step:PlotStep?,onStep:(Plot
         val availableHeight=maxHeight
         Column(Modifier.fillMaxSize()) {
             if(step==null) {
-                PlanningStages(Modifier.padding(horizontal=16.dp,vertical=8.dp))
+                PlanningStages(Modifier.padding(horizontal=16.dp,vertical=8.dp),onFloor=onFloor)
                 PlotCanvas(workspace,null,true,Modifier.fillMaxWidth().weight(1f))
                 PlotProblems(workspace,Modifier.padding(horizontal=16.dp,vertical=4.dp),onReload)
             } else {
@@ -135,13 +135,13 @@ private fun MobilePlotEditor(workspace:PlotWorkspace,step:PlotStep?,onStep:(Plot
 private fun PlotStep.title()=segment.replaceFirstChar {it.uppercase()}
 
 @Composable
-private fun PlanningStages(modifier: Modifier) {
+internal fun PlanningStages(modifier: Modifier, selected:Int=0,onPlot:()->Unit={},onFloor:()->Unit={}) {
     val c=LocalPlotusColors.current
     Row(modifier.fillMaxWidth().height(44.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         listOf("Plot setup","Floor plan").forEachIndexed { i,label ->
-            Row(Modifier.weight(1f).fillMaxHeight().background(if(i==0)c.active else c.background,RoundedCornerShape(8.dp)).padding(8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(24.dp).background(if(i==0)c.primary else c.quiet,CircleShape),contentAlignment=Alignment.Center) {Text("${i+1}",fontSize=12.sp,color=if(i==0)c.onPrimary else c.muted)}
-                Text(label,fontSize=14.sp,fontWeight=if(i==0)FontWeight.SemiBold else FontWeight.Normal,color=if(i==0)c.primary else c.muted)
+            Row(Modifier.weight(1f).fillMaxHeight().background(if(i==selected)c.active else c.background,RoundedCornerShape(8.dp)).selectable(i==selected,role=Role.Tab,onClick=if(i==0)onPlot else onFloor).padding(8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(24.dp).background(if(i==selected)c.primary else c.quiet,CircleShape),contentAlignment=Alignment.Center) {Text("${i+1}",fontSize=12.sp,color=if(i==selected)c.onPrimary else c.muted)}
+                Text(label,fontSize=14.sp,fontWeight=if(i==selected)FontWeight.SemiBold else FontWeight.Normal,color=if(i==selected)c.primary else c.muted)
             }
         }
     }
@@ -165,7 +165,7 @@ private fun PlotInspector(workspace: PlotWorkspace,step: PlotStep,onStep:(PlotSt
         HorizontalDivider(color=c.line)
         Row(Modifier.fillMaxWidth().padding(20.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             PlotusButton("Back",{if(step==PlotStep.BOUNDARY)onBack() else onStep(PlotStep.entries[step.ordinal-1])},Modifier.width(100.dp).height(48.dp),outline=true,enabled=!workspace.saving)
-            PlotusButton(if(workspace.saving)"Saving…" else if(step==PlotStep.ROADS)"Save plot" else "Next",{
+            PlotusButton(if(workspace.saving)"Saving…" else if(step==PlotStep.ROADS)"Floor plan" else "Next",{
                 workspace.save(requireBoundary=true,requireRoads=step==PlotStep.ROADS) {if(step==PlotStep.ROADS)onComplete() else onStep(PlotStep.entries[step.ordinal+1])}
             },Modifier.weight(1f).height(48.dp),enabled=!workspace.saving)
         }
@@ -321,7 +321,7 @@ private fun RoadControls(workspace:PlotWorkspace) {
 }
 
 @Composable
-private fun MeasurementInput(metres: Double?, units: PlotUnits, label: String, modifier: Modifier, enabled: Boolean, error: String? = null, onChange: (Double?) -> Unit) {
+internal fun MeasurementInput(metres: Double?, units: PlotUnits, label: String, modifier: Modifier, enabled: Boolean, error: String? = null, onChange: (Double?) -> Unit) {
     val c=LocalPlotusColors.current
     fun parts(value: Double?): Pair<String,String> {
         if(value==null)return "" to ""

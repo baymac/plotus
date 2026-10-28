@@ -32,4 +32,5 @@ private class UnusedProjects : ProjectStore {
     override suspend fun update(owner: UUID,id: UUID,revision: Long,draft: ProjectDraft): Project = error("unexpected")
     override suspend fun delete(owner: UUID,id: UUID,revision: Long): Unit = error("unexpected")
     override suspend fun savePlot(owner: UUID,id: UUID,revision: Long,setup: PlotSetup): Project = error("unexpected")
+    override suspend fun saveFloorPlan(owner: UUID,id: UUID,revision: Long,setup: FloorPlanSetup): Project = error("unexpected")
 }

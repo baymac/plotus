@@ -95,3 +95,16 @@ test("the project overview has the same session gate as its sheets",async t=>{
   assert.equal((await worker.fetch(request(path,cookie),env)).status,200);
   assert.equal((await worker.fetch(request("/login?next="+encodeURIComponent(path),cookie),env)).headers.get("Location"),path);
 });
+
+test("floor-plan sections keep their protected path through sign-in",async t=>{
+  const root="/projects/c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a/floor-plan";
+  for(const path of [root,root+"/setbacks",root+"/requirements"]) {
+    const anonymous=await worker.fetch(request(path),env);
+    assert.equal(anonymous.status,302);
+    assert.equal(anonymous.headers.get("Location"),"/login?next="+encodeURIComponent(path));
+  }
+  t.mock.method(globalThis,"fetch",async()=>new Response(null,{status:200}));
+  const cookie={headers:{Cookie:"__Host-plotus_refresh=fixture"}};
+  assert.equal((await worker.fetch(request(root+"/requirements",cookie),env)).status,200);
+  assert.equal((await worker.fetch(request("/login?next="+encodeURIComponent(root+"/requirements"),cookie),env)).headers.get("Location"),root+"/requirements");
+});

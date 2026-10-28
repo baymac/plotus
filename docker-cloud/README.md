@@ -33,3 +33,5 @@ With Node 22+, JDK 17 and authenticated Wrangler available:
 This builds the landing site and optimised Kotlin app together, then deploys the combined output to the existing `plotus-landing` Pages project. The app's assets live under `/_app/`; the root stays the landing page. Deploy this combined build when updating the website, so the app routes remain available. No repository automation is required.
 
 The optional private engine remains excluded from the default deployment.
+
+The optional private planning service is configured with `PLOTUS_ENGINE_URL` and `PLOTUS_ENGINE_SERVICE_TOKEN` in the private environment file. The URL must be reachable from the API container. Leave both blank to save floor-plan requirements without generation. Never put the service token in web or iOS configuration.

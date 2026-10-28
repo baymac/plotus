@@ -2,13 +2,13 @@
 
 ## Created during the hackathon
 
-The public app, shared iPhone and web screens, supporting services and welcome illustration were created during the event on 27 October 2026. The miniature home on the welcome screen is an illustration, not a generated floor plan.
+The public app, shared iPhone and web screens, supporting services and welcome illustration were created during the event on 27–28 October 2026. The miniature home on the welcome screen is an illustration, not a generated floor plan.
 
 ## Existing design and planning technology
 
 The interface and logo use the supplied [Plotus Figma design](https://www.figma.com/design/0AIbJahPpgu09bT3AqguPx/Plotus--Mobile--Desktop?node-id=349-144623), which predates the event. [Design references](DESIGN.md) and the [asset source record](design-sources.json) identify the inputs.
 
-The planning engine and its CAD assets are pre-existing private technology. They remain in the private `baymac/plotus-engine` project, referenced through an optional private submodule. Public app builds do not need access to that source. The engine's Python service wrapper was created during the event; the app does not call it yet. [About the planning engine](ENGINE.md).
+The planning engine and its CAD assets are pre-existing private technology. They remain in the private `baymac/plotus-engine` project, referenced through an optional private submodule. Public app builds do not need access to that source. The engine's Python service wrapper was created during the event; the event-authored project API now calls it for buildable-envelope preview and checked generation. The event-authored transport renders accepted engine sheets into private account-owned previews. [About the planning engine](ENGINE.md).
 
 ## Third-party assets and software
 

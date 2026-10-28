@@ -16,6 +16,7 @@ data class Project(
     val revision: Long = 0,
     val updatedAt: String = "",
     val plotSetup: PlotSetup? = null,
+    val floorPlan: SavedFloorPlan? = null,
 )
 
 @Serializable
@@ -50,7 +51,7 @@ data class ProjectDraft(
         require(errors().isEmpty()) { "Project details are invalid." }
         return Project(id, name.trim(), location.trim(), existing?.areaSqFt, "Just now",
             if (isClient) Client(clientName.trim(), email.trim(), phone.trim()) else null,
-            existing?.revision ?: 0, existing?.updatedAt.orEmpty(), existing?.plotSetup)
+            existing?.revision ?: 0, existing?.updatedAt.orEmpty(), existing?.plotSetup, existing?.floorPlan)
     }
 
     companion object {

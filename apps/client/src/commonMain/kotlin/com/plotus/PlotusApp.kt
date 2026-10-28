@@ -74,7 +74,7 @@ fun PlotusApp() {
                         collapsed = !collapsed; writePreference("sidebar", if (collapsed) "collapsed" else "open")
                     }, onNavigate = { navigation.navigate(it) })
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        if (destination != Destination.PLOT && (!compact || destination != Destination.SETTINGS)) AppHeader(compact, destination) { navigation.navigate(Destination.SETTINGS) }
+                        if (destination !in listOf(Destination.PLOT,Destination.FLOOR_PLAN) && (!compact || destination != Destination.SETTINGS)) AppHeader(compact, destination) { navigation.navigate(Destination.SETTINGS) }
                         if (destination == Destination.PLOT) {
                             val id = navigation.projectID!!
                             val plot = if (preview) previewPlots.getOrPut(id) {
@@ -83,7 +83,12 @@ fun PlotusApp() {
                                 }, { project -> projects=saveProject(projects,project) })
                             } else workspace!!.plot(id)
                             Box(Modifier.weight(1f).fillMaxWidth()) {
-                                PlotSetupScreen(plot,navigation.plotStep,compact,{navigation.openProject(id,it,replace=compact)},{navigation.navigate(Destination.PROJECTS)})
+                                PlotSetupScreen(plot,navigation.plotStep,compact,{navigation.openProject(id,it,replace=compact)},{navigation.navigate(Destination.PROJECTS)},{if(preview)message="Sign in to configure a floor plan." else navigation.openFloor(id)})
+                            }
+                        } else if(destination==Destination.FLOOR_PLAN&&workspace!=null) {
+                            val id=navigation.projectID!!
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
+                                FloorPlanScreen(workspace.floor(id),id,navigation.floorStep,compact,{navigation.openFloor(id,it)},{navigation.openProject(id)},{navigation.navigate(Destination.PROJECTS)})
                             }
                         } else {
                         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) 24.dp else 32.dp,
@@ -160,7 +165,7 @@ private fun Sidebar(destination: Destination, collapsed: Boolean, onCollapse: ()
         }
         HorizontalDivider(color = colors.line)
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (destination == Destination.PROJECTS || destination == Destination.PLOT) NavItem("Projects", AppIcon.PROJECTS, true, collapsed) { onNavigate(Destination.PROJECTS) }
+            if (destination in listOf(Destination.PROJECTS,Destination.PLOT,Destination.FLOOR_PLAN)) NavItem("Projects", AppIcon.PROJECTS, true, collapsed) { onNavigate(Destination.PROJECTS) }
             else {
                 NavItem("Back to app", AppIcon.ARROW, false, collapsed) { onNavigate(Destination.PROJECTS) }
                 NavItem("General", AppIcon.SETTINGS, destination == Destination.GENERAL, collapsed) { onNavigate(Destination.GENERAL) }
@@ -168,7 +173,7 @@ private fun Sidebar(destination: Destination, collapsed: Boolean, onCollapse: ()
             }
         }
         Spacer(Modifier.weight(1f))
-        if (destination == Destination.PROJECTS || destination == Destination.PLOT) Column(Modifier.padding(12.dp)) {
+        if (destination in listOf(Destination.PROJECTS,Destination.PLOT,Destination.FLOOR_PLAN)) Column(Modifier.padding(12.dp)) {
             HorizontalDivider(color = colors.line)
             Spacer(Modifier.height(8.dp))
             NavItem("Settings", AppIcon.SETTINGS, false, collapsed) { onNavigate(Destination.GENERAL) }
@@ -197,7 +202,7 @@ private fun AppHeader(compact: Boolean, destination: Destination, onSettingsBack
     Row(Modifier.fillMaxWidth().height(if (compact) 76.dp else 72.dp).padding(horizontal = if (compact) 24.dp else 32.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (compact) Wordmark(Modifier.weight(1f))
-        else Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.SETTINGS -> "Settings"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account"; Destination.LOGIN -> "Sign in"; Destination.PLOT -> "Plot setup" },
+        else Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.SETTINGS -> "Settings"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account"; Destination.LOGIN -> "Sign in"; Destination.PLOT -> "Plot setup"; Destination.FLOOR_PLAN -> "Floor plan" },
             Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
     if (!compact) HorizontalDivider(color = colors.line)

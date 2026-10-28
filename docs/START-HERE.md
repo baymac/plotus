@@ -16,7 +16,7 @@ Creating or opening a project takes you to **Plot setup**:
 2. **Direction:** move the north slider to match the site's orientation.
 3. **Roads:** select road-facing sides. Priority appears when more than one side is selected.
 
-On iPhone, **Plot setup** and **Floor plan** appear above the canvas when no section is selected. The canvas stays visible above **Boundary**, **Direction**, **Roads** and **Upload plot image**. Selecting a section highlights it and shows scrolling controls on the same screen. The header and preview compress to make room for typing. Use the keyboard-dismiss button beside Done to close the keyboard without saving or leaving the section. The three buttons and upload action hide while a section is selected. Choose **Done** to save, collapse the controls and bring the buttons back. Drag corners in the main view or Boundary to change angles without stretching measured sides; Direction and Roads keep the outline fixed. Measured diagonals lock the angles. On desktop, use the tabs beside the canvas; **Save plot** completes the setup.
+On iPhone, **Plot setup** and **Floor plan** appear above the canvas when no section is selected. The canvas stays visible above **Boundary**, **Direction**, **Roads** and **Upload plot image**. Selecting a section highlights it and shows scrolling controls on the same screen. The header and preview compress to make room for typing. Use the keyboard-dismiss button beside Done to close the keyboard without saving or leaving the section. The three buttons and upload action hide while a section is selected. Choose **Done** to save, collapse the controls and bring the buttons back. Drag corners in the main view or Boundary to change angles without stretching measured sides; Direction and Roads keep the outline fixed. Measured diagonals lock the angles. On desktop, use the tabs beside the canvas; **Floor plan** saves the plot and continues to the planning brief.
 
 Use **Save** in the project header to keep a draft. Undo and Redo let you revisit edits. Errors appear above the controls and beside the affected measurement. Reopening the project restores the saved plot on iPhone or web.
 
@@ -27,6 +27,16 @@ If another device saves a newer version, your local edits remain available. You 
 ## Start from a sketch
 
 Choose **Upload plot image** and select a photo of a hand-drawn or printed plot sketch. Plotus reads annotated dimensions, north and road-facing sides. Choose **Review measurements** to inspect and correct the extracted outline. Unclear measurements remain blank. Your existing plot stays intact until you choose to apply the result, and extracted values are saved only when you choose Save or Done.
+
+## Plan the building
+
+Select **Floor plan** after completing the boundary and road-facing sides.
+
+1. In **Setbacks**, choose Auto or enter a common distance or a distance for each edge. The shaded outline shows the buildable area. Choose the building’s floors and number of homes, then Next.
+2. In **Requirements**, choose each home’s BHK, floor allocation and Vastu preference. Auto supplies a room programme; Custom lets you add or remove rooms and configure bedroom features. Shared spaces belong to the building.
+3. Save the requirements or choose **Generate plan**. You can return to Projects while generation runs and reopen Floor plan to check the result. A result contains a drawing for each returned floor. A no-fit result keeps the requirements available for adjustment.
+
+Room dimensions are automatic in this milestone. Some catalogue entries remain marked Coming later, and the engine reports unsupported combinations before generation. If the boundary or direction changes, review and save setbacks again before generating. A floor-plan concept still needs a designer’s review.
 
 ## Keep your work organised
 
@@ -42,5 +52,3 @@ If a save fails, your entered details stay in the form so you can try again. Whe
 ## Explore the demo
 
 Choose **View demo** on the iPhone welcome screen to explore local sample projects without an account. Demo changes last for that session and stay separate from your saved workspace.
-
-Floor-plan requirements and generation are the next milestone.

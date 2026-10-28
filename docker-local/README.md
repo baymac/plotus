@@ -17,3 +17,5 @@ For Facebook, set its app ID/secret and exact registered HTTPS `FACEBOOK_CALLBAC
 App code lives in `apps/client` and `apps/ios`; services live in `services`; shared Kotlin models live in `packages/shared`. iOS builds run in Xcode on the Mac.
 
 The private engine is optional and excluded from default startup. Owners can initialize `services/engine-private`, set its service token, and explicitly enable the `engine` profile.
+
+The optional private planning service is configured with `PLOTUS_ENGINE_URL` and `PLOTUS_ENGINE_SERVICE_TOKEN` in the private environment file. The URL must be reachable from the API container. Leave both blank to save floor-plan requirements without generation. Never put the service token in web or iOS configuration.

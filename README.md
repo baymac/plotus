@@ -14,9 +14,11 @@ Account settings also let you add a passkey on iPhone or web. Appearance options
 
 Choose **Start project** at [plotus.app](https://plotus.app) to open your workspace. Sign-in is required on the web. The iPhone's separate **View demo** option contains temporary sample projects.
 
-## What comes next
+## Plan the home
 
-Plotus is being built to turn plot details and a client's brief into floor-plan concepts that a designer can review and refine. Setbacks, room requirements and floor-plan generation are the next parts of that journey.
+Continue to **Floor plan** to review setbacks and the buildable area, choose the building’s floors and homes, and set each home’s BHK and Vastu preference. Use automatic requirements or add rooms, attached bathrooms, closets and shared spaces. Save the brief to continue on another device.
+
+Choose **Generate plan** to request a checked concept. Generation continues when you leave the screen. If the requirements cannot produce a checked layout, Plotus asks you to adjust them. Detailed design, structural approval and construction documents still need a professional designer.
 
 [App guide](docs/START-HERE.md) · [Design](docs/DESIGN.md)
 
@@ -26,4 +28,4 @@ The public website and support/privacy/deletion pages live at [plotus.app](https
 
 ## Credits
 
-The app and supporting public services were created during the hackathon. The supplied visual design and private planning engine predate the event; the engine is not connected to the app yet. Sketch reading uses [Meta’s hosted image-understanding API](https://dev.meta.ai/docs/image-understanding); its app integration was written during the event. [Sources and credits](docs/PROVENANCE.md).
+The app and supporting public services were created during the hackathon. The supplied visual design and private planning engine predate the event; the app calls it through a private hosted service. Sketch reading uses [Meta’s hosted image-understanding API](https://dev.meta.ai/docs/image-understanding); its app integration was written during the event. [Sources and credits](docs/PROVENANCE.md).

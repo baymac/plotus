@@ -18,6 +18,10 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
     var mutationErrorCode by mutableStateOf<String?>(null); private set
     private val lock = Mutex()
     private val plotEditors = mutableMapOf<String, PlotWorkspace>()
+    private val floorEditors = mutableMapOf<String, FloorWorkspace>()
+    fun floor(id:String):FloorWorkspace=floorEditors.getOrPut(id) {
+        liveFloorWorkspace(auth,scope,owner) {project->if(auth.user?.id==owner)projects=saveProject(projects,project)}
+    }
 
     fun plot(id: String): PlotWorkspace = plotEditors.getOrPut(id) {
         livePlotWorkspace(auth, scope, owner, id) { project ->

@@ -92,7 +92,7 @@ private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float
 }
 
 @Composable
-internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true) {
+internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true, readOnly:Boolean=false, envelope:FloorEnvelope?=null) {
     val c=LocalPlotusColors.current
     var tool by remember { mutableStateOf(PlotTool.MOVE) }
     var toolOpen by remember { mutableStateOf(false) }
@@ -109,7 +109,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
     LaunchedEffect(points,dragging) { if(!dragging)fitPoints=points }
     val currentSetup by rememberUpdatedState(setup)
     val currentPoints by rememberUpdatedState(points)
-    val anglesEnabled=step==null||step==PlotStep.BOUNDARY
+    val anglesEnabled=!readOnly&&(step==null||step==PlotStep.BOUNDARY)
     val currentAnglesEnabled by rememberUpdatedState(anglesEnabled)
     val density=androidx.compose.ui.platform.LocalDensity.current.density
     val transform=plotTransform(fitPoints,canvasSize,density,zoom,pan,showToolbar,compact)
@@ -148,7 +148,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
                     }
                 }
             }.pointerInput(workspace,step) {
-                if(step==PlotStep.ROADS)detectTapGestures { position ->
+                if(step==PlotStep.ROADS&&!readOnly)detectTapGestures { position ->
                     if(workspace.saving)return@detectTapGestures
                     val p=currentPoints;val t=currentTransform
                     val side=p.indices.minByOrNull { i -> pointToSegment(position,t.screen(p[i]),t.screen(p[(i+1)%p.size])) }
@@ -169,6 +169,12 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
             }
             drawPath(path,c.surface)
             drawPath(path,c.ink,style=Stroke(1.5f*density))
+            envelope?.outlines?.filter {it.size>=3}?.forEach {outline->
+                val inner=outline.map(transform::screen)
+                val buildable=Path().apply {moveTo(inner[0].x,inner[0].y);inner.drop(1).forEach {lineTo(it.x,it.y)};close()}
+                drawPath(buildable,c.primary.copy(alpha=.12f))
+                drawPath(buildable,c.primary,style=Stroke(1.5f*density,pathEffect=PathEffect.dashPathEffect(floatArrayOf(5*density,4*density))))
+            }
             if(setup.useDiagonals && setup.vertices.isNotEmpty()) for(i in 2 until points.lastIndex) drawLine(c.muted.copy(alpha=.6f),screen[0],screen[i],1*density,pathEffect=PathEffect.dashPathEffect(floatArrayOf(4*density,4*density)))
             screen.forEachIndexed { i,p ->
                 val label=measureLabel(setup.lengths.getOrNull(i),setup.units)

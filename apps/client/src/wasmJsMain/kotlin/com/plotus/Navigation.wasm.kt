@@ -12,7 +12,7 @@ private external fun locationJson(): String
 @JsFun("""(path,replace) => {
  if(replace)history.replaceState(null,'',path);else history.pushState(null,'',path);
  const titles={'/projects':'Projects','/settings':'Settings','/settings/general':'General','/settings/account':'Account','/login':'Sign in'};
- document.title=(titles[new URL(location.href).pathname] || 'Workspace')+' · Plotus';
+ document.title=(titles[new URL(location.href).pathname] || (location.pathname.includes('/plot/') ? 'Plot setup' : 'Workspace'))+' · Plotus';
 }""")
 private external fun updateLocation(path: String, replace: Boolean)
 

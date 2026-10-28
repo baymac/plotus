@@ -11,6 +11,8 @@ import javax.sql.DataSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.postgresql.ds.PGSimpleDataSource
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 interface ProjectStore {
     suspend fun healthy(): Boolean
@@ -19,6 +21,7 @@ interface ProjectStore {
     suspend fun create(owner: UUID, draft: ProjectDraft): Project
     suspend fun update(owner: UUID, id: UUID, revision: Long, draft: ProjectDraft): Project
     suspend fun delete(owner: UUID, id: UUID, revision: Long)
+    suspend fun savePlot(owner: UUID, id: UUID, revision: Long, setup: PlotSetup): Project
 }
 
 class PostgresProjects(private val source: DataSource) : ProjectStore {
@@ -34,7 +37,9 @@ class PostgresProjects(private val source: DataSource) : ProjectStore {
         }
     }
     fun migrate() {
-        val sql = javaClass.getResourceAsStream("/migrations/001_projects.sql")!!.bufferedReader().use { it.readText() }
+        val sql = listOf("001_projects.sql", "002_plot_setup.sql").joinToString("\n") { file ->
+            javaClass.getResourceAsStream("/migrations/$file")!!.bufferedReader().use { it.readText() }
+        }
         source.connection.use { connection -> connection.createStatement().use { it.execute(sql) } }
     }
     override suspend fun healthy(): Boolean = withContext(Dispatchers.IO) {
@@ -72,6 +77,14 @@ class PostgresProjects(private val source: DataSource) : ProjectStore {
             if (it.executeUpdate()!=1) changedOrMissing(connection,owner,id)
         }
     } }
+    override suspend fun savePlot(owner: UUID, id: UUID, revision: Long, setup: PlotSetup): Project = database { connection ->
+        connection.prepareStatement("""UPDATE plotus.projects SET plot_setup=?::jsonb,area_sq_ft=?,
+            revision=revision+1,updated_at=clock_timestamp() WHERE owner_id=? AND id=? AND revision=? RETURNING *""").use {
+            it.setString(1, Json.encodeToString(setup)); it.setObject(2, setup.areaSquareFeet)
+            it.setObject(3, owner); it.setObject(4, id); it.setLong(5, revision)
+            it.executeQuery().use { rows -> if (rows.next()) rows.project() else changedOrMissing(connection,owner,id) }
+        }
+    }
     private fun changedOrMissing(connection: Connection, owner: UUID, id: UUID): Nothing {
         connection.prepareStatement("SELECT 1 FROM plotus.projects WHERE owner_id=? AND id=?").use {
             it.setObject(1, owner); it.setObject(2, id)
@@ -95,7 +108,8 @@ class PostgresProjects(private val source: DataSource) : ProjectStore {
         val minutes = Duration.between(edited,Instant.now()).toMinutes().coerceAtLeast(0)
         val label = when { minutes<1 -> "Just now"; minutes<60 -> "$minutes min ago"; minutes<1440 -> "${minutes/60} hr ago"; else -> "${minutes/1440} days ago" }
         return Project(getObject("id").toString(),getString("name"),getString("location"),getObject("area_sq_ft") as Int?,label,
-            getString("client_name")?.let { Client(it,getString("client_email"),getString("client_phone").orEmpty()) },getLong("revision"),edited.toString())
+            getString("client_name")?.let { Client(it,getString("client_email"),getString("client_phone").orEmpty()) },getLong("revision"),edited.toString(),
+            getString("plot_setup")?.let { Json.decodeFromString<PlotSetup>(it) })
     }
 }
 

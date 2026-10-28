@@ -69,3 +69,17 @@ test("public pages keep their asset response and aliases cannot use the auth API
   assert.equal((await worker.fetch(new Request("https://plotus-landing.pages.dev/api/auth/config"), env)).status, 403);
   assert.equal((await worker.fetch(request("/_app/index.html"), env)).headers.get("Location"), "/projects");
 });
+
+test("project plot deep links are protected and survive the sign-in return", async t => {
+  const path="/projects/c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a/plot/roads";
+  const anonymous=await worker.fetch(request(path),env);
+  assert.equal(anonymous.status,302);
+  assert.equal(anonymous.headers.get("Location"),"/login?next="+encodeURIComponent(path));
+  t.mock.method(globalThis,"fetch",async()=>new Response(null,{status:200}));
+  const cookie={headers:{Cookie:"__Host-plotus_refresh=fixture"}};
+  assert.equal((await worker.fetch(request(path,cookie),env)).status,200);
+  const returned=await worker.fetch(request("/login?next="+encodeURIComponent(path),cookie),env);
+  assert.equal(returned.headers.get("Location"),path);
+  const unknown=await worker.fetch(request("/projects/not-a-project/plot/roads"),env);
+  assert.equal(await unknown.text(),"/projects/not-a-project/plot/roads");
+});

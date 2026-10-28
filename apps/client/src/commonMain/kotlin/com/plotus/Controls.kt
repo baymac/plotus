@@ -19,6 +19,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.plotus.resources.*
+import com.plotus.shared.PlotPoint
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
@@ -77,11 +78,13 @@ fun LabeledInput(label: String, value: String, onChange: (String) -> Unit, error
 }
 
 @Composable
-fun GeometryBadge() {
+fun GeometryBadge(points: List<PlotPoint> = emptyList()) {
     val colors = LocalPlotusColors.current
     Box(Modifier.size(48.dp).background(colors.surface, RoundedCornerShape(12.dp))
         .border(1.dp, colors.border, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-        Image(painterResource(if (colors.dark) Res.drawable.boundary_dark else Res.drawable.boundary), null, Modifier.size(34.dp))
-        Text("PLOT", fontSize = 7.5.sp, color = colors.muted, modifier = Modifier.offset(x = (-3).dp))
+        if(points.isEmpty()) {
+            Image(painterResource(if (colors.dark) Res.drawable.boundary_dark else Res.drawable.boundary), null, Modifier.size(34.dp))
+            Text("PLOT", fontSize = 7.5.sp, color = colors.muted, modifier = Modifier.offset(x = (-3).dp))
+        } else PlotThumbnail(points, Modifier.size(34.dp), 4.dp)
     }
 }

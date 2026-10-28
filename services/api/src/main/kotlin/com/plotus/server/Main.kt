@@ -63,6 +63,13 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier) {
                 val revision = request.revision?.takeIf { it>0 } ?: throw ApiFailure(400,"INVALID_REVISION","Refresh the project before saving changes.")
                 call.respond(store.update(call.attributes[Owner],call.projectID(),revision,request.details))
             }
+            put("/projects/{id}/plot") {
+                val request = call.receive<SavePlotRequest>()
+                val errors = request.setup.errors()
+                if (errors.isNotEmpty()) throw ApiFailure(400,"VALIDATION_FAILED","Check the plot details.",errors)
+                if (request.revision <= 0) throw ApiFailure(400,"INVALID_REVISION","Reopen this project before saving changes.")
+                call.respond(store.savePlot(call.attributes[Owner],call.projectID(),request.revision,request.setup))
+            }
             delete("/projects/{id}") {
                 val request = call.receive<DeleteProjectRequest>()
                 if (request.revision<=0) throw ApiFailure(400,"INVALID_REVISION","Refresh the project before deleting it.")

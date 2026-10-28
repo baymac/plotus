@@ -42,6 +42,7 @@ fun PlotusApp() {
     var deleting by remember { mutableStateOf<Project?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var nextId by remember { mutableStateOf(1) }
+    val previewPlots = remember { mutableMapOf<String, PlotWorkspace>() }
     val account = auth.user
     val workspace = remember(account?.id) { account?.let { ProjectWorkspace(auth, scope, it.id) } }
     LaunchedEffect(account?.id, destination) { showForm = false; editing = null; deleting = null }
@@ -73,7 +74,18 @@ fun PlotusApp() {
                         collapsed = !collapsed; writePreference("sidebar", if (collapsed) "collapsed" else "open")
                     }, onNavigate = { navigation.navigate(it) })
                     Column(Modifier.weight(1f).fillMaxHeight()) {
-                        if (!compact || destination != Destination.SETTINGS) AppHeader(compact, destination) { navigation.navigate(Destination.SETTINGS) }
+                        if (destination != Destination.PLOT && (!compact || destination != Destination.SETTINGS)) AppHeader(compact, destination) { navigation.navigate(Destination.SETTINGS) }
+                        if (destination == Destination.PLOT) {
+                            val id = navigation.projectID!!
+                            val plot = if (preview) previewPlots.getOrPut(id) {
+                                PlotWorkspace(scope, { projects.first { it.id == id } }, { project, setup ->
+                                    project.copy(plotSetup=setup, areaSqFt=setup.areaSquareFeet, revision=project.revision+1, lastEdited="Just now")
+                                }, { project -> projects=saveProject(projects,project) })
+                            } else workspace!!.plot(id)
+                            Box(Modifier.weight(1f).fillMaxWidth()) {
+                                PlotSetupScreen(plot,navigation.plotStep,compact,{navigation.openProject(id,it)},{navigation.navigate(Destination.PROJECTS)})
+                            }
+                        } else {
                         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) 24.dp else 32.dp,
                             vertical = if (compact) 12.dp else 32.dp)) {
                             if (destination == Destination.PROJECTS) ProjectsScreen(if (preview) projects else workspace?.projects.orEmpty(), compact,
@@ -82,7 +94,8 @@ fun PlotusApp() {
                                 onDelete = { deleting = it; workspace?.clearMutationError() },
                                 loading = !preview && workspace?.loading == true, busy = !preview && workspace?.busy == true,
                                 error = if (preview) null else workspace?.error,
-                                onRetry = if (preview) null else { { workspace?.reload() } })
+                                onRetry = if (preview) null else { { workspace?.reload() } },
+                                onOpen = { navigation.openProject(it.id) })
                             else if (destination == Destination.SETTINGS) SettingsHomeScreen { navigation.navigate(it) }
                             else if (destination == Destination.GENERAL) GeneralSettingsScreen(compact, appearance) {
                                 appearance = it; writePreference("appearance", it.name)
@@ -93,15 +106,21 @@ fun PlotusApp() {
                             else PreviewAccountScreen(compact, onSignIn = exit)
                         }
                         if (compact) MobileNavigation(destination) { navigation.navigate(it) }
+                        }
                     }
                 }
                 if (destination == Destination.PROJECTS && showForm && (preview || account != null)) ProjectFormDialog(editing, compact, onDismiss = { showForm = false },
                     busy = !preview && workspace?.busy == true, error = if (preview) null else workspace?.mutationError,
                     onSave = { draft ->
+                        val creating = editing == null
                         if (preview) {
                             val project = draft.toProject(editing?.id ?: "preview-new-${nextId++}", editing)
                             projects = saveProject(projects, project); showForm = false
-                        } else workspace?.save(editing, draft) { showForm = false }
+                            if(creating) navigation.openProject(project.id)
+                        } else workspace?.save(editing, draft) { saved ->
+                            showForm = false
+                            if(creating && navigation.destination == Destination.PROJECTS) navigation.openProject(saved.id)
+                        }
                     })
                 if (destination == Destination.PROJECTS && (preview || account != null)) deleting?.let { project ->
                     val busy = !preview && workspace?.busy == true
@@ -139,7 +158,7 @@ private fun Sidebar(destination: Destination, collapsed: Boolean, onCollapse: ()
         }
         HorizontalDivider(color = colors.line)
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (destination == Destination.PROJECTS) NavItem("Projects", AppIcon.PROJECTS, true, collapsed) { onNavigate(Destination.PROJECTS) }
+            if (destination == Destination.PROJECTS || destination == Destination.PLOT) NavItem("Projects", AppIcon.PROJECTS, true, collapsed) { onNavigate(Destination.PROJECTS) }
             else {
                 NavItem("Back to app", AppIcon.ARROW, false, collapsed) { onNavigate(Destination.PROJECTS) }
                 NavItem("General", AppIcon.SETTINGS, destination == Destination.GENERAL, collapsed) { onNavigate(Destination.GENERAL) }
@@ -147,7 +166,7 @@ private fun Sidebar(destination: Destination, collapsed: Boolean, onCollapse: ()
             }
         }
         Spacer(Modifier.weight(1f))
-        if (destination == Destination.PROJECTS) Column(Modifier.padding(12.dp)) {
+        if (destination == Destination.PROJECTS || destination == Destination.PLOT) Column(Modifier.padding(12.dp)) {
             HorizontalDivider(color = colors.line)
             Spacer(Modifier.height(8.dp))
             NavItem("Settings", AppIcon.SETTINGS, false, collapsed) { onNavigate(Destination.GENERAL) }
@@ -176,7 +195,7 @@ private fun AppHeader(compact: Boolean, destination: Destination, onSettingsBack
     Row(Modifier.fillMaxWidth().height(if (compact) 76.dp else 72.dp).padding(horizontal = if (compact) 24.dp else 32.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (compact) Wordmark(Modifier.weight(1f))
-        else Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.SETTINGS -> "Settings"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account"; Destination.LOGIN -> "Sign in" },
+        else Text(when (destination) { Destination.PROJECTS -> "Projects"; Destination.SETTINGS -> "Settings"; Destination.GENERAL -> "General"; Destination.ACCOUNT -> "Account"; Destination.LOGIN -> "Sign in"; Destination.PLOT -> "Plot setup" },
             Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
     }
     if (!compact) HorizontalDivider(color = colors.line)

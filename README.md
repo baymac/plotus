@@ -8,13 +8,15 @@ Plotus is a home-planning workspace for architects and residential designers. It
 
 Sign in with Google or Facebook to create projects, add client details and keep your work organised. Search by name or location, sort your projects, and update or remove them as your work changes. Your projects are saved to your account and available on iPhone and web.
 
-Account settings also let you add a passkey for web sign-in. Appearance options live in **Settings → General**.
+Open a project to define its plot. Enter side lengths and optional diagonals, adjust the corners, set north and choose road-facing sides. Save a draft at any point, or complete Plot setup to save the boundary, direction and road details together. Your measured area appears in Projects.
+
+Account settings also let you add a passkey on iPhone or web. Appearance options live in **Settings → General**.
 
 Choose **Start project** at [plotus.app](https://plotus.app) to open your workspace. Sign-in is required on the web. The iPhone's separate **View demo** option contains temporary sample projects.
 
 ## What comes next
 
-Plotus is being built to turn plot details and a client's brief into floor-plan concepts that a designer can review and refine. Plot boundaries, room requirements and floor-plan generation are still in development.
+Plotus is being built to turn plot details and a client's brief into floor-plan concepts that a designer can review and refine. Image tracing, setbacks, room requirements and floor-plan generation are the next parts of that journey.
 
 [App guide](docs/START-HERE.md) · [Design](docs/DESIGN.md)
 

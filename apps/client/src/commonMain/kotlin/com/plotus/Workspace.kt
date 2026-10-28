@@ -16,6 +16,13 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
     var error by mutableStateOf<String?>(null); private set
     var mutationError by mutableStateOf<String?>(null); private set
     private val lock = Mutex()
+    private val plotEditors = mutableMapOf<String, PlotWorkspace>()
+
+    fun plot(id: String): PlotWorkspace = plotEditors.getOrPut(id) {
+        livePlotWorkspace(auth, scope, owner, id) { project ->
+            if (auth.user?.id == owner) projects = saveProject(projects, project)
+        }
+    }
 
     suspend fun refresh() = lock.withLock {
         if (auth.user?.id != owner) return@withLock
@@ -30,12 +37,12 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
     fun reload() { scope.launch { refresh() } }
     fun clearMutationError() { mutationError = null }
 
-    fun save(existing: Project?, draft: ProjectDraft, onSaved: () -> Unit) = mutate {
+    fun save(existing: Project?, draft: ProjectDraft, onSaved: (Project) -> Unit) = mutate {
         val path = if (existing == null) "/v1/projects" else "/v1/projects/${existing.id}"
         val result = auth.projectRequest(if(existing==null) "POST" else "PUT",path,
             authJson.encodeToString(SaveProjectRequest(draft,existing?.revision)))
         val project = authJson.decodeFromJsonElement<Project>(result)
-        if (auth.user?.id == owner) { projects = saveProject(projects,project); error = null; onSaved() }
+        if (auth.user?.id == owner) { projects = saveProject(projects,project); error = null; onSaved(project) }
     }
     fun delete(project: Project, onDeleted: () -> Unit) = mutate {
         auth.projectRequest("DELETE","/v1/projects/${project.id}",authJson.encodeToString(DeleteProjectRequest(project.revision)))

@@ -44,3 +44,31 @@ class NavigationTest {
         assertEquals(Destination.ACCOUNT, navigation.destination)
     }
 }
+
+class PlotNavigationTest {
+    private val id = "c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a"
+    @Test fun projectDeepLinksReturnToTheSameStepAfterSignIn() {
+        val writes = mutableListOf<String>()
+        val route = "/projects/$id/plot/roads"
+        val navigation = AppNavigation(AppLocation(route)) { path, _ -> writes += path }
+        navigation.reconcileSession(false,false)
+        assertEquals("/login?next=$route", writes.last())
+        navigation.reconcileSession(true,false)
+        assertEquals(Destination.PLOT,navigation.destination)
+        assertEquals(id,navigation.projectID)
+        assertEquals(com.plotus.shared.PlotStep.ROADS,navigation.plotStep)
+        assertEquals(route,writes.last())
+        navigation.receive(AppLocation("/projects/$id/plot/direction"))
+        assertEquals(com.plotus.shared.PlotStep.DIRECTION,navigation.plotStep)
+    }
+    @Test fun invalidProjectReturnPathsStayInsideKnownRoutes() {
+        for (path in listOf("/projects/other/plot/roads","/projects/$id/plot/../account","//example.invalid/projects/$id/plot/roads")) {
+            val navigation=AppNavigation(AppLocation("/login",path)) {_,_->}
+            navigation.reconcileSession(true,false)
+            assertEquals(Destination.PROJECTS,navigation.destination)
+        }
+        val native=AppNavigation(null) {_,_->fail("Native routes do not update browser history")}
+        native.openProject("preview-jaipur",com.plotus.shared.PlotStep.DIRECTION)
+        assertEquals("preview-jaipur",native.projectID)
+    }
+}

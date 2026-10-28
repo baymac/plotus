@@ -6,7 +6,7 @@ It considers plot geometry, setbacks, floors, room requirements and how spaces c
 
 ## Availability
 
-The engine is not connected to the current Plotus demo. Plot editing and floor-plan generation are not available in the app yet.
+The engine is not connected to the current Plotus app. Plot setup now saves manually entered boundaries, orientation and road details; floor-plan generation is still in development.
 
 ## Existing technology
 

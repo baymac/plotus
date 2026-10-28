@@ -34,7 +34,7 @@ export const legalPages = [
         bullets: [
           "Account information. When you choose Google or Facebook sign-in, Plotus receives the provider account identifier, name, and any email address and profile-picture URL the provider supplies. These identify your Plotus account and display your account details. Plotus does not receive your Google or Facebook password.",
           "Login and security information. Plotus keeps account and session identifiers, session expiry and revocation records, and credentials needed to keep you signed in and protect the service. If you add a passkey, Plotus stores its public credential information and related security metadata. Your fingerprint, face data and device unlock code are not sent to Plotus.",
-          "Project information. When signed in, you can save project names, locations and optional client names, email addresses and phone numbers. Plotus stores these details on its backend under your account so you can access them on iPhone and web. Only provide client information you are authorised to use. The separate iPhone design preview uses temporary local sample projects.",
+          "Project information. When signed in, you can save project names, locations, plot boundaries and measurements, north direction, road details and optional client names, email addresses and phone numbers. Plotus stores these details on its backend under your account so you can access them on iPhone and web. Only provide client information you are authorised to use. The separate iPhone design preview uses temporary local sample projects.",
           "Support messages. If you email us, we receive your email address, message and any attachments you choose to send. Please avoid sending passwords, login codes, identity documents or confidential client material.",
         ],
       },
@@ -108,8 +108,8 @@ export const legalPages = [
       {
         title: "The current service",
         paragraphs: [
-          "Plotus is being built to help architects and residential designers organise a home-design brief and explore early planning ideas. The current app lets signed-in users save project and client details, search and sort projects, and change appearance. Google and Facebook sign-in, together with web passkeys, provide access to your Plotus account.",
-          "Signed-in project changes are saved to your account and available across devices. Plot setup, room requirements and floor-plan generation are still in development. Descriptions of that direction are not a promise that a feature is available today or will ship on a particular date.",
+          "Plotus is being built to help architects and residential designers organise a home-design brief and explore early planning ideas. The current app lets signed-in users save project and client details, define plot boundaries, set north and roads, search and sort projects, and change appearance. Google, Facebook and passkeys provide access to your Plotus account.",
+          "Signed-in project and plot changes are saved to your account and available across devices. Image tracing, floor-plan requirements and generation are still in development. Descriptions of that direction are not a promise that a feature is available today or will ship on a particular date.",
         ],
       },
       {
@@ -176,8 +176,8 @@ export const legalPages = [
       {
         title: "What the demo can do today",
         paragraphs: [
-          "Choose Start project on the website and sign in to open your saved workspace. You can create and edit project details, search, sort and change the theme. A separate iPhone design preview contains temporary local sample projects.",
-          "Google or Facebook sign-in opens your Plotus account. Web accounts can add and remove passkeys in Settings → Account. Plot setup, room requirements and generated floor plans are still in development.",
+          "Choose Start project on the website and sign in to open your saved workspace. Create a project, define its boundary and measurements, set north and add road details. You can also edit project details, search, sort and change the theme. A separate iPhone design preview contains temporary local sample projects.",
+          "Google or Facebook sign-in opens your Plotus account. You can add and remove passkeys in Settings → Account on iPhone or web. Plot-image upload, floor-plan requirements and generation are still in development.",
         ],
       },
       {
@@ -185,7 +185,7 @@ export const legalPages = [
         bullets: [
           "Check your connection, close the sign-in prompt and start again. A cancelled or expired sign-in attempt can be restarted safely.",
           "Use the same Google or Facebook account you used to create your Plotus account.",
-          "To use a web passkey, sign in with Google or Facebook first and add one in Account settings on a compatible browser and device.",
+          "To use a passkey, sign in with Google or Facebook first and add one in Account settings on a compatible browser or iPhone. Removing a passkey revokes its Plotus registration; if an old entry remains in your password manager, remove it there too.",
           "If the problem continues, email the error message and your device or browser details. Do not include login codes or credentials.",
         ],
       },
@@ -282,7 +282,7 @@ export const legalPages = [
       {
         title: "What deletion means",
         paragraphs: [
-          "Deleting the account removes its Plotus profile, provider identifier, sessions and stored passkey credentials. The current app does not save project edits to an account. If you also want support correspondence deleted, include that in your request.",
+          "Deleting the account removes its Plotus profile, provider identifier, sessions, stored passkey credentials and saved project, plot and client details. If you also want support correspondence deleted, include that in your request.",
           "Deleting your Plotus account does not delete your Google or Facebook account. Removing Plotus from a provider's connected apps revokes that connection; it is separate from deleting information held by Plotus.",
         ],
       },

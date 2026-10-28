@@ -1,4 +1,6 @@
 const appPaths = new Set(["/projects", "/settings", "/settings/general", "/settings/account"]);
+const projectPath = /^\/projects\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\/plot\/(boundary|direction|roads)$/;
+const isAppPath = path => appPaths.has(path) || projectPath.test(path);
 const entryPaths = new Set(["/login", "/_app", "/_app/", "/_app/index.html"]);
 const appCsp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests";
 
@@ -34,7 +36,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "") || "/";
     const api = path.startsWith("/api/auth/") || path.startsWith("/v1/") || path === "/.well-known/jwks.json";
-    const app = appPaths.has(path) || entryPaths.has(url.pathname) || path === "/login";
+    const app = isAppPath(path) || entryPaths.has(url.pathname) || path === "/login";
     if (!api && !app) return env.ASSETS.fetch(request);
     const origin = env.PUBLIC_ORIGIN || "https://plotus.app";
     if (url.origin !== origin) {
@@ -61,7 +63,7 @@ export default {
     if (!signedIn && path !== "/login") return redirect("/login?next=" + encodeURIComponent(path));
     if (signedIn && path === "/login") {
       const next = url.searchParams.get("next");
-      return redirect(appPaths.has(next) ? next : "/projects");
+      return redirect(typeof next === "string" && isAppPath(next) ? next : "/projects");
     }
 
     const asset = await env.ASSETS.fetch(new Request(new URL("/_app/", url), { method: request.method }));

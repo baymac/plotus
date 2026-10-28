@@ -18,7 +18,8 @@ import org.jetbrains.compose.resources.*
 
 @Composable
 fun ProjectsScreen(projects: List<Project>, compact: Boolean, onNew: () -> Unit, onEdit: (Project) -> Unit, onDelete: (Project) -> Unit,
-    loading: Boolean = false, busy: Boolean = false, error: String? = null, onRetry: (() -> Unit)? = null) {
+    loading: Boolean = false, busy: Boolean = false, error: String? = null, onRetry: (() -> Unit)? = null,
+    onOpen: (Project) -> Unit = onEdit) {
     val colors = LocalPlotusColors.current
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf(ProjectSort.RECENT) }
@@ -77,7 +78,7 @@ fun ProjectsScreen(projects: List<Project>, compact: Boolean, onNew: () -> Unit,
         }
         LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false)) {
             items(visible, key = { it.id }) { project ->
-                ProjectRow(project, compact, { onEdit(project) }, { onDelete(project) })
+                ProjectRow(project, compact, { onOpen(project) }, { onEdit(project) }, { onDelete(project) })
                 HorizontalDivider(color = colors.line)
             }
         }
@@ -85,13 +86,13 @@ fun ProjectsScreen(projects: List<Project>, compact: Boolean, onNew: () -> Unit,
 }
 
 @Composable
-private fun ProjectRow(project: Project, compact: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun ProjectRow(project: Project, compact: Boolean, onOpen: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     val colors = LocalPlotusColors.current
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().heightIn(min = if (compact) 96.dp else 88.dp)
         .padding(horizontal = if (compact) 0.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).heightIn(min = if (compact) 96.dp else 88.dp).clickable(onClick = onEdit), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(if (compact) 62.dp else 88.dp), contentAlignment = if (compact) Alignment.CenterStart else Alignment.Center) { GeometryBadge() }
+        Row(Modifier.weight(1f).heightIn(min = if (compact) 96.dp else 88.dp).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(if (compact) 62.dp else 88.dp), contentAlignment = if (compact) Alignment.CenterStart else Alignment.Center) { GeometryBadge(project.plotSetup?.vertices.orEmpty()) }
             Column(Modifier.weight(1f)) {
                 Text(project.name, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
                 Text(project.location, fontSize = if (compact) 13.sp else 14.sp, color = colors.muted)

@@ -1,0 +1,229 @@
+package com.plotus
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.plotus.shared.*
+import kotlin.math.*
+
+internal enum class PlotTool { MOVE, HAND }
+internal enum class PlotSymbol { POINTER, HAND, UNDO, REDO, FIT, MORE, GRID, ZOOM_IN, ZOOM_OUT, IMAGE, CHEVRON, BACK }
+internal val provisionalPlot = listOf(PlotPoint(0.0,0.0),PlotPoint(10.0,0.0),PlotPoint(10.0,8.0),PlotPoint(0.0,8.0))
+
+@Composable
+internal fun PlotSymbol(symbol: PlotSymbol, color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(20.dp)) {
+        scale(size.width/20f, size.height/20f, pivot=Offset.Zero) {
+            fun line(x1: Float,y1: Float,x2: Float,y2: Float) = drawLine(color,Offset(x1,y1),Offset(x2,y2),1.4f,StrokeCap.Round)
+            when(symbol) {
+                PlotSymbol.CHEVRON -> {line(6f,8f,10f,12f);line(10f,12f,14f,8f)}
+                PlotSymbol.BACK -> {line(12f,4f,6f,10f);line(6f,10f,12f,16f)}
+                PlotSymbol.POINTER -> drawPath(Path().apply { moveTo(4f,3f);lineTo(16f,9f);lineTo(10f,11f);lineTo(8f,17f);close() },color,style=Stroke(1.4f))
+                PlotSymbol.HAND -> drawPath(Path().apply { moveTo(5f,10f);lineTo(5f,7f);quadraticTo(5f,5f,7f,7f);lineTo(7f,4f);quadraticTo(8f,2f,9f,4f);lineTo(9f,7f);lineTo(9f,3f);quadraticTo(10f,1f,11f,3f);lineTo(11f,7f);lineTo(11f,4f);quadraticTo(12f,2f,13f,4f);lineTo(13f,8f);quadraticTo(16f,6f,16f,9f);lineTo(15f,14f);quadraticTo(14f,18f,11f,18f);lineTo(9f,18f);quadraticTo(7f,18f,5f,14f);lineTo(3f,11f);quadraticTo(2f,8f,5f,10f) },color,style=Stroke(1.3f))
+                PlotSymbol.UNDO, PlotSymbol.REDO -> {
+                    fun x(v: Float) = if(symbol==PlotSymbol.REDO) 20f-v else v
+                    drawPath(Path().apply { moveTo(x(14f),16f);cubicTo(x(20f),10f,x(12f),5f,x(5f),8f) },color,style=Stroke(1.4f))
+                    line(x(8f),4f,x(4f),8f);line(x(4f),8f,x(8f),11f)
+                }
+                PlotSymbol.FIT -> { line(3f,7f,3f,3f);line(3f,3f,7f,3f);line(13f,3f,17f,3f);line(17f,3f,17f,7f);line(17f,13f,17f,17f);line(17f,17f,13f,17f);line(7f,17f,3f,17f);line(3f,17f,3f,13f) }
+                PlotSymbol.MORE -> listOf(4f,10f,16f).forEach { drawCircle(color,1.25f,Offset(it,10f)) }
+                PlotSymbol.GRID -> { for (p in listOf(4f,10f,16f)) { line(p,2f,p,18f);line(2f,p,18f,p) } }
+                PlotSymbol.ZOOM_IN, PlotSymbol.ZOOM_OUT -> { drawCircle(color,5.2f,Offset(8f,8f),style=Stroke(1.3f));line(12f,12f,17f,17f);line(5f,8f,11f,8f);if(symbol==PlotSymbol.ZOOM_IN)line(8f,5f,8f,11f) }
+                PlotSymbol.IMAGE -> { drawRoundRect(color,Offset(2f,3f),androidx.compose.ui.geometry.Size(16f,14f),androidx.compose.ui.geometry.CornerRadius(2f),style=Stroke(1.3f));drawCircle(color,1.5f,Offset(7f,7f));line(3f,15f,9f,10f);line(9f,10f,12f,13f);line(12f,13f,16f,9f) }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun PlotToolButton(symbol: PlotSymbol, label: String, enabled: Boolean = true, selected: Boolean = false, onClick: () -> Unit) {
+    val c = LocalPlotusColors.current
+    IconButton(onClick,Modifier.size(44.dp).background(if(selected)c.active else Color.Transparent,RoundedCornerShape(10.dp))
+        .semantics { contentDescription=label },enabled=enabled) {
+        PlotSymbol(symbol,if(selected)c.primary else if(enabled)c.muted else c.border)
+    }
+}
+
+private data class PlotTransform(val scale: Float, val centre: Offset, val x: Double, val y: Double) {
+    fun screen(p: PlotPoint) = Offset(centre.x+((p.x-x)*scale).toFloat(),centre.y+((p.y-y)*scale).toFloat())
+    fun model(p: Offset) = PlotPoint(x+(p.x-centre.x)/scale,y+(p.y-centre.y)/scale)
+}
+private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float, zoom: Float, pan: Offset, showToolbar: Boolean, compact: Boolean): PlotTransform {
+    val minX=points.minOf { it.x };val maxX=points.maxOf { it.x };val minY=points.minOf { it.y };val maxY=points.maxOf { it.y }
+    val width=(size.width-92*density).coerceAtLeast(20*density)
+    val top=(if(showToolbar)84 else 12)*density
+    val height=(size.height-top-64*density).coerceAtLeast(20*density)
+    return PlotTransform(min(width/(maxX-minX).coerceAtLeast(.01),height/(maxY-minY).coerceAtLeast(.01)).toFloat()*zoom*(if(compact)1f else .84f),
+        Offset(size.width/2f,top+height/2+(if(compact)0 else 10)*density)+pan,(minX+maxX)/2,(minY+maxY)/2)
+}
+
+@Composable
+internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true, onChooseShape: () -> Unit) {
+    val c=LocalPlotusColors.current
+    var tool by remember { mutableStateOf(PlotTool.MOVE) }
+    var toolOpen by remember { mutableStateOf(false) }
+    var moreOpen by remember { mutableStateOf(false) }
+    var grid by remember { mutableStateOf(true) }
+    var zoom by remember { mutableStateOf(1f) }
+    var pan by remember { mutableStateOf(Offset.Zero) }
+    var canvasSize by remember { mutableStateOf(IntSize(1,1)) }
+    var dragging by remember { mutableStateOf(false) }
+    var dragIndex by remember { mutableStateOf(-1) }
+    val setup=workspace.draft
+    val points=setup.vertices.ifEmpty { provisionalPlotForSides(setup.lengths.size) }
+    var fitPoints by remember { mutableStateOf(points) }
+    LaunchedEffect(points,dragging) { if(!dragging)fitPoints=points }
+    val currentSetup by rememberUpdatedState(setup)
+    val currentPoints by rememberUpdatedState(points)
+    val currentStep by rememberUpdatedState(step)
+    val density=androidx.compose.ui.platform.LocalDensity.current.density
+    val transform=plotTransform(fitPoints,canvasSize,density,zoom,pan,showToolbar,compact)
+    val currentTransform by rememberUpdatedState(transform)
+    var gestureTransform by remember { mutableStateOf(transform) }
+    val measurer=rememberTextMeasurer()
+    val baseStyle=LocalTextStyle.current
+    Box(modifier.background(c.background).onSizeChanged { canvasSize=it }) {
+        Canvas(Modifier.fillMaxSize().semantics { contentDescription="Plot boundary. Edit the labelled side measurements below or drag the corners. North ${decimal(setup.northDegrees)} degrees." }
+            .pointerInput(tool,workspace) {
+                detectDragGestures(onDragStart={ offset ->
+                    if(workspace.saving)return@detectDragGestures
+                    gestureTransform=currentTransform
+                    dragIndex=if(tool==PlotTool.MOVE && currentStep==PlotStep.BOUNDARY) currentPoints.indices.minByOrNull { i -> (gestureTransform.screen(currentPoints[i])-offset).getDistance() }
+                        ?.takeIf { (gestureTransform.screen(currentPoints[it])-offset).getDistance()<=28*density } ?: -1 else -1
+                    dragging=true
+                    if(dragIndex>=0)workspace.markGestureStart()
+                },onDragEnd={dragging=false;dragIndex=-1},onDragCancel={dragging=false;dragIndex=-1}) { change,amount ->
+                    if(workspace.saving)return@detectDragGestures
+                    if(tool==PlotTool.HAND) {pan+=amount;change.consume()}
+                    else if(dragIndex>=0) {
+                        val edited=currentPoints.toMutableList()
+                        edited[dragIndex]=gestureTransform.model(change.position)
+                        if(simplePolygon(edited))workspace.change(currentSetup.withVertices(edited),remember=false)
+                        change.consume()
+                    }
+                }
+            }.pointerInput(workspace,step) {
+                if(step==PlotStep.ROADS)detectTapGestures { position ->
+                    if(workspace.saving)return@detectTapGestures
+                    val p=currentPoints;val t=currentTransform
+                    val side=p.indices.minByOrNull { i -> pointToSegment(position,t.screen(p[i]),t.screen(p[(i+1)%p.size])) }
+                    if(side!=null && pointToSegment(position,t.screen(p[side]),t.screen(p[(side+1)%p.size]))<18*density)workspace.change(currentSetup.toggleRoad(side))
+                }
+            }) {
+            if(grid) {
+                val spacing=24*density
+                var x=16*density
+                while(x<size.width) {var y=16*density;while(y<size.height){drawCircle(c.border.copy(alpha=.65f),.65f*density,Offset(x,y));y+=spacing};x+=spacing}
+            }
+            val screen=points.map(transform::screen)
+            val path=Path().apply {moveTo(screen[0].x,screen[0].y);screen.drop(1).forEach {lineTo(it.x,it.y)};close()}
+            val winding=points.indices.sumOf { i -> val a=points[i];val b=points[(i+1)%points.size];a.x*b.y-a.y*b.x }.let { if(it>=0)1f else -1f }
+            fun outward(i: Int): Offset {val d=screen[(i+1)%screen.size]-screen[i];val length=d.getDistance().coerceAtLeast(1f);return Offset(d.y/length,-d.x/length)*winding}
+            setup.roads.forEach { road ->
+                if(road.side in screen.indices) { val n=outward(road.side)*8f*density;drawLine(c.quiet,screen[road.side]+n,screen[(road.side+1)%screen.size]+n,12*density);drawLine(c.line,screen[road.side]+n*1.8f,screen[(road.side+1)%screen.size]+n*1.8f,1*density) }
+            }
+            drawPath(path,c.surface)
+            drawPath(path,c.ink,style=Stroke(1.5f*density))
+            if(setup.useDiagonals && setup.vertices.isNotEmpty()) for(i in 2 until points.lastIndex) drawLine(c.muted.copy(alpha=.6f),screen[0],screen[i],1*density,pathEffect=PathEffect.dashPathEffect(floatArrayOf(4*density,4*density)))
+            screen.forEachIndexed { i,p ->
+                val label=measureLabel(setup.lengths.getOrNull(i),setup.units)
+                val text=measurer.measure(label,baseStyle.copy(fontSize=if(compact)10.sp else 11.sp,color=c.muted))
+                val middle=(p+screen[(i+1)%screen.size])/2f+outward(i)*17f*density
+                val origin=Offset((middle.x-text.size.width/2f).coerceIn(0f,(size.width-text.size.width).coerceAtLeast(0f)),middle.y-text.size.height/2f)
+                drawRoundRect(c.background,origin-Offset(4*density,2*density),androidx.compose.ui.geometry.Size(text.size.width+8*density,text.size.height+4*density),androidx.compose.ui.geometry.CornerRadius(4*density))
+                drawText(text,topLeft=origin)
+                if(step==PlotStep.BOUNDARY){drawCircle(c.surface,5*density,p);drawCircle(c.primary,5*density,p,style=Stroke(1*density))}
+                drawCircle(c.primary,2.1f*density,p)
+                val toward=p-transform.centre
+                val at=p+Offset(if(toward.x<0)-17*density else 8*density,if(toward.y<0)-23*density else 8*density)
+                drawText(measurer,vertexName(i),topLeft=at,style=baseStyle.copy(fontSize=11.sp,color=c.ink))
+            }
+            if(step!=PlotStep.BOUNDARY) {
+                val centre=screen.reduce { a,b -> a+b }/screen.size.toFloat()
+                val r=(if(compact)43 else 62)*density
+                drawCircle(c.surface,r,centre);drawCircle(c.line,r,centre,style=Stroke(density))
+                val north=setup.northDegrees*PI/180-PI/2
+                repeat(60) { i -> val a=i*PI/30;val n=Offset(cos(a).toFloat(),sin(a).toFloat());drawLine(c.border,centre+n*(r-3*density),centre+n*r,1*density) }
+                listOf("N","E","S","W").forEachIndexed { i,label ->
+                    val a=north+i*PI/2;val at=centre+Offset(cos(a).toFloat(),sin(a).toFloat())*(r-14*density)
+                    val layout=measurer.measure(label,baseStyle.copy(fontSize=11.sp,color=if(i==0)c.primary else c.muted))
+                    drawText(layout,topLeft=at-Offset(layout.size.width/2f,layout.size.height/2f))
+                }
+                val n=Offset(cos(north).toFloat(),sin(north).toFloat());val cross=Offset(-n.y,n.x)
+                drawLine(c.ink,centre-n*12f*density,centre+n*13f*density,1.7f*density)
+                val tip=centre+n*14f*density
+                drawLine(c.primary,tip,tip-n*7f*density+cross*3f*density,1.6f*density)
+                drawLine(c.primary,tip,tip-n*7f*density-cross*3f*density,1.6f*density)
+            }
+        }
+        if(showToolbar) Row(Modifier.align(Alignment.TopCenter).padding(horizontal=20.dp,vertical=12.dp).fillMaxWidth().height(52.dp)
+            .background(c.surface,RoundedCornerShape(12.dp)).border(1.dp,c.line,RoundedCornerShape(12.dp)).padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
+            Box {
+                Row(verticalAlignment=Alignment.CenterVertically) {
+                    PlotToolButton(if(tool==PlotTool.MOVE)PlotSymbol.POINTER else PlotSymbol.HAND,if(tool==PlotTool.MOVE)"Move corners" else "Pan canvas",selected=true,enabled=!workspace.saving) {toolOpen=!toolOpen}
+                    TextButton({toolOpen=true},Modifier.width(24.dp).height(44.dp).semantics {contentDescription="Choose canvas tool"},contentPadding=PaddingValues(0.dp)) {PlotSymbol(PlotSymbol.CHEVRON,c.muted,Modifier.size(12.dp))}
+                }
+                DropdownMenu(toolOpen,{toolOpen=false}) {
+                    DropdownMenuItem(text={Text("Move")},onClick={tool=PlotTool.MOVE;toolOpen=false})
+                    DropdownMenuItem(text={Text("Hand")},onClick={tool=PlotTool.HAND;toolOpen=false})
+                }
+            }
+            PlotToolButton(PlotSymbol.UNDO,"Undo plot change",workspace.canUndo&&!workspace.saving) {workspace.undo()}
+            PlotToolButton(PlotSymbol.REDO,"Redo plot change",workspace.canRedo&&!workspace.saving) {workspace.redo()}
+            if(!compact && canvasSize.width/density>600) {
+                PlotToolButton(PlotSymbol.GRID,"Toggle canvas grid",selected=grid) {grid=!grid}
+                PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in") {zoom=(zoom*1.2f).coerceAtMost(4f)}
+                PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out") {zoom=(zoom/1.2f).coerceAtLeast(.3f)}
+            }
+            Spacer(Modifier.weight(1f))
+            PlotToolButton(PlotSymbol.FIT,"Fit plot to canvas") {zoom=1f;pan=Offset.Zero;fitPoints=points}
+            Box {
+                PlotToolButton(PlotSymbol.MORE,"Plot canvas options") {moreOpen=true}
+                DropdownMenu(moreOpen,{moreOpen=false}) {
+                    Text("Units",Modifier.padding(horizontal=12.dp,vertical=8.dp),fontSize=12.sp,color=c.muted)
+                    PlotUnits.entries.forEach { unit -> DropdownMenuItem(text={Text((if(setup.units==unit)"✓  " else "")+if(unit==PlotUnits.METRES)"Metres" else "Feet & inches")},onClick={workspace.change(setup.copy(units=unit));moreOpen=false},enabled=!workspace.saving) }
+                    HorizontalDivider()
+                    DropdownMenuItem(text={Text("Choose shape")},onClick={moreOpen=false;onChooseShape()},enabled=setup.vertices.isNotEmpty()&&!workspace.saving)
+                    if(setup.lengths.size>3)DropdownMenuItem(text={Text("Remove last side")},onClick={workspace.change(setup.withSideCount(setup.lengths.size-1));moreOpen=false},enabled=!workspace.saving)
+                }
+            }
+        }
+        val area=if(setup.units==PlotUnits.METRES)setup.areaSquareMetres?.let { "${decimal(it)} m²" } else setup.areaSquareFeet?.let(::areaLabel)
+        Text("Area ${area ?: "—"} · Perimeter ${measureLabel(setup.perimeterMetres,setup.units)}",Modifier.align(Alignment.BottomCenter).padding(bottom=if(compact)3.dp else 16.dp)
+            .widthIn(min=if(compact)276.dp else 320.dp).background(c.surface,RoundedCornerShape(8.dp)).border(1.dp,c.line,RoundedCornerShape(8.dp)).padding(horizontal=12.dp,vertical=7.dp),
+            fontSize=12.sp,lineHeight=18.sp,color=c.muted,textAlign=TextAlign.Center)
+    }
+}
+
+internal fun provisionalPlotForSides(count: Int): List<PlotPoint> = if(count==4)provisionalPlot else List(count.coerceIn(3,12)) { i ->
+    val angle=2*PI*i/count-PI*.75
+    PlotPoint(5+5*cos(angle),5+5*sin(angle))
+}
+private fun pointToSegment(p: Offset,a: Offset,b: Offset): Float {
+    val d=b-a;val denominator=d.x*d.x+d.y*d.y
+    val t=if(denominator==0f)0f else (((p.x-a.x)*d.x+(p.y-a.y)*d.y)/denominator).coerceIn(0f,1f)
+    return (p-(a+d*t)).getDistance()
+}

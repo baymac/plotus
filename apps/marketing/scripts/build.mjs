@@ -50,11 +50,11 @@ const FAQs = [
   ],
   [
     "What can I try today?",
-    "Sign in with Google or Facebook to create projects, organise client details, and pick up your saved work on iPhone or web. You can search, sort and edit your projects, and add a passkey in web Account settings.",
+    "Sign in to create projects, organise client details and define a plot’s boundary, north direction and roads. Pick up your saved work on iPhone or web, and add a passkey in Account settings.",
   ],
   [
     "Does Plotus generate floor plans yet?",
-    "Not in the current public demo. Plot setup, room requirements, and floor-plan concepts are in development. The home and plan illustrations on this website express our direction; they are not generated app results.",
+    "Not yet. You can save your plot setup today; floor-plan requirements and generation are the next milestone. The home and plan illustrations on this website express our direction; they are not generated app results.",
   ],
   [
     "Is this for homeowners or design professionals?",

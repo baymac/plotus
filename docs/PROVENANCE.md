@@ -8,7 +8,7 @@ The public app, shared iPhone and web screens, supporting services and welcome i
 
 The interface and logo use the supplied [Plotus Figma design](https://www.figma.com/design/0AIbJahPpgu09bT3AqguPx/Plotus--Mobile--Desktop?node-id=349-144623), which predates the event. [Design references](DESIGN.md) and the [asset source record](design-sources.json) identify the inputs.
 
-The planning engine and its CAD assets are pre-existing private technology. They remain in the private `baymac/plotus-engine` project, referenced through an optional private submodule. Public app builds do not need access to that source. The engine's Python service wrapper was created during the event; the event-authored project API now calls it for buildable-envelope preview and checked generation. The event-authored transport renders accepted engine sheets into private account-owned previews. [About the planning engine](ENGINE.md).
+The planning engine and its CAD assets are pre-existing private technology. They remain in the private `baymac/plotus-engine` project, referenced through an optional private submodule. Public app builds do not need access to that source. The engine's Python service wrapper was created during the event; the event-authored project API now calls it for buildable-envelope preview and checked generation. The event-authored transport renders accepted engine sheets into private account-owned previews. Event-authored integration corrections add the optional-room presence metadata required by the native validator and a bounded, fully revalidated adjustment of automatically inferred internal door positions. They do not replace the pre-existing solver or relax its acceptance checks. [About the planning engine](ENGINE.md).
 
 ## Third-party assets and software
 

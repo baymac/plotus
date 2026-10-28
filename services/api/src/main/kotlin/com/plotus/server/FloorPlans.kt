@@ -23,7 +23,7 @@ interface PlanEngine {
 class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngine {
     private val client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build()
     private suspend fun request(path:String,body:JsonObject):JsonObject=try {withContext(Dispatchers.IO) {
-        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(if(path=="/v1/programmes/resolve")15 else 230))
+        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(if(path=="/v1/programmes/resolve")15 else 260))
             .header("Authorization","Bearer $token").header("Content-Type","application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build()
         var response=client.send(request,HttpResponse.BodyHandlers.ofInputStream())
@@ -37,7 +37,16 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
         val bytes=response.body().use {it.readNBytes(24*1024*1024+1)}
         if(bytes.size>24*1024*1024)throw ApiFailure(502,"PLAN_TOO_LARGE","The plan preview is too large. Try fewer floors.")
         if(response.statusCode()==429)throw ApiFailure(429,"ENGINE_BUSY","A plan is being generated. Try again shortly.")
-        if(response.statusCode()==422)throw ApiFailure(422,"PLAN_NO_FIT","No plan passed the layout checks. Adjust setbacks or requirements and try again.")
+        if(response.statusCode()==422) {
+            val code=runCatching {Json.parseToJsonElement(bytes.decodeToString()).jsonObject["error"]?.jsonObject?.get("code")?.jsonPrimitive?.contentOrNull}.getOrNull()
+            throw when(code) {
+                "search_budget_exhausted"->ApiFailure(422,"PLAN_SEARCH_LIMIT","Search limit reached. Try again or simplify the requirements.")
+                "generation_resource_limit"->ApiFailure(503,"PLAN_RESOURCE_LIMIT","Generation resources are busy. Try again shortly.")
+                "solver_model_error","architectural_detail_error","graph_drafting_error"->ApiFailure(503,"PLAN_ENGINE_ERROR","Couldn’t complete generation. Please try again.")
+                else->ApiFailure(422,"PLAN_NO_FIT","No plan passed the layout checks. Adjust setbacks or requirements and try again.")
+            }
+        }
+        if(response.statusCode()==504)throw ApiFailure(504,"PLAN_TIMED_OUT","Generation reached its time limit. Try again.")
         if(response.statusCode()!=200)throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")
         try {Json.parseToJsonElement(bytes.decodeToString()).jsonObject}catch(_:Exception){throw ApiFailure(502,"ENGINE_INVALID_RESPONSE","The plan preview couldn’t be opened.")}
     }}catch(failure:IOException){throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")}
@@ -210,7 +219,8 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
         val job=started.plan
         if(!started.created)return job
         scope.launch {
-            val finished=try {job.copy(status="ready",drawings=withTimeout(235000) {planner.generate(project,saved.setup)})}
+            // Include preflight and transport time beyond the engine's 240-second worker ceiling.
+            val finished=try {job.copy(status="ready",drawings=withTimeout(280000) {planner.generate(project,saved.setup)})}
                 catch(cancelled:CancellationException){if(cancelled !is TimeoutCancellationException)throw cancelled;job.copy(status="failed",error="Generation took too long. Try again.")}
                 catch(failure:Exception){job.copy(status=if((failure as? ApiFailure)?.status==422)"blocked" else "failed",error=(failure as? ApiFailure)?.message ?: "Couldn’t generate this plan. Try again.")}
             store.finish(owner,UUID.fromString(project.id),finished)

@@ -16,4 +16,6 @@ The engine and its CAD assets predate the hackathon and remain private. The publ
 
 The engine's Python service wrapper was created during the event. See [sources and credits](PROVENANCE.md) for the distinction between existing technology and new work.
 
+The 28 October integration correction emits the actual presence flag for optional rooms, matching the engine's existing validation contract. The transport retains the native default of three architectural attempts, with one site attempt and a 240-second worker ceiling. Backend timeouts include that ceiling and preflight overhead. A bounded native repair can move an automatically inferred internal door to the other end of its shared wall when the fully open entrance blocks access. It preserves the entrance and all room geometry, widths and furniture, reruns every native check, and rejects moves that introduce failures. Explicit client openings stay fixed.
+
 Buildable envelopes are stored by verified owner, project, plot and effective setback inputs. They are loaded with the project and remain available without another engine call. Floor count, room requirements and display units are excluded from that key. The area calculation uses a fixed geometry-only programme so building configuration cannot change the footprint. Derived-area writes do not change the project’s edit revision.

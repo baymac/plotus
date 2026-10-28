@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.plotus.resources.*
@@ -303,10 +304,13 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             if(bitmap!=null)Image(bitmap,drawing?.label,Modifier.fillMaxWidth().weight(1f).background(Color.White,RoundedCornerShape(12.dp)),contentScale=ContentScale.Fit)
             else Box(Modifier.weight(1f),contentAlignment=Alignment.Center){FloorError("This floor drawing couldn’t be opened.")}
         }
-    }else Column(modifier.fillMaxWidth().padding(24.dp),verticalArrangement=Arrangement.Center,horizontalAlignment=Alignment.CenterHorizontally) {
-        FloorTitle(if(plan?.status=="blocked")"No checked layout found" else "Couldn’t create this plan")
-        Text(plan?.error ?: workspace.error ?: "Please try again.",Modifier.padding(vertical=16.dp),fontSize=14.sp,color=c.muted)
-        PlotusButton("Edit requirements",{workspace.newAttempt()})
+    }else Box(modifier.fillMaxWidth().padding(24.dp),contentAlignment=Alignment.Center) {
+        Column(Modifier.widthIn(max=420.dp).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally) {
+            Text(if(plan?.status=="blocked")"No checked layout found" else "Couldn’t create this plan",
+                Modifier.fillMaxWidth(),fontSize=18.sp,fontWeight=FontWeight.SemiBold,textAlign=TextAlign.Center)
+            Text(plan?.error ?: workspace.error ?: "Please try again.",Modifier.fillMaxWidth().padding(vertical=16.dp),fontSize=14.sp,color=c.muted,textAlign=TextAlign.Center)
+            PlotusButton("Edit requirements",{workspace.newAttempt()})
+        }
     }
 }
 

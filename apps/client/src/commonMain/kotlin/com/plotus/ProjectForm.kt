@@ -25,7 +25,7 @@ fun ProjectFormDialog(project: Project?, compact: Boolean, onDismiss: () -> Unit
     val errors = if (submitted) draft.errors() else emptyMap()
     Dialog(onDismissRequest = { if (!busy) onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false,
         dismissOnBackPress = !busy, dismissOnClickOutside = !busy)) {
-        BoxWithConstraints(Modifier.fillMaxSize().imePadding(), contentAlignment = if (compact) Alignment.BottomCenter else Alignment.CenterEnd) {
+        BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.ime), contentAlignment = if (compact) Alignment.BottomCenter else Alignment.CenterEnd) {
             val maxHeight = maxHeight
             Column(Modifier.width(if (compact) maxWidth else 440.dp).heightIn(max = maxHeight)
                 .then(if (compact) Modifier else Modifier.fillMaxHeight())

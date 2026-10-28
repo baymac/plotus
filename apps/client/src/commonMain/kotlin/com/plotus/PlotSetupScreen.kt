@@ -13,7 +13,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
@@ -31,8 +32,6 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.plotus.shared.*
 import kotlinx.coroutines.launch
 import kotlin.math.*
@@ -46,15 +45,18 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
     var reloadOpen by remember { mutableStateOf(false) }
     val close: (() -> Unit) -> Unit = { action -> if(workspace.dirty)leaving=action else action() }
     val selected=step ?: PlotStep.BOUNDARY
+    val editing=compact&&step!=null
+    val focus=LocalFocusManager.current
+    val keyboardController=LocalSoftwareKeyboardController.current
+    // safeDrawing includes the keyboard. Applying imePadding as well duplicates it on iOS.
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
-        Row(Modifier.fillMaxWidth().height(72.dp).padding(start=if(compact)12.dp else 20.dp,end=20.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            if(compact)PlotToolButton(PlotSymbol.BACK,"Back to projects",enabled=!workspace.saving) {close(onExit)}
+        Row(Modifier.fillMaxWidth().height(if(editing)48.dp else 64.dp).padding(start=if(compact)8.dp else 20.dp,end=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            if(compact)PlotToolButton(PlotSymbol.BACK,"Back to projects",enabled=!workspace.saving) {focus.clearFocus();keyboardController?.hide();close(onExit)}
             Column(Modifier.weight(1f)) {
                 Text(workspace.project?.name ?: "Plot setup",maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=16.sp,fontWeight=FontWeight.SemiBold)
-                if(workspace.project!=null)Text(if(workspace.saving)"Saving…" else if(workspace.dirty)"Unsaved changes" else "Saved",color=c.muted,fontSize=11.sp,lineHeight=15.sp)
             }
-            TextButton({workspace.save()},enabled=workspace.project!=null&&!workspace.loading&&!workspace.saving&&workspace.dirty) {
-                Text("Save",fontSize=14.sp,color=if(workspace.dirty)c.primary else c.muted)
+            TextButton({focus.clearFocus();keyboardController?.hide();workspace.save(requireBoundary=step==PlotStep.BOUNDARY,requireRoads=step==PlotStep.ROADS)},enabled=workspace.project!=null&&!workspace.loading&&!workspace.saving&&workspace.dirty) {
+                Text(if(workspace.saving)"Saving…" else "Save",fontSize=14.sp,color=if(workspace.dirty&&!workspace.saving)c.primary else c.muted)
             }
         }
         if(workspace.loading)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {CircularProgressIndicator()}
@@ -64,30 +66,7 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
             TextButton(onExit) {Text("Back to projects")}
         }
         else if(compact) {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-                Text("Plot setup",fontSize=24.sp,fontWeight=FontWeight.Bold)
-                PlotProblems(workspace) {reloadOpen=true}
-                Column(Modifier.fillMaxWidth().background(c.surface,RoundedCornerShape(16.dp)).border(1.dp,c.line,RoundedCornerShape(16.dp))) {
-                    PlotStep.entries.forEachIndexed { i,item ->
-                        Row(Modifier.fillMaxWidth().heightIn(min=88.dp).clickable(enabled=!workspace.saving,role=Role.Button) {onStep(item)}.padding(16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(14.dp)) {
-                            Box(Modifier.size(44.dp).background(c.quiet,RoundedCornerShape(12.dp)),contentAlignment=Alignment.Center) {
-                                PlotSymbol(when(item){PlotStep.BOUNDARY->PlotSymbol.BOUNDARY;PlotStep.DIRECTION->PlotSymbol.COMPASS;PlotStep.ROADS->PlotSymbol.ROAD},c.primary)
-                            }
-                            Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                                Text(item.title(),fontSize=16.sp,fontWeight=FontWeight.SemiBold)
-                                Text(when(item) {
-                                    PlotStep.BOUNDARY -> if(workspace.draft.vertices.isEmpty())"Add plot measurements" else "${workspace.draft.lengths.size} sides · ${areaLabel(workspace.draft.areaSquareFeet)}"
-                                    PlotStep.DIRECTION -> "North ${decimal(workspace.draft.northDegrees)}°"
-                                    PlotStep.ROADS -> when(workspace.draft.roads.size){0->"Choose road-facing sides";1->"1 side selected";else->"${workspace.draft.roads.size} sides selected"}
-                                },fontSize=12.sp,color=c.muted)
-                            }
-                            PlotSymbol(PlotSymbol.BACK,c.muted,Modifier.size(16.dp).then(Modifier.graphicsLayer {rotationZ=180f}))
-                        }
-                        if(i<PlotStep.entries.lastIndex)HorizontalDivider(Modifier.padding(start=74.dp),color=c.line)
-                    }
-                }
-                SketchUpload(workspace) {onStep(PlotStep.BOUNDARY)}
-            }
+            MobilePlotEditor(workspace,step,onStep,Modifier.weight(1f)) {reloadOpen=true}
         } else Row(Modifier.fillMaxWidth().weight(1f)) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 PlanningStages(Modifier.padding(horizontal=20.dp).padding(vertical=8.dp))
@@ -97,42 +76,60 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
             PlotInspector(workspace,selected,{onStep(it)},{close(onExit)},onExit,Modifier.width(408.dp).fillMaxHeight(),{reloadOpen=true})
         }
     }
-    if(compact&&step!=null&&workspace.project!=null&&!workspace.loading) {
-        Dialog(onDismissRequest={if(!workspace.saving)close {onStep(null)}},properties=DialogProperties(usePlatformDefaultWidth=false,dismissOnBackPress=!workspace.saving,dismissOnClickOutside=!workspace.saving)) {
-            BoxWithConstraints(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top+WindowInsetsSides.Horizontal)).imePadding(),contentAlignment=Alignment.BottomCenter) {
-                val keyboard=WindowInsets.ime.getBottom(LocalDensity.current)>0
-                val problemHeight=if(workspace.error!=null||workspace.validation.isNotEmpty())76.dp else 0.dp
-                val previewHeight=minOf(if(keyboard)120.dp else 252.dp,maxOf(0.dp,maxHeight*.97f-56.dp-88.dp-140.dp-problemHeight))
-                Column(Modifier.fillMaxWidth().fillMaxHeight(.97f).background(c.background,RoundedCornerShape(topStart=24.dp,topEnd=24.dp)).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
-                    Box(Modifier.fillMaxWidth().height(12.dp),contentAlignment=Alignment.Center) {Box(Modifier.size(32.dp,4.dp).background(c.border,RoundedCornerShape(4.dp)))}
-                    Row(Modifier.fillMaxWidth().height(44.dp).padding(start=20.dp,end=8.dp),verticalAlignment=Alignment.CenterVertically) {
-                        Text(step.title(),Modifier.weight(1f),fontSize=20.sp,fontWeight=FontWeight.SemiBold)
-                        PlotToolButton(PlotSymbol.CLOSE,"Close ${step.title()}",enabled=!workspace.saving) {close {onStep(null)}}
-                    }
-                    if(previewHeight>=64.dp)PlotCanvas(workspace,step,true,Modifier.fillMaxWidth().height(previewHeight),showToolbar=!keyboard&&previewHeight>=190.dp)
-                    PlotProblems(workspace,Modifier.padding(horizontal=20.dp,vertical=4.dp)) {reloadOpen=true}
-                    PlotFields(workspace,step,Modifier.weight(1f))
-                    HorizontalDivider(color=c.line)
-                    Row(Modifier.fillMaxWidth().background(c.surface).padding(20.dp),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-                        PlotusButton("Cancel",{close {onStep(null)}},Modifier.width(100.dp).height(48.dp),outline=true,enabled=!workspace.saving)
-                        PlotusButton(if(workspace.saving)"Saving…" else "Done",{
-                            workspace.save(requireBoundary=step==PlotStep.BOUNDARY,requireRoads=step==PlotStep.ROADS) {onStep(null)}
-                        },Modifier.weight(1f).height(48.dp),enabled=!workspace.saving)
-                    }
-                }
-            }
-        }
-    }
     leaving?.let { action ->
-        AlertDialog(onDismissRequest={if(!workspace.saving)leaving=null},title={Text("Save plot changes?")},
-            confirmButton={TextButton({leaving=null;workspace.save {action()}},enabled=!workspace.saving) {Text("Save")}},
-            dismissButton={Row {
-                TextButton({leaving=null},enabled=!workspace.saving) {Text("Cancel")}
-                TextButton({workspace.discard();leaving=null;action()},enabled=!workspace.saving) {Text("Discard")}
-            }})
+        AlertDialog(onDismissRequest={if(!workspace.saving)leaving=null},title={
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("Save plot changes?",Modifier.weight(1f),fontSize=20.sp,fontWeight=FontWeight.SemiBold)
+                PlotToolButton(PlotSymbol.CLOSE,"Cancel",enabled=!workspace.saving) {leaving=null}
+            }
+        },confirmButton={TextButton({leaving=null;workspace.save {action()}},enabled=!workspace.saving) {Text("Save")}},
+            dismissButton={TextButton({workspace.discard();leaving=null;action()},enabled=!workspace.saving) {Text("Discard")}})
     }
     if(reloadOpen)AlertDialog(onDismissRequest={reloadOpen=false},title={Text("Reload saved plot?")},text={Text("Your unsaved measurements will be replaced by the latest saved plot.")},
         confirmButton={TextButton({reloadOpen=false;scope.launch {workspace.load(force=true)}}) {Text("Reload")}},dismissButton={TextButton({reloadOpen=false}) {Text("Cancel")}})
+}
+
+@Composable
+private fun MobilePlotEditor(workspace:PlotWorkspace,step:PlotStep?,onStep:(PlotStep?)->Unit,modifier:Modifier,onReload:()->Unit) {
+    val c=LocalPlotusColors.current
+    val keyboard=WindowInsets.ime.getBottom(LocalDensity.current)>0
+    val focus=LocalFocusManager.current
+    val keyboardController=LocalSoftwareKeyboardController.current
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val availableHeight=maxHeight
+        Column(Modifier.fillMaxSize()) {
+            if(step==null) {
+                PlanningStages(Modifier.padding(horizontal=16.dp,vertical=8.dp))
+                PlotCanvas(workspace,null,true,Modifier.fillMaxWidth().weight(1f))
+                PlotProblems(workspace,Modifier.padding(horizontal=16.dp,vertical=4.dp),onReload)
+            } else {
+                val canvasHeight=minOf(if(keyboard)160.dp else 280.dp,availableHeight*(if(keyboard).40f else .43f))
+                PlotCanvas(workspace,step,true,Modifier.fillMaxWidth().height(canvasHeight),showToolbar=!keyboard)
+                HorizontalDivider(color=c.line)
+                Row(Modifier.fillMaxWidth().background(c.active).padding(start=20.dp,end=8.dp).height(44.dp),verticalAlignment=Alignment.CenterVertically) {
+                    PlotSymbol(when(step){PlotStep.BOUNDARY->PlotSymbol.BOUNDARY;PlotStep.DIRECTION->PlotSymbol.COMPASS;PlotStep.ROADS->PlotSymbol.ROAD},c.primary,Modifier.size(18.dp))
+                    Text(step.title(),Modifier.weight(1f).padding(start=10.dp),fontSize=15.sp,fontWeight=FontWeight.SemiBold,color=c.primary)
+                    if(keyboard)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard",enabled=!workspace.saving) {focus.clearFocus();keyboardController?.hide()}
+                    TextButton({focus.clearFocus();keyboardController?.hide();workspace.save(requireBoundary=step==PlotStep.BOUNDARY,requireRoads=step==PlotStep.ROADS) {onStep(null)}},enabled=!workspace.saving) {Text(if(workspace.saving)"Saving…" else "Done",color=c.primary)}
+                }
+                PlotFields(workspace,step,Modifier.weight(1f),onReload)
+            }
+            if(step==null) {
+                HorizontalDivider(color=c.line)
+                Row(Modifier.fillMaxWidth().background(c.surface).padding(horizontal=16.dp,vertical=6.dp).height(60.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    PlotStep.entries.forEach { item ->
+                        Column(Modifier.weight(1f).fillMaxHeight().background(c.surface,RoundedCornerShape(10.dp))
+                            .border(1.dp,c.line,RoundedCornerShape(10.dp)).clickable(enabled=!workspace.saving,role=Role.Button) {onStep(item)},
+                            horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+                            PlotSymbol(when(item){PlotStep.BOUNDARY->PlotSymbol.BOUNDARY;PlotStep.DIRECTION->PlotSymbol.COMPASS;PlotStep.ROADS->PlotSymbol.ROAD},c.muted,Modifier.size(18.dp))
+                            Text(item.title(),fontSize=12.sp,color=c.muted)
+                        }
+                    }
+                }
+                if(!keyboard)SketchUpload(workspace,Modifier.background(c.surface).padding(horizontal=16.dp).padding(bottom=12.dp)) {onStep(PlotStep.BOUNDARY)}
+            }
+        }
+    }
 }
 
 private fun PlotStep.title()=segment.replaceFirstChar {it.uppercase()}
@@ -176,15 +173,12 @@ private fun PlotInspector(workspace: PlotWorkspace,step: PlotStep,onStep:(PlotSt
 }
 
 @Composable
-private fun PlotFields(workspace:PlotWorkspace,step:PlotStep,modifier:Modifier) {
+private fun PlotFields(workspace:PlotWorkspace,step:PlotStep,modifier:Modifier,onReload:(()->Unit)?=null) {
     val c=LocalPlotusColors.current
     val scroll=remember(step) {ScrollState(0)}
-    LaunchedEffect(workspace.validationAttempt) {if(workspace.validation.isNotEmpty())scroll.scrollTo(0)}
+    LaunchedEffect(workspace.validationAttempt,workspace.error,workspace.validation["boundary"]) {if(workspace.validation.isNotEmpty()||workspace.error!=null)scroll.scrollTo(0)}
     Column(modifier.fillMaxWidth().background(c.surface).verticalScroll(scroll).padding(horizontal=20.dp,vertical=16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        if(workspace.sketchNotes.isNotEmpty())Column(Modifier.fillMaxWidth().background(c.active,RoundedCornerShape(10.dp)).padding(12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-            Text("Review the sketch measurements",fontSize=13.sp,fontWeight=FontWeight.SemiBold,color=c.primary)
-            workspace.sketchNotes.take(3).forEach {Text(it,fontSize=12.sp,color=c.ink)}
-        }
+        if(onReload!=null)PlotProblems(workspace,onReload=onReload)
         when(step) {
             PlotStep.BOUNDARY->BoundaryControls(workspace)
             PlotStep.DIRECTION->DirectionControls(workspace)
@@ -197,8 +191,8 @@ private fun PlotFields(workspace:PlotWorkspace,step:PlotStep,modifier:Modifier) 
 private fun PlotProblems(workspace:PlotWorkspace,modifier:Modifier=Modifier,onReload:()->Unit) {
     val c=LocalPlotusColors.current
     val errors=workspace.validation.map { (field,message)->when {
-        field.startsWith("side.")->"Side ${field.substringAfter('.').toInt()+1}: $message"
-        field.startsWith("diagonal.")->"Diagonal A → ${vertexName(field.substringAfter('.').toInt()+2)}: $message"
+        field.startsWith("side.")->"${sideName(field.substringAfter('.').toInt(),workspace.draft.lengths.size)}: $message"
+        field.startsWith("diagonal.")->"A → ${vertexName(field.substringAfter('.').toInt()+2)}: $message"
         else->message
     }}.distinct()
     val message=workspace.error ?: errors.firstOrNull()
@@ -234,15 +228,15 @@ private fun SketchUpload(workspace:PlotWorkspace,modifier:Modifier=Modifier,onRe
 private fun BoundaryControls(workspace: PlotWorkspace) {
     val c=LocalPlotusColors.current;val draft=workspace.draft
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-        Text("Sides",Modifier.weight(1f),fontSize=16.sp,fontWeight=FontWeight.SemiBold)
+        Text("Lengths",Modifier.weight(1f),fontSize=16.sp,fontWeight=FontWeight.SemiBold)
         Text("${draft.lengths.size} sides",color=c.muted,fontSize=12.sp)
     }
     Column(verticalArrangement=Arrangement.spacedBy(10.dp)) {draft.lengths.forEachIndexed { i,length ->
         Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
             Row(Modifier.fillMaxWidth().heightIn(min=56.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Column(Modifier.width(56.dp)) {Text("Side ${i+1}",fontSize=14.sp);Text(sideName(i,draft.lengths.size),fontSize=12.sp,color=c.muted)}
-                MeasurementInput(length,draft.units,"Side ${i+1}",Modifier.weight(1f),!workspace.saving,workspace.validation["side.$i"]) {workspace.change(draft.withLength(i,it))}
-                if(i>=4)IconButton({workspace.change(draft.withoutSide(i))},Modifier.size(44.dp).semantics {contentDescription="Delete side ${i+1}"},enabled=!workspace.saving) {PlotSymbol(PlotSymbol.DELETE,c.muted,Modifier.size(18.dp))}
+                Text(sideName(i,draft.lengths.size),Modifier.width(56.dp),fontSize=14.sp)
+                MeasurementInput(length,draft.units,sideName(i,draft.lengths.size),Modifier.weight(1f),!workspace.saving,workspace.validation["side.$i"]) {workspace.change(draft.withLength(i,it))}
+                if(i>=4)IconButton({workspace.change(draft.withoutSide(i))},Modifier.size(44.dp).semantics {contentDescription="Delete ${sideName(i,draft.lengths.size)}"},enabled=!workspace.saving) {PlotSymbol(PlotSymbol.DELETE,c.muted,Modifier.size(18.dp))}
             }
             workspace.validation["side.$i"]?.let {Text(it,fontSize=12.sp,color=MaterialTheme.colorScheme.error)}
         }
@@ -261,14 +255,14 @@ private fun BoundaryControls(workspace: PlotWorkspace) {
         if(draft.useDiagonals)draft.diagonals.forEachIndexed { i,length ->
             Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(10.dp)) {
-                    Column(Modifier.width(56.dp)) {Text("Diagonal",fontSize=14.sp);Text("A → ${vertexName(i+2)}",fontSize=12.sp,color=c.muted)}
-                    MeasurementInput(length,draft.units,"Diagonal A to ${vertexName(i+2)}",Modifier.weight(1f),!workspace.saving,workspace.validation["diagonal.$i"]) {workspace.change(draft.withDiagonal(i,it))}
+                    Text("A → ${vertexName(i+2)}",Modifier.width(56.dp),fontSize=14.sp)
+                    MeasurementInput(length,draft.units,"A → ${vertexName(i+2)}",Modifier.weight(1f),!workspace.saving,workspace.validation["diagonal.$i"]) {workspace.change(draft.withDiagonal(i,it))}
                 }
                 workspace.validation["diagonal.$i"]?.let {Text(it,fontSize=12.sp,color=MaterialTheme.colorScheme.error)}
             }
         }
     }
-    Text("Add measured diagonals or move the corners to match your plot.",fontSize=12.sp,color=c.muted)
+    Text("Drag corners to adjust angles while keeping side lengths fixed.",fontSize=12.sp,color=c.muted)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -309,7 +303,7 @@ private fun RoadControls(workspace:PlotWorkspace) {
         Column(Modifier.fillMaxWidth().border(1.dp,if(road==null)c.line else c.primary,RoundedCornerShape(12.dp)).padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth().heightIn(min=44.dp).toggleable(road!=null,enabled=!workspace.saving,role=Role.Checkbox) {workspace.change(draft.toggleRoad(i))},verticalAlignment=Alignment.CenterVertically) {
                 Checkbox(road!=null,null,Modifier.size(26.dp),enabled=!workspace.saving,colors=CheckboxDefaults.colors(checkedColor=c.primary,uncheckedColor=c.border))
-                Spacer(Modifier.width(8.dp));Text("Side ${i+1} · ${sideName(i,draft.lengths.size)}",Modifier.weight(1f),fontSize=14.sp)
+                Spacer(Modifier.width(8.dp));Text(sideName(i,draft.lengths.size),Modifier.weight(1f),fontSize=14.sp)
             }
             if(road!=null&&draft.roads.size>1) {
                 var prioritiesOpen by remember {mutableStateOf(false)}

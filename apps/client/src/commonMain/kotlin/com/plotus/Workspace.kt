@@ -15,6 +15,7 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
     var busy by mutableStateOf(false); private set
     var error by mutableStateOf<String?>(null); private set
     var mutationError by mutableStateOf<String?>(null); private set
+    var mutationErrorCode by mutableStateOf<String?>(null); private set
     private val lock = Mutex()
     private val plotEditors = mutableMapOf<String, PlotWorkspace>()
 
@@ -35,7 +36,7 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
         finally { loading = false }
     }
     fun reload() { scope.launch { refresh() } }
-    fun clearMutationError() { mutationError = null }
+    fun clearMutationError() { mutationError = null;mutationErrorCode=null }
 
     fun save(existing: Project?, draft: ProjectDraft, onSaved: (Project) -> Unit) = mutate {
         val path = if (existing == null) "/v1/projects" else "/v1/projects/${existing.id}"
@@ -45,16 +46,24 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
         if (auth.user?.id == owner) { projects = saveProject(projects,project); error = null; onSaved(project) }
     }
     fun delete(project: Project, onDeleted: () -> Unit) = mutate {
-        auth.projectRequest("DELETE","/v1/projects/${project.id}",authJson.encodeToString(DeleteProjectRequest(project.revision)))
-        if (auth.user?.id == owner) { projects = projects.filterNot { it.id==project.id }; onDeleted() }
+        val selected=projects.firstOrNull {it.id==project.id} ?: project
+        val changed=confirmProjectDeletion(
+            {auth.projectRequest("DELETE","/v1/projects/${project.id}",authJson.encodeToString(DeleteProjectRequest(selected.revision)))},
+            {authJson.decodeFromJsonElement<Project>(auth.projectRequest("GET","/v1/projects/${project.id}"))})
+        if(auth.user?.id!=owner)return@mutate
+        if(changed!=null) {
+            projects=saveProject(projects,changed)
+            throw AuthFailure(409,"Project changed.","PROJECT_CHANGED")
+        }
+        projects = projects.filterNot { it.id==project.id }; onDeleted()
     }
     private fun mutate(operation: suspend () -> Unit) {
         if (busy || auth.user?.id != owner) return
-        busy = true; mutationError = null
+        busy = true; mutationError = null;mutationErrorCode=null
         scope.launch {
             try { lock.withLock { operation() } }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { mutationError = failureMessage(failure) }
+            catch (failure: Exception) { mutationError = failureMessage(failure);mutationErrorCode=(failure as? AuthFailure)?.code }
             finally { busy = false }
         }
     }

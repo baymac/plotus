@@ -106,13 +106,17 @@ class PlotWorkspace(
         val snapshot = draft
         scope.launch {
             try {
-                val updated = write(current, snapshot)
+                val updated = confirmPlotSave(current,snapshot,{write(current,snapshot)},read)
                 project = updated; saved = snapshot; conflict = false
                 accepted(updated); onSaved()
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: Exception) {
                 conflict = (failure as? AuthFailure)?.code == "PROJECT_CHANGED"
-                error = failure.message ?: "Couldn’t save this plot. Your measurements are still here."
+                error = when {
+                    conflict->"Plot changed on another device."
+                    (failure as? AuthFailure)?.status==404->"This project is no longer available."
+                    else->"Couldn’t save plot."
+                }
             } finally { saving = false }
         }
     }

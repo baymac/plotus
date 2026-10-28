@@ -18,7 +18,9 @@ import kotlin.js.Promise
  if(csrf)headers['X-CSRF-Token']=csrf;
  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);
  return fetch(url,{method,credentials:'include',headers,body:body||undefined,signal:controller.signal})
-  .then(async response=>JSON.stringify({status:response.status,body:await response.text()})).finally(()=>clearTimeout(timer));
+  .then(async response=>JSON.stringify({status:response.status,body:await response.text()}))
+  .catch(()=>JSON.stringify({status:0,body:JSON.stringify({error:{code:'NETWORK_UNAVAILABLE',message:'Couldn’t connect. Try again.'}})}))
+  .finally(()=>clearTimeout(timer));
 }""")
 private external fun browserRequest(method: String,path: String,body: String?,bearer: String?,csrf: String?): Promise<JsString>
 

@@ -125,16 +125,18 @@ fun PlotusApp() {
                 if (destination == Destination.PROJECTS && (preview || account != null)) deleting?.let { project ->
                     val busy = !preview && workspace?.busy == true
                     val dismiss = { if (!busy) deleting = null }
-                    AlertDialog(onDismissRequest = dismiss, title = { Text("Delete project?") },
-                        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(if (preview) "Delete “${project.name}” from the local preview? This cannot be undone."
-                                else "Delete “${project.name}” from your projects? This cannot be undone.")
-                            if (!preview) workspace?.mutationError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                        } },
+                    val failed=!preview&&workspace?.mutationError!=null
+                    val changed=!preview&&workspace?.mutationErrorCode=="PROJECT_CHANGED"
+                    val name=workspace?.projects?.firstOrNull {it.id==project.id}?.name ?: project.name
+                    AlertDialog(onDismissRequest = dismiss, title = {Text(when {
+                        changed->"Delete updated project?"
+                        failed->"Couldn’t delete project"
+                        else->"Delete “$name”?"
+                    })},
                         confirmButton = { TextButton(enabled = !busy, onClick = {
                             if (preview) { projects = projects.filterNot { it.id == project.id }; deleting = null }
                             else workspace?.delete(project) { deleting = null }
-                        }) { Text(if (busy) "Deleting…" else "Delete project") } },
+                        }) { Text(if (busy) "Deleting…" else if(changed)"Delete updated project" else if(failed)"Try again" else "Delete project") } },
                         dismissButton = { TextButton(enabled = !busy, onClick = dismiss) { Text("Cancel") } })
                 }
                 (auth.error ?: auth.notice ?: message)?.let { text ->

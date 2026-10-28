@@ -12,11 +12,11 @@ Choose **Create project** to save it. Your projects update automatically across 
 
 Creating or opening a project takes you to **Plot setup**:
 
-1. **Boundary:** enter side lengths in feet and inches or metres. Add sides for an irregular plot, delete added sides from Side 5 onward, supply measured diagonals when available, or drag the corners. The drawing, measurements and area update together. Use the canvas menu to change units.
+1. **Boundary:** enter side lengths in feet and inches or metres. Add sides for an irregular plot, delete added edges when the plot has at least five sides, supply measured diagonals when available, or drag the corners. Typed measurements update the drawing and area. Dragging corners adjusts angles while preserving every side length. Use the canvas menu to change units.
 2. **Direction:** move the north slider to match the site's orientation.
 3. **Roads:** select road-facing sides. Priority appears when more than one side is selected.
 
-On iPhone, choose **Boundary**, **Direction** or **Roads** from Plot setup. Each opens in a separate sheet with a fixed plot preview and scrolling controls. Choose **Done** to save and return to the three options. On desktop, use the tabs beside the canvas; **Save plot** completes the setup.
+On iPhone, **Plot setup** and **Floor plan** appear above the canvas when no section is selected. The canvas stays visible above **Boundary**, **Direction**, **Roads** and **Upload plot image**. Selecting a section highlights it and shows scrolling controls on the same screen. The header and preview compress to make room for typing. Use the keyboard-dismiss button beside Done to close the keyboard without saving or leaving the section. The three buttons and upload action hide while a section is selected. Choose **Done** to save, collapse the controls and bring the buttons back. Drag corners in the main view or Boundary to change angles without stretching measured sides; Direction and Roads keep the outline fixed. Measured diagonals lock the angles. On desktop, use the tabs beside the canvas; **Save plot** completes the setup.
 
 Use **Save** in the project header to keep a draft. Undo and Redo let you revisit edits. Errors appear above the controls and beside the affected measurement. Reopening the project restores the saved plot on iPhone or web.
 

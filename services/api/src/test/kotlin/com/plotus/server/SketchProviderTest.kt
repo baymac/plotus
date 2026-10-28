@@ -24,6 +24,8 @@ class SketchProviderTest {
             val result=MetaSketchReader(URI("http://127.0.0.1:${server.address.port}/chat/completions"),"test-key","test-model").read(SketchTest.validImage())
             val request=assertNotNull(received)
             assertEquals(false,request["store"]!!.jsonPrimitive.boolean)
+            assertEquals("low",request["reasoning_effort"]!!.jsonPrimitive.content)
+            assertEquals(8192,request["max_completion_tokens"]!!.jsonPrimitive.int)
             assertEquals("json_schema",request["response_format"]!!.jsonObject["type"]!!.jsonPrimitive.content)
             val image=request["messages"]!!.jsonArray[1].jsonObject["content"]!!.jsonArray[1].jsonObject["image_url"]!!.jsonObject["url"]!!.jsonPrimitive.content
             assertTrue(image.startsWith("data:image/png;base64,"))
@@ -32,4 +34,20 @@ class SketchProviderTest {
             assertTrue(result.setup.errors(completeBoundary=true,completeRoads=true).isEmpty())
         } finally {server.stop(0)}
     }
+    @Test fun truncatedReasoningIsAnIncompleteReadRatherThanAnInvalidBoundary()=runBlocking<Unit> {
+        val server=HttpServer.create(InetSocketAddress("127.0.0.1",0),0)
+        server.createContext("/chat/completions") {exchange->
+            exchange.requestBody.use {it.readBytes()}
+            val response="""{"choices":[{"finish_reason":"length","message":{"content":null}}]}""".toByteArray()
+            exchange.responseHeaders.add("Content-Type","application/json");exchange.sendResponseHeaders(200,response.size.toLong());exchange.responseBody.use {it.write(response)}
+        }
+        server.start()
+        try {
+            val failure=assertFailsWith<SketchReadFailure> {
+                MetaSketchReader(URI("http://127.0.0.1:${server.address.port}/chat/completions"),"test-key","test-model").read(SketchTest.validImage())
+            }
+            assertEquals("Sketch reading didn’t finish. Try again.",failure.message)
+        } finally {server.stop(0)}
+    }
+
 }

@@ -139,7 +139,7 @@ internal class MetaSketchReader(private val endpoint:URI,private val key:String,
         val prompt=javaClass.getResourceAsStream("/sketch-prompt.txt")!!.bufferedReader().use {it.readText()}
         val schema=javaClass.getResourceAsStream("/sketch-schema.json")!!.bufferedReader().use {json.parseToJsonElement(it.readText())}
         val body=buildJsonObject {
-            put("model",model);put("store",false);put("max_completion_tokens",3500)
+            put("model",model);put("store",false);put("reasoning_effort","low");put("max_completion_tokens",8192)
             putJsonObject("response_format") {put("type","json_schema");putJsonObject("json_schema") {put("name","plot_sketch");put("strict",true);put("schema",schema)}}
             putJsonArray("messages") {
                 addJsonObject {put("role","system");put("content",prompt)}
@@ -154,8 +154,10 @@ internal class MetaSketchReader(private val endpoint:URI,private val key:String,
         val response=client.send(request,HttpResponse.BodyHandlers.ofString())
         if(response.statusCode()!=200)throw SketchReadFailure(if(response.statusCode()==429)"Sketch reading is busy. Try again shortly." else "Sketch reading is temporarily unavailable. You can enter measurements manually.")
         if(response.body().length>100_000)throw SketchReadFailure("The sketch couldn’t be read. Try a clearer photo.")
-        val content=json.parseToJsonElement(response.body()).jsonObject["choices"]?.jsonArray?.firstOrNull()?.jsonObject?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull
-            ?: throw SketchReadFailure("Couldn’t find a plot boundary in this image.")
+        val choice=json.parseToJsonElement(response.body()).jsonObject["choices"]?.jsonArray?.firstOrNull()?.jsonObject
+        if(choice?.get("finish_reason")?.jsonPrimitive?.contentOrNull=="length")throw SketchReadFailure("Sketch reading didn’t finish. Try again.")
+        val content=choice?.get("message")?.jsonObject?.get("content")?.jsonPrimitive?.contentOrNull
+            ?: throw SketchReadFailure("Couldn’t read this sketch. Try again.")
         json.decodeFromString<ReadSketch>(content).suggestion()
     }
 }

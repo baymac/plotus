@@ -30,7 +30,7 @@ import com.plotus.shared.*
 import kotlin.math.*
 
 internal enum class PlotTool { MOVE, HAND }
-internal enum class PlotSymbol { POINTER, HAND, UNDO, REDO, FIT, MORE, GRID, ZOOM_IN, ZOOM_OUT, IMAGE, CHEVRON, BACK, DELETE, COMPASS, ROAD, BOUNDARY, CLOSE }
+internal enum class PlotSymbol { POINTER, HAND, UNDO, REDO, FIT, MORE, GRID, ZOOM_IN, ZOOM_OUT, IMAGE, CHEVRON, BACK, DELETE, COMPASS, ROAD, BOUNDARY, CLOSE, KEYBOARD_HIDE }
 internal val provisionalPlot = listOf(PlotPoint(0.0,0.0),PlotPoint(10.0,0.0),PlotPoint(10.0,8.0),PlotPoint(0.0,8.0))
 
 @Composable
@@ -39,6 +39,11 @@ internal fun PlotSymbol(symbol: PlotSymbol, color: Color, modifier: Modifier = M
         scale(size.width/20f, size.height/20f, pivot=Offset.Zero) {
             fun line(x1: Float,y1: Float,x2: Float,y2: Float) = drawLine(color,Offset(x1,y1),Offset(x2,y2),1.4f,StrokeCap.Round)
             when(symbol) {
+                PlotSymbol.KEYBOARD_HIDE -> {
+                    drawRoundRect(color,Offset(2f,2f),androidx.compose.ui.geometry.Size(16f,10f),androidx.compose.ui.geometry.CornerRadius(1.5f),style=Stroke(1.3f))
+                    for(x in listOf(5f,8f,11f,14f))for(y in listOf(5f,8f))drawCircle(color,.55f,Offset(x,y))
+                    line(7f,15f,10f,18f);line(10f,18f,13f,15f)
+                }
                 PlotSymbol.CLOSE -> {line(5f,5f,15f,15f);line(5f,15f,15f,5f)}
                 PlotSymbol.DELETE -> {line(4f,5f,16f,5f);line(8f,2f,12f,2f);line(6f,5f,7f,17f);line(7f,17f,13f,17f);line(13f,17f,14f,5f);line(9f,8f,9f,14f);line(11f,8f,11f,14f)}
                 PlotSymbol.COMPASS -> {drawCircle(color,8f,Offset(10f,10f),style=Stroke(1.3f));line(13f,6f,11f,11f);line(11f,11f,6f,14f);line(6f,14f,8f,9f);line(8f,9f,13f,6f)}
@@ -79,14 +84,15 @@ private data class PlotTransform(val scale: Float, val centre: Offset, val x: Do
 private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float, zoom: Float, pan: Offset, showToolbar: Boolean, compact: Boolean): PlotTransform {
     val minX=points.minOf { it.x };val maxX=points.maxOf { it.x };val minY=points.minOf { it.y };val maxY=points.maxOf { it.y }
     val width=(size.width-92*density).coerceAtLeast(20*density)
-    val top=(if(showToolbar)84 else 12)*density
-    val height=(size.height-top-64*density).coerceAtLeast(20*density)
+    val top=(if(showToolbar) {if(compact)80 else 84} else if(compact)28 else 12)*density
+    val bottom=(if(compact) {if(size.height/density>=180)68 else 32} else 64)*density
+    val height=(size.height-top-bottom).coerceAtLeast(20*density)
     return PlotTransform(min(width/(maxX-minX).coerceAtLeast(.01),height/(maxY-minY).coerceAtLeast(.01)).toFloat()*zoom*(if(compact)1f else .84f),
         Offset(size.width/2f,top+height/2+(if(compact)0 else 10)*density)+pan,(minX+maxX)/2,(minY+maxY)/2)
 }
 
 @Composable
-internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true) {
+internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true) {
     val c=LocalPlotusColors.current
     var tool by remember { mutableStateOf(PlotTool.MOVE) }
     var toolOpen by remember { mutableStateOf(false) }
@@ -103,7 +109,8 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boole
     LaunchedEffect(points,dragging) { if(!dragging)fitPoints=points }
     val currentSetup by rememberUpdatedState(setup)
     val currentPoints by rememberUpdatedState(points)
-    val currentStep by rememberUpdatedState(step)
+    val anglesEnabled=step==null||step==PlotStep.BOUNDARY
+    val currentAnglesEnabled by rememberUpdatedState(anglesEnabled)
     val density=androidx.compose.ui.platform.LocalDensity.current.density
     val transform=plotTransform(fitPoints,canvasSize,density,zoom,pan,showToolbar,compact)
     val currentTransform by rememberUpdatedState(transform)
@@ -111,22 +118,32 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boole
     val measurer=rememberTextMeasurer()
     val baseStyle=LocalTextStyle.current
     Box(modifier.background(c.background).onSizeChanged { canvasSize=it }) {
-        Canvas(Modifier.fillMaxSize().semantics { contentDescription="Plot boundary. Edit the labelled side measurements below or drag the corners. North ${decimal(setup.northDegrees)} degrees." }
+        Canvas(Modifier.fillMaxSize().semantics { contentDescription="Plot boundary. "+(if(anglesEnabled)"Drag corners to adjust angles with fixed side lengths. " else "Corner editing disabled. ")+"North ${decimal(setup.northDegrees)} degrees." }
             .pointerInput(tool,workspace) {
                 detectDragGestures(onDragStart={ offset ->
                     if(workspace.saving)return@detectDragGestures
                     gestureTransform=currentTransform
-                    dragIndex=if(tool==PlotTool.MOVE && currentStep==PlotStep.BOUNDARY) currentPoints.indices.minByOrNull { i -> (gestureTransform.screen(currentPoints[i])-offset).getDistance() }
+                    dragIndex=if(tool==PlotTool.MOVE && currentAnglesEnabled) currentPoints.indices.minByOrNull { i -> (gestureTransform.screen(currentPoints[i])-offset).getDistance() }
                         ?.takeIf { (gestureTransform.screen(currentPoints[it])-offset).getDistance()<=28*density } ?: -1 else -1
                     dragging=true
-                    if(dragIndex>=0)workspace.markGestureStart()
+                    if(dragIndex>=0) {
+                        val message=when {
+                            currentSetup.vertices.isEmpty()->"Enter all side lengths to adjust angles."
+                            currentSetup.useDiagonals->"Measured diagonals fix the angles. Turn off diagonals to adjust them."
+                            currentSetup.lengths.size<4->"Side lengths fix a triangle’s angles."
+                            else->null
+                        }
+                        if(message!=null) {workspace.boundaryError(message);dragIndex=-1}
+                        else workspace.markGestureStart()
+                    }
                 },onDragEnd={dragging=false;dragIndex=-1},onDragCancel={dragging=false;dragIndex=-1}) { change,amount ->
                     if(workspace.saving)return@detectDragGestures
                     if(tool==PlotTool.HAND) {pan+=amount;change.consume()}
                     else if(dragIndex>=0) {
-                        val edited=currentPoints.toMutableList()
-                        edited[dragIndex]=gestureTransform.model(change.position)
-                        if(simplePolygon(edited))workspace.change(currentSetup.withVertices(edited),remember=false) else workspace.boundaryError("Those sides would cross. Move the corner back inside the boundary.")
+                        if(!currentAnglesEnabled)return@detectDragGestures
+                        val edited=currentSetup.withCornerAngle(dragIndex,gestureTransform.model(change.position))
+                        if(edited!=null)workspace.change(edited,remember=false)
+                        else workspace.boundaryError("This angle would cross the boundary or change a side length.")
                         change.consume()
                     }
                 }
@@ -160,7 +177,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boole
                 val origin=Offset((middle.x-text.size.width/2f).coerceIn(0f,(size.width-text.size.width).coerceAtLeast(0f)),middle.y-text.size.height/2f)
                 drawRoundRect(c.background,origin-Offset(4*density,2*density),androidx.compose.ui.geometry.Size(text.size.width+8*density,text.size.height+4*density),androidx.compose.ui.geometry.CornerRadius(4*density))
                 drawText(text,topLeft=origin)
-                if(step==PlotStep.BOUNDARY){drawCircle(c.surface,5*density,p);drawCircle(c.primary,5*density,p,style=Stroke(1*density))}
+                if(anglesEnabled){drawCircle(c.surface,5*density,p);drawCircle(c.primary,5*density,p,style=Stroke(1*density))}
                 drawCircle(c.primary,2.1f*density,p)
                 val toward=p-transform.centre
                 val at=p+Offset(if(toward.x<0)-17*density else 8*density,if(toward.y<0)-23*density else 8*density)
@@ -193,15 +210,15 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boole
                 }
             }
         }
-        if(showToolbar) Row(Modifier.align(Alignment.TopCenter).padding(horizontal=20.dp,vertical=12.dp).fillMaxWidth().height(52.dp)
+        if(showToolbar) Row(Modifier.align(Alignment.TopCenter).padding(horizontal=if(compact)12.dp else 20.dp,vertical=if(compact)6.dp else 12.dp).fillMaxWidth().height(if(compact)44.dp else 52.dp)
             .background(c.surface,RoundedCornerShape(12.dp)).border(1.dp,c.line,RoundedCornerShape(12.dp)).padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
             Box {
                 Row(verticalAlignment=Alignment.CenterVertically) {
-                    PlotToolButton(if(tool==PlotTool.MOVE)PlotSymbol.POINTER else PlotSymbol.HAND,if(tool==PlotTool.MOVE)"Move corners" else "Pan canvas",selected=true,enabled=!workspace.saving) {toolOpen=!toolOpen}
+                    PlotToolButton(if(tool==PlotTool.MOVE)PlotSymbol.POINTER else PlotSymbol.HAND,if(tool==PlotTool.MOVE)"Adjust corner angles" else "Pan canvas",selected=true,enabled=!workspace.saving&&(tool!=PlotTool.MOVE||anglesEnabled)) {toolOpen=!toolOpen}
                     TextButton({toolOpen=true},Modifier.width(24.dp).height(44.dp).semantics {contentDescription="Choose canvas tool"},contentPadding=PaddingValues(0.dp)) {PlotSymbol(PlotSymbol.CHEVRON,c.muted,Modifier.size(12.dp))}
                 }
                 DropdownMenu(toolOpen,{toolOpen=false}) {
-                    DropdownMenuItem(text={Text("Move")},onClick={tool=PlotTool.MOVE;toolOpen=false})
+                    DropdownMenuItem(text={Text("Adjust angles")},onClick={tool=PlotTool.MOVE;toolOpen=false},enabled=anglesEnabled)
                     DropdownMenuItem(text={Text("Hand")},onClick={tool=PlotTool.HAND;toolOpen=false})
                 }
             }
@@ -224,7 +241,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boole
             }
         }
         val area=if(setup.units==PlotUnits.METRES)setup.areaSquareMetres?.let { "${decimal(it)} m²" } else setup.areaSquareFeet?.let(::areaLabel)
-        Text("Area ${area ?: "—"} · Perimeter ${measureLabel(setup.perimeterMetres,setup.units)}",Modifier.align(Alignment.BottomCenter).padding(bottom=if(compact)3.dp else 16.dp)
+        if(!compact||canvasSize.height/density>=180)Text("Area ${area ?: "—"} · Perimeter ${measureLabel(setup.perimeterMetres,setup.units)}",Modifier.align(Alignment.BottomCenter).padding(bottom=if(compact)3.dp else 16.dp)
             .widthIn(min=if(compact)276.dp else 320.dp).background(c.surface,RoundedCornerShape(8.dp)).border(1.dp,c.line,RoundedCornerShape(8.dp)).padding(horizontal=12.dp,vertical=7.dp),
             fontSize=12.sp,lineHeight=18.sp,color=c.muted,textAlign=TextAlign.Center)
     }

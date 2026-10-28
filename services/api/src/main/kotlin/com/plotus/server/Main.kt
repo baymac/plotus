@@ -101,7 +101,9 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
             }
             get("/projects/{id}/floor-plan/generations") {
                 val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
-                call.respond(PlanGenerations(listOfNotNull(floorPlans.latest(owner,id))))
+                val before=call.request.queryParameters["before"]?.let {value->try {UUID.fromString(value)}catch(_:IllegalArgumentException){throw ApiFailure(400,"INVALID_CURSOR","Reopen generation history.")}}
+                // Older installed clients expect the latest drawing inline.
+                call.respond(if(call.request.queryParameters["summaries"]=="true")floorPlans.history(owner,id,before) else PlanGenerations(listOfNotNull(floorPlans.latest(owner,id))))
             }
             post("/projects/{id}/floor-plan/generations") {
                 val owner=call.attributes[Owner];val project=store.get(owner,call.projectID())

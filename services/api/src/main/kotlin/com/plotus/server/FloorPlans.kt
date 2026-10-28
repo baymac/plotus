@@ -160,6 +160,16 @@ internal fun programme(project:Project,setup:FloorPlanSetup):JsonObject {
 /** Durable, owner-scoped jobs. The unique request ID makes a lost HTTP response safe to recover. */
 data class StartedPlan(val plan:GeneratedFloorPlan,val created:Boolean)
 class PostgresPlans(private val source:DataSource) {
+    /** List lightweight summaries; fetch a drawing only when its history entry is opened. */
+    suspend fun history(owner:UUID,project:UUID,before:UUID?=null):PlanGenerations=db {c->
+        val cursor=if(before==null)"" else " AND (created_at,id)<(SELECT created_at,id FROM plotus.plan_generations WHERE owner_id=? AND project_id=? AND id=?)"
+        c.prepareStatement("SELECT id,status,created_at,source_revision,result->>'error' AS error FROM plotus.plan_generations WHERE owner_id=? AND project_id=?$cursor ORDER BY created_at DESC,id DESC LIMIT 31").use {
+            it.setObject(1,owner);it.setObject(2,project)
+            if(before!=null){it.setObject(3,owner);it.setObject(4,project);it.setObject(5,before)}
+            val rows=it.executeQuery().use {r->buildList {while(r.next())add(GeneratedFloorPlan(r.getObject("id").toString(),r.getString("status"),error=r.getString("error"),createdAt=r.getTimestamp("created_at").toInstant().toString(),sourceRevision=r.getLong("source_revision")))}}
+            PlanGenerations(rows.take(30),if(rows.size>30)rows[29].id else null)
+        }
+    }
     suspend fun find(owner:UUID,project:UUID,id:UUID,byRequest:Boolean=false):GeneratedFloorPlan?=db {c->
         c.prepareStatement("SELECT * FROM plotus.plan_generations WHERE owner_id=? AND project_id=? AND ${if(byRequest)"request_id" else "id"}=?").use {
             it.setObject(1,owner);it.setObject(2,project);it.setObject(3,id);it.executeQuery().use {r->if(r.next())r.plan() else null}
@@ -201,6 +211,7 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
         return connected().preview(project,setup)
     }
     suspend fun latest(owner:UUID,project:UUID)=jobs?.latest(owner,project)
+    suspend fun history(owner:UUID,project:UUID,before:UUID?=null)=jobs?.history(owner,project,before) ?: PlanGenerations(emptyList())
     suspend fun get(owner:UUID,project:UUID,id:UUID,byRequest:Boolean=false)=jobs?.find(owner,project,id,byRequest)
         ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
     suspend fun start(owner:UUID,project:Project,request:StartPlanRequest):GeneratedFloorPlan {

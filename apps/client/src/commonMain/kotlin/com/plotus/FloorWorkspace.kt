@@ -29,6 +29,13 @@ class FloorWorkspace(
     var previewError by mutableStateOf<String?>(null);private set
     var previewing by mutableStateOf(false);private set
     var generation by mutableStateOf<GeneratedFloorPlan?>(null);private set
+    var history by mutableStateOf<List<GeneratedFloorPlan>>(emptyList());private set
+    var historyLoading by mutableStateOf(false);private set
+    var historyError by mutableStateOf<String?>(null);private set
+    var nextHistoryBefore by mutableStateOf<String?>(null);private set
+    var viewingPlan by mutableStateOf<GeneratedFloorPlan?>(null);private set
+    var viewLoading by mutableStateOf(false);private set
+    var viewError by mutableStateOf<String?>(null);private set
     var starting by mutableStateOf(false);private set
     private var requestID:String?=null
     private var polling:Job?=null
@@ -46,7 +53,8 @@ class FloorWorkspace(
             project=p;saved=p.floorPlan?.setup ?: FloorPlanSetup(units=p.plotSetup?.units ?: PlotUnits.FEET_INCHES);draft=saved.singleResidence();accepted(p)
             p.buildableArea?.let {areas[it.key]=it};restoreArea()
             validation=emptyMap();conflict=false
-            generation=authJson.decodeFromJsonElement<PlanGenerations>(request("GET","$base/generations",null)).plans.firstOrNull()
+            loadHistory()
+            generation=history.firstOrNull {it.status in listOf("running","queued")}
             generation?.takeIf {it.status in listOf("running","queued")}?.let {poll(it)}
         }catch(cancelled:CancellationException){throw cancelled}
         catch(failure:Exception){error=failure.message ?: "Couldn’t open Floor plan."}
@@ -70,7 +78,7 @@ class FloorWorkspace(
         val p=project ?: return
         val key=footprintKey ?: return
         areas[key]?.let {preview=it.asPreview();previewError=null;return}
-        if(loading||generating||generation!=null||draft.geometrySetup().errors(p.plotSetup,true).isNotEmpty())return
+        if(loading||generating||draft.geometrySetup().errors(p.plotSetup,true).isNotEmpty())return
         val snapshot=draft;val revision=p.revision
         previewing=true
         try {
@@ -104,7 +112,7 @@ class FloorWorkspace(
             finally {saving=false}
         }
     }
-    fun generate()=save(complete=true) {
+    fun generate(onStarted:(GeneratedFloorPlan)->Unit={})=save(complete=true) {
         if(starting||generating)return@save
         starting=true;error=null
         val current=project!!
@@ -116,20 +124,46 @@ class FloorWorkspace(
                     if(failure is CancellationException)throw failure
                     try {authJson.decodeFromJsonElement<GeneratedFloorPlan>(request("GET","$base/generations/$key?by=request",null))}catch(cancelled:CancellationException){throw cancelled}catch(_:Exception){throw failure}
                 }
-                generation=job;poll(job)
+                generation=job;rememberPlan(job);poll(job);onStarted(job)
             }catch(cancelled:CancellationException){throw cancelled}
             catch(failure:Exception){conflict=(failure as? AuthFailure)?.code in listOf("PROJECT_CHANGED","PLOT_CHANGED");error=failure.message ?: "Couldn’t start generation."}
             finally {starting=false}
         }
     }
     fun newAttempt(){requestID=null;generation=null;error=null}
+    suspend fun loadHistory(more:Boolean=false) {
+        if(project==null||historyLoading)return
+        val before=if(more)nextHistoryBefore ?: return else null
+        historyLoading=true;historyError=null
+        try {
+            val page=authJson.decodeFromJsonElement<PlanGenerations>(request("GET","$base/generations?summaries=true"+(before?.let {"&before=$it"} ?: ""),null))
+            history=(if(more)history+page.plans else page.plans).distinctBy {it.id};nextHistoryBefore=page.nextBefore
+        }catch(cancelled:CancellationException){throw cancelled}
+        catch(failure:Exception){historyError=failure.message ?: "Couldn’t load history."}
+        finally {historyLoading=false}
+    }
+    suspend fun openPlan(id:String) {
+        viewingPlan=null;viewError=null;viewLoading=true
+        try {
+            val plan=authJson.decodeFromJsonElement<GeneratedFloorPlan>(request("GET","$base/generations/$id",null))
+            viewingPlan=plan
+            if(plan.status in listOf("running","queued")){generation=plan;poll(plan)}
+        }catch(cancelled:CancellationException){throw cancelled}
+        catch(failure:Exception){viewError=failure.message ?: "Couldn’t open this plan."}
+        finally {viewLoading=false}
+    }
+    private fun rememberPlan(plan:GeneratedFloorPlan) {
+        val summary=plan.copy(drawings=emptyList())
+        history=if(history.any {it.id==plan.id})history.map {if(it.id==plan.id)summary else it} else listOf(summary)+history
+        if(viewingPlan?.id==plan.id)viewingPlan=plan
+    }
     private fun poll(job:GeneratedFloorPlan) {
         polling?.cancel()
         if(job.status !in listOf("running","queued"))return
         polling=scope.launch {
             try {while(isActive) {
                 delay(2000)
-                val next=authJson.decodeFromJsonElement<GeneratedFloorPlan>(request("GET","$base/generations/${job.id}",null));generation=next;error=null
+                val next=authJson.decodeFromJsonElement<GeneratedFloorPlan>(request("GET","$base/generations/${job.id}",null));generation=next;rememberPlan(next);error=null
                 if(next.status !in listOf("running","queued"))break
             }}catch(cancelled:CancellationException){throw cancelled}
             catch(failure:Exception){error="Couldn’t check generation. Reopen Floor plan to continue."}

@@ -10,9 +10,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -26,13 +25,11 @@ import com.plotus.resources.*
 import com.plotus.shared.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.decodeToImageBitmap
 import org.jetbrains.compose.resources.painterResource
-import kotlin.io.encoding.Base64
 import kotlin.uuid.Uuid
 
 @Composable
-fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:Boolean,onStep:(FloorStep?)->Unit,onPlot:()->Unit,onExit:()->Unit) {
+fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:Boolean,onStep:(FloorStep?)->Unit,onPlot:()->Unit,onExit:()->Unit,generationID:String?=null,onGeneration:(String)->Unit={}) {
     val c=LocalPlotusColors.current
     val scope=rememberCoroutineScope()
     val focus=LocalFocusManager.current
@@ -52,28 +49,33 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
         onStep(item)
     }
     LaunchedEffect(workspace,id) {workspace.load(id)}
+    LaunchedEffect(workspace,id,generationID,workspace.loading) {if(!workspace.loading&&workspace.project!=null&&generationID!=null)workspace.openPlan(generationID)}
+    LaunchedEffect(workspace,step,workspace.loading) {if(!workspace.loading&&step==FloorStep.HISTORY&&generationID==null)workspace.loadHistory()}
     LaunchedEffect(step) {editing=null;catalogue=false}
     LaunchedEffect(workspace.footprintKey,workspace.loading,workspace.generating,workspace.generation?.id) {delay(700);workspace.refreshPreview()}
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
         Row(Modifier.fillMaxWidth().height(if(active||keyboardVisible)48.dp else 64.dp).padding(start=if(compact)8.dp else 20.dp,end=16.dp),verticalAlignment=Alignment.CenterVertically) {
-            if(compact||step!=null||editing!=null||catalogue)PlotToolButton(PlotSymbol.BACK,
-                when {editing!=null||catalogue->"Back to requirements";step!=null->"Back to floor plan";else->"Back to projects"},enabled=!workspace.saving) {
+            val viewed=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
+            val heading=if(generationID!=null)viewed?.createdAt?.let(::planTimestamp) ?: "Floor plan" else editing?.second?.kind?.title ?: if(catalogue)"Add room" else when(step){FloorStep.SETBACKS->"Setback";FloorStep.REQUIREMENTS->"Requirements";FloorStep.HISTORY->"History";else->workspace.project?.name ?: "Floor plan"}
+            EditorBack(heading,
+                when {editing!=null||catalogue->"Back to requirements";generationID!=null->"Back to history";step!=null->"Back to floor plan";else->"Back to projects"},enabled=!workspace.saving) {
                 hideKeyboard()
-                when {editing!=null||catalogue->{editing=null;catalogue=false};step!=null->onStep(null);else->close(onExit)}
+                when {editing!=null||catalogue->{editing=null;catalogue=false};generationID!=null->onStep(FloorStep.HISTORY);step!=null->onStep(null);else->close(onExit)}
             }
-            Text(editing?.second?.kind?.title ?: if(catalogue)"Add room" else step?.segment?.replaceFirstChar {it.uppercase()} ?: workspace.project?.name ?: "Floor plan",
-                Modifier.weight(1f),fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
             if(keyboardVisible)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard") {hideKeyboard()}
-            TextButton({hideKeyboard();workspace.save()},enabled=!busy&&canSave) {Text(if(workspace.saving)"Saving…" else "Save",color=if(!busy&&canSave)c.primary else c.muted)}
+            if(step!=FloorStep.HISTORY)TextButton({hideKeyboard();workspace.save()},enabled=!busy&&canSave) {Text(if(workspace.saving)"Saving…" else "Save",color=if(!busy&&canSave)c.primary else c.muted)}
         }
         if(workspace.loading)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
         else if(workspace.project?.plotSetup==null)Column(Modifier.fillMaxSize().padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             Text(workspace.error ?: "Complete Plot setup first.")
             PlotusButton("Plot setup",onPlot)
             TextButton({scope.launch {workspace.load(id)}}) {Text("Try again")}
-        } else if(workspace.generation!=null||workspace.starting) {
-            PlanningStages(Modifier.padding(horizontal=if(compact)16.dp else 20.dp,vertical=8.dp),1,{close(onPlot)})
-            GenerationView(workspace,compact,Modifier.weight(1f))
+        } else if(generationID!=null) {
+            val plan=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
+            if(workspace.viewLoading&&plan==null)Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
+            else GenerationView(workspace,plan,compact,Modifier.weight(1f),{workspace.newAttempt();onStep(FloorStep.REQUIREMENTS)},{scope.launch {workspace.openPlan(generationID)}})
+        } else if(step==FloorStep.HISTORY) {
+            PlanHistory(workspace,Modifier.weight(1f),onGeneration)
         } else {
             val inspector:@Composable (Modifier)->Unit={modifier->
                 val scroll=rememberScrollState()
@@ -106,19 +108,25 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                     if(editing==null&&!catalogue) {
                         if(selected==FloorStep.REQUIREMENTS) {
                             HorizontalDivider(color=c.line)
-                            PlotusButton(if(workspace.saving)"Saving…" else "Generate plan",{hideKeyboard();workspace.generate()},Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=12.dp),enabled=!busy)
+                            PlotusButton(if(workspace.saving)"Saving…" else "Generate plan",{
+                                hideKeyboard()
+                                if(workspace.generation?.status in listOf("ready","blocked","failed"))workspace.newAttempt()
+                                workspace.generate {onGeneration(it.id)}
+                            },Modifier.fillMaxWidth().padding(horizontal=20.dp,vertical=12.dp),enabled=!busy)
                         }
-                        if(!compact)FloorOptions(selected,!busy,Modifier.fillMaxWidth(),select)
                     }
                 }
             }
-            if(compact) {
-                if(step==null) {
+            if(step==null) {
+                Column(Modifier.weight(1f)) {
                     PlanningStages(Modifier.padding(horizontal=16.dp,vertical=8.dp),1,{close(onPlot)})
-                    FloorPreview(workspace,true,Modifier.fillMaxWidth().weight(1f),!keyboardVisible)
+                    FloorPreview(workspace,compact,Modifier.fillMaxWidth().weight(1f),!keyboardVisible)
                     workspace.error?.let {FloorError(it)}
+                    workspace.generation?.takeIf {it.status in listOf("running","queued")}?.let {job->TextButton({onGeneration(job.id)},Modifier.align(Alignment.CenterHorizontally)){Text("View generation in progress")}}
                     FloorOptions(null,!busy,Modifier.fillMaxWidth(),select)
-                }else BoxWithConstraints(Modifier.weight(1f)) {
+                }
+            }else if(compact) {
+                BoxWithConstraints(Modifier.weight(1f)) {
                     val availableHeight=maxHeight
                     Column(Modifier.fillMaxSize()) {
                         val canvasHeight=minOf(if(keyboardVisible)160.dp else 320.dp,availableHeight*(if(keyboardVisible).36f else .46f))
@@ -146,14 +154,19 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
 @Composable private fun FloorOptions(selected:FloorStep?,enabled:Boolean,modifier:Modifier,onSelect:(FloorStep)->Unit) {
     val c=LocalPlotusColors.current
     HorizontalDivider(color=c.line)
-    Row(modifier.background(c.surface).padding(horizontal=16.dp,vertical=10.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-        FloorStep.entries.forEach {item->
+    Column(modifier.background(c.surface).padding(horizontal=16.dp,vertical=10.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.widthIn(max=560.dp).fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        listOf(FloorStep.SETBACKS,FloorStep.REQUIREMENTS).forEach {item->
             Column(Modifier.weight(1f).height(60.dp).background(if(selected==item)c.active else c.surface,RoundedCornerShape(10.dp))
                 .border(1.dp,if(selected==item)c.primary else c.line,RoundedCornerShape(10.dp)).selectable(selected==item,enabled,Role.Tab) {onSelect(item)},
                 horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
                 PlotSymbol(if(item==FloorStep.SETBACKS)PlotSymbol.BOUNDARY else PlotSymbol.GRID,if(selected==item)c.primary else c.muted,Modifier.size(18.dp))
-                Text(item.segment.replaceFirstChar {it.uppercase()},fontSize=13.sp,color=if(selected==item)c.primary else c.muted)
+                Text(if(item==FloorStep.SETBACKS)"Setback" else "Requirements",fontSize=13.sp,color=if(selected==item)c.primary else c.muted)
             }
+        }
+        }
+        Row(Modifier.widthIn(max=560.dp).fillMaxWidth().height(48.dp).border(1.dp,c.line,RoundedCornerShape(10.dp)).clickable(role=Role.Button){onSelect(FloorStep.HISTORY)},horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
+            PlotSymbol(PlotSymbol.HISTORY,c.muted,Modifier.size(18.dp));Spacer(Modifier.width(8.dp));Text("History",fontSize=13.sp,color=c.muted)
         }
     }
 }
@@ -166,21 +179,8 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     val plot=remember(snapshot) {PlotWorkspace(scope,{snapshot},{_,_->error("Read-only preview")},{})}
     LaunchedEffect(plot){plot.load()}
     LaunchedEffect(plot,plot.loading,workspace.draft.units) {if(!plot.loading)plot.change(plot.draft.copy(units=workspace.draft.units))}
-    Column(modifier.background(c.background)) {
-        val envelope=workspace.preview?.envelope
-        val area=envelope?.areaSquareMetres
-        val label=when {
-            workspace.previewing->"Checking buildable area…"
-            envelope?.empty==true->"No buildable area"
-            area!=null->"Buildable · "+if(workspace.draft.units==PlotUnits.METRES)"${decimal(area)} m²" else areaLabel((area/(METRES_PER_FOOT*METRES_PER_FOOT)).toInt())
-            else->"Buildable area preview"
-        }
-        Box(Modifier.fillMaxWidth().height(36.dp),contentAlignment=Alignment.Center) {
-            Text(label,Modifier.background(c.surface,RoundedCornerShape(8.dp)).padding(horizontal=12.dp,vertical=6.dp),fontSize=12.sp,color=if(envelope?.empty==true)MaterialTheme.colorScheme.error else c.muted)
-        }
-        Box(Modifier.fillMaxWidth().weight(1f)) {
-            if(!plot.loading)PlotCanvas(plot,PlotStep.DIRECTION,compact,Modifier.fillMaxSize(),showToolbar=showToolbar,readOnly=true,envelope=workspace.preview?.envelope,onUnitsChange={workspace.change(workspace.draft.copy(units=it))})
-        }
+    Box(modifier.background(c.background)) {
+        if(!plot.loading)PlotCanvas(plot,PlotStep.DIRECTION,compact,Modifier.fillMaxSize(),showToolbar=showToolbar,readOnly=true,envelope=workspace.preview?.envelope,showBuildable=true,checkingBuildable=workspace.previewing,onUnitsChange={workspace.change(workspace.draft.copy(units=it))})
     }
 }
 
@@ -282,34 +282,53 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     TextButton(onDelete,enabled=enabled) {Text("Delete ${room.kind.title.lowercase()}",color=MaterialTheme.colorScheme.error)}
 }
 
-@Composable private fun GenerationView(workspace:FloorWorkspace,compact:Boolean,modifier:Modifier) {
+@Composable private fun PlanHistory(workspace:FloorWorkspace,modifier:Modifier,onOpen:(String)->Unit) {
     val c=LocalPlotusColors.current
-    val plan=workspace.generation
-    if(workspace.generating)Column(modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+    val scope=rememberCoroutineScope()
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        if(workspace.history.isEmpty()&&!workspace.historyLoading&&workspace.historyError==null)Box(Modifier.fillMaxWidth().heightIn(min=240.dp),contentAlignment=Alignment.Center) {
+            Text("No generations yet",color=c.muted)
+        }
+        workspace.history.forEach {plan->
+            Row(Modifier.widthIn(max=720.dp).fillMaxWidth().heightIn(min=76.dp).background(c.surface,RoundedCornerShape(12.dp))
+                .border(1.dp,c.line,RoundedCornerShape(12.dp)).clickable(role=Role.Button,onClickLabel="Open generated plan"){onOpen(plan.id)}.padding(16.dp),
+                verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(16.dp)) {
+                PlotSymbol(PlotSymbol.HISTORY,c.muted)
+                Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                    Text(planTimestamp(plan.createdAt),fontSize=14.sp,fontWeight=FontWeight.Medium)
+                    if(plan.status!="ready")Text(when(plan.status){"running","queued"->"Generating…";"blocked"->"No checked layout found";else->"Couldn’t create this plan"},fontSize=12.sp,color=c.muted)
+                }
+                PlotSymbol(PlotSymbol.BACK,c.muted,Modifier.size(16.dp).graphicsLayer {rotationZ=180f})
+            }
+        }
+        workspace.historyError?.let {FloorError(it);TextButton({scope.launch {workspace.loadHistory()}}){Text("Try again")}}
+        if(workspace.historyLoading)CircularProgressIndicator(Modifier.padding(20.dp).size(24.dp))
+        else if(workspace.nextHistoryBefore!=null)TextButton({scope.launch {workspace.loadHistory(more=true)}}){Text("Load more")}
+    }
+}
+
+@Composable private fun GenerationView(workspace:FloorWorkspace,plan:GeneratedFloorPlan?,compact:Boolean,modifier:Modifier,onEdit:()->Unit,onRetry:()->Unit) {
+    val c=LocalPlotusColors.current
+    if(plan?.status in listOf("running","queued"))Column(modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
         CircularProgressIndicator();Spacer(Modifier.height(24.dp));FloorTitle("Creating your floor plan")
-        Text("You can leave this screen and come back.",Modifier.padding(top=8.dp),fontSize=14.sp,color=c.muted)
+        Text("You can leave this screen and come back.",Modifier.padding(top=8.dp),fontSize=14.sp,color=c.muted,textAlign=TextAlign.Center)
         workspace.error?.let {FloorError(it)}
     } else if(plan?.status=="ready") {
         var floor by remember(plan.id) {mutableStateOf(0)}
-        val drawing=plan.drawings.getOrNull(floor)
-        val bitmap=remember(drawing?.pngBase64){drawing?.let {runCatching {Base64.decode(it.pngBase64).decodeToImageBitmap()}.getOrNull()}}
-        Column(modifier.fillMaxWidth().padding(if(compact)16.dp else 24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                FloorTitle("Floor plan")
-                Spacer(Modifier.weight(1f))
-                TextButton({workspace.newAttempt()}) {Text("Requirements")}
+        Column(modifier.fillMaxWidth()) {
+            if(plan.drawings.size>1)Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=16.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                plan.drawings.forEachIndexed {i,_->FloorChip(floorName(i),floor==i,true){floor=i}}
             }
-            if(plan.sourceRevision!=workspace.project?.revision)Text("This plan uses an earlier saved version of the project.",fontSize=12.sp,color=c.muted)
-            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {plan.drawings.forEachIndexed {i,item->FloorChip(item.label,floor==i,true){floor=i}}}
-            if(bitmap!=null)Image(bitmap,drawing?.label,Modifier.fillMaxWidth().weight(1f).background(Color.White,RoundedCornerShape(12.dp)),contentScale=ContentScale.Fit)
-            else Box(Modifier.weight(1f),contentAlignment=Alignment.Center){FloorError("This floor drawing couldn’t be opened.")}
+            val drawing=plan.drawings.getOrNull(floor)
+            if(drawing!=null)GeneratedPlanCanvas(drawing,compact,Modifier.fillMaxWidth().weight(1f))
+            else Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){FloorError("This floor drawing couldn’t be opened.")}
         }
     }else Box(modifier.fillMaxWidth().padding(24.dp),contentAlignment=Alignment.Center) {
         Column(Modifier.widthIn(max=420.dp).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally) {
-            Text(if(plan?.status=="blocked")"No checked layout found" else "Couldn’t create this plan",
+            Text(if(plan?.status=="blocked")"No checked layout found" else if(plan==null)"Couldn’t open this plan" else "Couldn’t create this plan",
                 Modifier.fillMaxWidth(),fontSize=18.sp,fontWeight=FontWeight.SemiBold,textAlign=TextAlign.Center)
-            Text(plan?.error ?: workspace.error ?: "Please try again.",Modifier.fillMaxWidth().padding(vertical=16.dp),fontSize=14.sp,color=c.muted,textAlign=TextAlign.Center)
-            PlotusButton("Edit requirements",{workspace.newAttempt()})
+            Text(plan?.error ?: workspace.viewError ?: workspace.error ?: "Please try again.",Modifier.fillMaxWidth().padding(vertical=16.dp),fontSize=14.sp,color=c.muted,textAlign=TextAlign.Center)
+            PlotusButton(if(plan==null)"Try again" else "Edit requirements",if(plan==null)onRetry else onEdit)
         }
     }
 }

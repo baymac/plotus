@@ -8,7 +8,7 @@ It considers plot geometry, setbacks, floors, room requirements and how spaces c
 
 The Floor plan stage saves setbacks, building floors and a single residence’s room programme. A connected engine calculates the buildable envelope and runs bounded generation jobs. The app displays drawings only when the existing engine accepts the result. No-fit and unavailable states preserve the saved brief. Supported combinations are checked before generation; room sizing is automatic in this milestone.
 
-Generation is account-owned and runs behind the project API. Reopening Floor plan recovers the latest job. A request ID prevents duplicate jobs if the start response is lost, and a project revision prevents generating against a stale boundary. An interrupted service job is marked failed rather than silently repeated.
+Generation is account-owned and runs behind the project API. Floor plan opens its setup canvas; History lists earlier attempts by local date and time. Opening an entry shows its saved drawing on a read-only canvas with pan, zoom and fit, in the app’s current appearance. A running job continues when the screen is closed. A request ID prevents duplicate jobs if the start response is lost, and a project revision prevents generating against a stale boundary. An interrupted service job is marked failed rather than silently repeated.
 
 ## Existing technology
 

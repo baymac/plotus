@@ -14,6 +14,42 @@ import org.postgresql.ds.PGSimpleDataSource
 import kotlin.test.*
 
 class FloorPlanIntegrationTest {
+    @Test fun generationHistoryIsPagedOwnedAndDoesNotDownloadDrawings() {
+        val url=System.getenv("PLOTUS_TEST_DATABASE_URL");assumeTrue(url!=null)
+        val source=PGSimpleDataSource().apply {setURL(url!!);user="plotus";password=System.getenv("PLOTUS_TEST_DATABASE_PASSWORD")}
+        val owner=UUID.randomUUID();val other=UUID.randomUUID();val projects=PostgresProjects(source).also {it.migrate()};val jobs=PostgresPlans(source)
+        val service=FloorPlans(jobs)
+        try {testApplication {
+            application {plotusModule(projects,IdentityVerifier {if(it=="history-owner")owner else other},floorPlans=service)}
+            val project=runBlocking {
+                var p=projects.create(owner,ProjectDraft("History fixture","Test city"))
+                val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(0))).rebuild()
+                p=projects.savePlot(owner,UUID.fromString(p.id),p.revision,plot)
+                projects.saveFloorPlan(owner,UUID.fromString(p.id),p.revision,FloorPlanSetup())
+            }
+            val ids=runBlocking {(1..32).map {
+                val job=jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan
+                jobs.finish(owner,UUID.fromString(project.id),job.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","test-drawing-payload",100,100))))
+                job.id
+            }}
+            val path="/v1/projects/${project.id}/floor-plan/generations"
+            suspend fun list(suffix:String="",token:String="history-owner")=client.get(path+"?summaries=true"+suffix){bearerAuth(token)}
+            val firstResponse=list();assertEquals(HttpStatusCode.OK,firstResponse.status)
+            val first=Json.decodeFromString<PlanGenerations>(firstResponse.bodyAsText())
+            assertEquals(ids.reversed().take(30),first.plans.map {it.id});assertTrue(first.plans.all {it.drawings.isEmpty()})
+            assertFalse(firstResponse.bodyAsText().contains("test-drawing-payload"))
+            val legacy=Json.decodeFromString<PlanGenerations>(client.get(path){bearerAuth("history-owner")}.bodyAsText())
+            assertEquals(ids.last(),legacy.plans.single().id);assertEquals("test-drawing-payload",legacy.plans.single().drawings.single().pngBase64)
+            val second=Json.decodeFromString<PlanGenerations>(list("&before=${first.nextBefore}").bodyAsText())
+            assertEquals(ids.reversed().drop(30),second.plans.map {it.id});assertNull(second.nextBefore)
+            val exact=client.get("$path/${ids.first()}"){bearerAuth("history-owner")}
+            assertEquals("test-drawing-payload",Json.decodeFromString<GeneratedFloorPlan>(exact.bodyAsText()).drawings.single().pngBase64)
+            assertEquals(HttpStatusCode.NotFound,list(token="history-other").status)
+            assertEquals(HttpStatusCode.Unauthorized,client.get(path).status)
+            assertEquals(HttpStatusCode.BadRequest,list("&before=not-an-id").status)
+            assertTrue(runBlocking {jobs.history(other,UUID.fromString(project.id))}.plans.isEmpty())
+        }} finally {service.close();source.connection.use {c->c.prepareStatement("DELETE FROM plotus.projects WHERE owner_id IN (?,?)").use {it.setObject(1,owner);it.setObject(2,other);it.executeUpdate()}}}
+    }
     @Test fun savedBriefIsOwnedRevisionCheckedAndGenerationUsesAnImmutablePlotSnapshot() {
         val url=System.getenv("PLOTUS_TEST_DATABASE_URL");assumeTrue(url!=null)
         val source=PGSimpleDataSource().apply {setURL(url!!);user="plotus";password=System.getenv("PLOTUS_TEST_DATABASE_PASSWORD")}

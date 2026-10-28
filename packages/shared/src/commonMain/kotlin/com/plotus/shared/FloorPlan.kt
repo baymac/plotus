@@ -2,7 +2,7 @@ package com.plotus.shared
 
 import kotlinx.serialization.Serializable
 
-@Serializable enum class FloorStep(val segment:String) { SETBACKS("setbacks"), REQUIREMENTS("requirements") }
+@Serializable enum class FloorStep(val segment:String) { SETBACKS("setbacks"), REQUIREMENTS("requirements"), HISTORY("history") }
 @Serializable enum class PlanMode { AUTO, CUSTOM }
 @Serializable enum class RoomSize { SMALL, MEDIUM, LARGE }
 @Serializable enum class Closet { NONE, WARDROBE, WALK_IN }
@@ -149,4 +149,4 @@ fun FloorPlanSetup.geometrySetup()=FloorPlanSetup(setbackMode=setbackMode,sameSe
 @Serializable data class StartPlanRequest(val revision:Long,val requestID:String)
 @Serializable data class PlanDrawing(val id:String,val label:String,val pngBase64:String,val width:Int,val height:Int)
 @Serializable data class GeneratedFloorPlan(val id:String,val status:String,val drawings:List<PlanDrawing> = emptyList(),val error:String?=null,val createdAt:String="",val sourceRevision:Long=0,val findings:List<PlanFinding> = emptyList())
-@Serializable data class PlanGenerations(val plans:List<GeneratedFloorPlan>)
+@Serializable data class PlanGenerations(val plans:List<GeneratedFloorPlan>,val nextBefore:String?=null)

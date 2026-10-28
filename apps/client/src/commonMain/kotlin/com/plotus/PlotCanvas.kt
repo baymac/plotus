@@ -3,6 +3,7 @@ package com.plotus
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -11,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -19,6 +21,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.drawText
@@ -30,7 +35,7 @@ import com.plotus.shared.*
 import kotlin.math.*
 
 internal enum class PlotTool { MOVE, HAND }
-internal enum class PlotSymbol { POINTER, HAND, UNDO, REDO, FIT, MORE, GRID, ZOOM_IN, ZOOM_OUT, IMAGE, CHEVRON, BACK, DELETE, COMPASS, ROAD, BOUNDARY, CLOSE, KEYBOARD_HIDE }
+internal enum class PlotSymbol { POINTER, HAND, UNDO, REDO, FIT, MORE, GRID, ZOOM_IN, ZOOM_OUT, IMAGE, CHEVRON, BACK, DELETE, COMPASS, ROAD, BOUNDARY, CLOSE, KEYBOARD_HIDE, HISTORY }
 internal val provisionalPlot = listOf(PlotPoint(0.0,0.0),PlotPoint(10.0,0.0),PlotPoint(10.0,8.0),PlotPoint(0.0,8.0))
 
 @Composable
@@ -39,6 +44,7 @@ internal fun PlotSymbol(symbol: PlotSymbol, color: Color, modifier: Modifier = M
         scale(size.width/20f, size.height/20f, pivot=Offset.Zero) {
             fun line(x1: Float,y1: Float,x2: Float,y2: Float) = drawLine(color,Offset(x1,y1),Offset(x2,y2),1.4f,StrokeCap.Round)
             when(symbol) {
+                PlotSymbol.HISTORY -> {drawCircle(color,7f,Offset(11f,10f),style=Stroke(1.3f));line(11f,6f,11f,10f);line(11f,10f,14f,12f);line(2f,3f,2f,8f);line(2f,8f,7f,8f)}
                 PlotSymbol.KEYBOARD_HIDE -> {
                     drawRoundRect(color,Offset(2f,2f),androidx.compose.ui.geometry.Size(16f,10f),androidx.compose.ui.geometry.CornerRadius(1.5f),style=Stroke(1.3f))
                     for(x in listOf(5f,8f,11f,14f))for(y in listOf(5f,8f))drawCircle(color,.55f,Offset(x,y))
@@ -71,9 +77,21 @@ internal fun PlotSymbol(symbol: PlotSymbol, color: Color, modifier: Modifier = M
 @Composable
 internal fun PlotToolButton(symbol: PlotSymbol, label: String, enabled: Boolean = true, selected: Boolean = false, onClick: () -> Unit) {
     val c = LocalPlotusColors.current
-    IconButton(onClick,Modifier.size(44.dp).background(if(selected)c.active else Color.Transparent,RoundedCornerShape(10.dp))
+    IconButton(onClick,Modifier.size(44.dp)
         .semantics { contentDescription=label },enabled=enabled) {
-        PlotSymbol(symbol,if(selected)c.primary else if(enabled)c.muted else c.border)
+        Box(Modifier.size(32.dp).background(if(selected)c.active else Color.Transparent,RoundedCornerShape(8.dp)),contentAlignment=Alignment.Center) {
+            PlotSymbol(symbol,if(selected)c.primary else if(enabled)c.muted else c.border)
+        }
+    }
+}
+
+/** The title and chevron share one generous hit area; Save remains a separate action. */
+@Composable internal fun RowScope.EditorBack(title:String,label:String,enabled:Boolean=true,onBack:()->Unit) {
+    val c=LocalPlotusColors.current
+    Row(Modifier.weight(1f).heightIn(min=44.dp).clickable(enabled,role=Role.Button,onClickLabel=label,onClick=onBack)
+        .semantics(mergeDescendants=true) {contentDescription=label},verticalAlignment=Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp),contentAlignment=Alignment.Center){PlotSymbol(PlotSymbol.BACK,c.muted)}
+        Text(title,Modifier.weight(1f),fontSize=16.sp,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)
     }
 }
 
@@ -92,7 +110,7 @@ private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float
 }
 
 @Composable
-internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true, readOnly:Boolean=false, envelope:FloorEnvelope?=null,onUnitsChange:((PlotUnits)->Unit)?=null) {
+internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true, readOnly:Boolean=false, envelope:FloorEnvelope?=null,showBuildable:Boolean=false,checkingBuildable:Boolean=false,onUnitsChange:((PlotUnits)->Unit)?=null) {
     val c=LocalPlotusColors.current
     var tool by remember(readOnly) { mutableStateOf(if(readOnly)PlotTool.HAND else PlotTool.MOVE) }
     var toolOpen by remember { mutableStateOf(false) }
@@ -117,7 +135,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
     var gestureTransform by remember { mutableStateOf(transform) }
     val measurer=rememberTextMeasurer()
     val baseStyle=LocalTextStyle.current
-    Box(modifier.background(c.background).onSizeChanged { canvasSize=it }) {
+    Box(modifier.background(c.background).clipToBounds().onSizeChanged { canvasSize=it }) {
         Canvas(Modifier.fillMaxSize().semantics { contentDescription="Plot boundary. "+(if(anglesEnabled)"Drag corners to adjust angles with fixed side lengths. " else "Corner editing disabled. ")+"North ${decimal(setup.northDegrees)} degrees." }
             .pointerInput(tool,workspace) {
                 detectDragGestures(onDragStart={ offset ->
@@ -167,13 +185,30 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
             setup.roads.forEach { road ->
                 if(road.side in screen.indices) { val n=outward(road.side)*8f*density;drawLine(c.quiet,screen[road.side]+n,screen[(road.side+1)%screen.size]+n,12*density);drawLine(c.line,screen[road.side]+n*1.8f,screen[(road.side+1)%screen.size]+n*1.8f,1*density) }
             }
-            drawPath(path,c.surface)
+            drawPath(path,if(envelope!=null)c.primary.copy(alpha=.16f) else c.surface)
             drawPath(path,c.ink,style=Stroke(1.5f*density))
             envelope?.outlines?.filter {it.size>=3}?.forEach {outline->
                 val inner=outline.map(transform::screen)
                 val buildable=Path().apply {moveTo(inner[0].x,inner[0].y);inner.drop(1).forEach {lineTo(it.x,it.y)};close()}
-                drawPath(buildable,c.primary.copy(alpha=.12f))
-                drawPath(buildable,c.primary,style=Stroke(1.5f*density,pathEffect=PathEffect.dashPathEffect(floatArrayOf(5*density,4*density))))
+                drawPath(buildable,c.surface)
+                drawPath(buildable,c.primary,style=Stroke(2f*density,pathEffect=PathEffect.dashPathEffect(floatArrayOf(5*density,4*density))))
+            }
+            envelope?.edgeSetbacksMetres?.forEachIndexed {i,distance->
+                if(i in screen.indices&&distance>0) {
+                    val a=screen[i];val b=screen[(i+1)%screen.size]
+                    val middle=(a+b)/2f
+                    val normal=outward(i)
+                    val inner=middle-normal*(distance*transform.scale).toFloat()
+                    val tangent=Offset(-normal.y,normal.x)*3f*density
+                    drawLine(c.primary,middle,inner,density)
+                    drawLine(c.primary,middle-tangent,middle+tangent,density)
+                    drawLine(c.primary,inner-tangent,inner+tangent,density)
+                    val text=measurer.measure(measureLabel(distance,setup.units),baseStyle.copy(fontSize=if(compact)9.sp else 11.sp,color=c.primary))
+                    val centre=inner-normal*(12*density)
+                    val at=centre-Offset(text.size.width/2f,text.size.height/2f)
+                    drawRoundRect(c.surface,at-Offset(3*density,density),androidx.compose.ui.geometry.Size(text.size.width+6*density,text.size.height+2*density),androidx.compose.ui.geometry.CornerRadius(3*density))
+                    drawText(text,topLeft=at)
+                }
             }
             if(setup.useDiagonals && setup.vertices.isNotEmpty()) for(i in 2 until points.lastIndex) drawLine(c.muted.copy(alpha=.6f),screen[0],screen[i],1*density,pathEffect=PathEffect.dashPathEffect(floatArrayOf(4*density,4*density)))
             screen.forEachIndexed { i,p ->
@@ -234,7 +269,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
             PlotToolButton(PlotSymbol.REDO,"Redo plot change",workspace.canRedo&&!workspace.saving) {workspace.redo()}
             }
             if(readOnly||!compact && canvasSize.width/density>600) {
-                PlotToolButton(PlotSymbol.GRID,"Toggle canvas grid",selected=grid) {grid=!grid}
+                PlotToolButton(PlotSymbol.GRID,"Toggle guide dots",selected=grid) {grid=!grid}
                 PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in") {zoom=(zoom*1.2f).coerceAtMost(4f)}
                 PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out") {zoom=(zoom/1.2f).coerceAtLeast(.3f)}
             }
@@ -249,10 +284,23 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
                 }
             }
         }
+        if(envelope!=null&&canvasSize.height/density>=300)Row(Modifier.align(Alignment.TopStart).padding(start=if(compact)20.dp else 28.dp,top=if(showToolbar) {if(compact)58.dp else 76.dp} else 8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(12.dp).background(c.primary.copy(alpha=.16f),RoundedCornerShape(2.dp)).border(1.dp,c.primary.copy(alpha=.5f),RoundedCornerShape(2.dp)))
+            Text("Setback",fontSize=10.sp,color=c.muted)
+        }
         val area=if(setup.units==PlotUnits.METRES)setup.areaSquareMetres?.let { "${decimal(it)} m²" } else setup.areaSquareFeet?.let(::areaLabel)
-        if(!compact||canvasSize.height/density>=180)Text("Area ${area ?: "—"} · Perimeter ${measureLabel(setup.perimeterMetres,setup.units)}",Modifier.align(Alignment.BottomCenter).padding(bottom=if(compact)3.dp else 16.dp)
-            .widthIn(min=if(compact)276.dp else 320.dp).background(c.surface,RoundedCornerShape(8.dp)).border(1.dp,c.line,RoundedCornerShape(8.dp)).padding(horizontal=12.dp,vertical=7.dp),
-            fontSize=12.sp,lineHeight=18.sp,color=c.muted,textAlign=TextAlign.Center)
+        if(!compact||canvasSize.height/density>=180)Row(Modifier.align(Alignment.BottomCenter).padding(horizontal=12.dp,vertical=if(compact)3.dp else 16.dp)
+            .widthIn(max=560.dp).fillMaxWidth().background(c.surface,RoundedCornerShape(10.dp)).border(1.dp,c.line,RoundedCornerShape(10.dp)).padding(horizontal=8.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
+            val buildable=when {checkingBuildable->"Checking…";envelope?.empty==true->"0";setup.units==PlotUnits.METRES->envelope?.areaSquareMetres?.let {"${decimal(it)} m²"};else->envelope?.areaSquareMetres?.let {areaLabel((it/(METRES_PER_FOOT*METRES_PER_FOOT)).toInt())}}
+            val metrics=listOf("Area" to (area ?: "—"),"Perimeter" to measureLabel(setup.perimeterMetres,setup.units))+(if(showBuildable)listOf("Buildable" to (buildable ?: "—")) else emptyList())
+            metrics.forEachIndexed {i,(label,value)->
+                if(i>0)VerticalDivider(Modifier.height(28.dp),color=c.line)
+                Column(Modifier.weight(1f),horizontalAlignment=Alignment.CenterHorizontally) {
+                    Text(label,fontSize=10.sp,lineHeight=14.sp,color=c.muted)
+                    Text(value,fontSize=if(compact)11.sp else 12.sp,lineHeight=18.sp,color=if(label=="Buildable")c.primary else c.ink,maxLines=1)
+                }
+            }
+        }
     }
 }
 

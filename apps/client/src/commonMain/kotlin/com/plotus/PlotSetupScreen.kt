@@ -52,12 +52,9 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
     // safeDrawing includes the keyboard. Applying imePadding as well duplicates it on iOS.
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
         Row(Modifier.fillMaxWidth().height(if(editing)48.dp else 64.dp).padding(start=if(compact)8.dp else 20.dp,end=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            if(compact||step!=null)PlotToolButton(PlotSymbol.BACK,if(step==null)"Back to projects" else "Back to plot",enabled=!workspace.saving) {
+            EditorBack(step?.title() ?: workspace.project?.name ?: "Plot setup",if(step==null)"Back to projects" else "Back to plot",enabled=!workspace.saving) {
                 focus.clearFocus();keyboardController?.hide()
                 if(step!=null)onStep(null) else close(onExit)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(step?.title() ?: workspace.project?.name ?: "Plot setup",maxLines=1,overflow=TextOverflow.Ellipsis,fontSize=16.sp,fontWeight=FontWeight.SemiBold)
             }
             if(keyboard)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard",enabled=!workspace.saving) {focus.clearFocus();keyboardController?.hide()}
             TextButton({focus.clearFocus();keyboardController?.hide();workspace.save(requireBoundary=step==PlotStep.BOUNDARY,requireRoads=step==PlotStep.ROADS)},enabled=workspace.project!=null&&!workspace.loading&&!workspace.saving&&workspace.dirty) {

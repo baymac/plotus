@@ -20,8 +20,11 @@ private val plotPathPattern = Regex("^/projects/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[
 internal fun plotLocation(path: String?): Pair<String, PlotStep?>? = plotPathPattern.matchEntire(path?.trimEnd('/').orEmpty())?.let { match ->
     match.groupValues[1] to PlotStep.entries.firstOrNull { it.segment == match.groupValues[2] }
 }
-private val floorPathPattern=Regex("^/projects/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/floor-plan(?:/(setbacks|requirements))?$")
-internal fun floorLocation(path:String?):Pair<String,FloorStep?>?=floorPathPattern.matchEntire(path?.trimEnd('/').orEmpty())?.let {match->match.groupValues[1] to FloorStep.entries.firstOrNull {it.segment==match.groupValues[2]}}
+private const val routeUUID="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+private val floorPathPattern=Regex("^/projects/($routeUUID)/floor-plan(?:/(setbacks|requirements|history)(?:/($routeUUID))?)?$")
+private fun floorMatch(path:String?)=floorPathPattern.matchEntire(path?.trimEnd('/').orEmpty())?.takeIf {it.groupValues[3].isEmpty()||it.groupValues[2]=="history"}
+internal fun floorLocation(path:String?):Pair<String,FloorStep?>?=floorMatch(path)?.let {match->match.groupValues[1] to FloorStep.entries.firstOrNull {it.segment==match.groupValues[2]}}
+internal fun floorGeneration(path:String?):String?=floorMatch(path)?.groupValues?.get(3)?.ifEmpty {null}
 internal fun destinationForPath(path: String?): Destination? = Destination.entries.firstOrNull { it !in listOf(Destination.PLOT,Destination.FLOOR_PLAN) && it.path == path?.trimEnd('/') }
     ?: plotLocation(path)?.let { Destination.PLOT } ?: floorLocation(path)?.let {Destination.FLOOR_PLAN}
 private fun safeAppPath(path: String?): String = path?.trimEnd('/')?.takeIf { destinationForPath(it)?.let { d -> d != Destination.LOGIN } == true } ?: Destination.PROJECTS.path
@@ -33,8 +36,9 @@ internal class AppNavigation(initial: AppLocation?, private val updateLocation: 
     var projectID by mutableStateOf(plotLocation(initial?.path)?.first ?: floorLocation(initial?.path)?.first); private set
     var plotStep by mutableStateOf(plotLocation(initial?.path)?.second); private set
     var floorStep by mutableStateOf(floorLocation(initial?.path)?.second);private set
+    var generationID by mutableStateOf(floorGeneration(initial?.path));private set
     private var returnTo = safeAppPath(initial?.next)
-    val path: String get() = when(destination) {Destination.PLOT->"/projects/$projectID/plot" + (plotStep?.let { "/${it.segment}" } ?: "");Destination.FLOOR_PLAN->"/projects/$projectID/floor-plan"+(floorStep?.let {"/${it.segment}"} ?: "");else->destination.path}
+    val path: String get() = when(destination) {Destination.PLOT->"/projects/$projectID/plot" + (plotStep?.let { "/${it.segment}" } ?: "");Destination.FLOOR_PLAN->"/projects/$projectID/floor-plan"+(floorStep?.let {"/${it.segment}"} ?: "")+(generationID?.let {"/$it"} ?: "");else->destination.path}
     val loginCallbackPath: String get() = "/login?next=$returnTo"
 
     fun receive(location: AppLocation?) {
@@ -45,6 +49,7 @@ internal class AppNavigation(initial: AppLocation?, private val updateLocation: 
         projectID = plot?.first ?: floor?.first
         plotStep = plot?.second
         floorStep=floor?.second
+        generationID=floorGeneration(location.path)
         if (destination == Destination.LOGIN) returnTo = safeAppPath(location.next)
     }
     fun navigate(target: Destination, replace: Boolean = false) {
@@ -60,11 +65,12 @@ internal class AppNavigation(initial: AppLocation?, private val updateLocation: 
         destination = Destination.PLOT; projectID = id; plotStep = step
         if (browser) updateLocation(target, replace)
     }
-    fun openFloor(id:String,step:FloorStep?=null,replace:Boolean=false) {
-        val target="/projects/$id/floor-plan"+(step?.let {"/${it.segment}"} ?: "")
+    fun openFloor(id:String,step:FloorStep?=null,replace:Boolean=false,generation:String?=null) {
+        require(generation==null||step==FloorStep.HISTORY)
+        val target="/projects/$id/floor-plan"+(step?.let {"/${it.segment}"} ?: "")+(generation?.let {"/$it"} ?: "")
         require(!browser||floorLocation(target)!=null) {"Invalid floor-plan route"}
-        if(destination==Destination.FLOOR_PLAN&&projectID==id&&floorStep==step&&!replace)return
-        destination=Destination.FLOOR_PLAN;projectID=id;floorStep=step
+        if(destination==Destination.FLOOR_PLAN&&projectID==id&&floorStep==step&&generationID==generation&&!replace)return
+        destination=Destination.FLOOR_PLAN;projectID=id;floorStep=step;generationID=generation
         if(browser)updateLocation(target,replace)
     }
     fun reconcileSession(signedIn: Boolean, initializing: Boolean) {

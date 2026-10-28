@@ -1,4 +1,7 @@
 import UIKit
+import PhotosUI
+import UniformTypeIdentifiers
+import ImageIO
 import AuthenticationServices
 import CryptoKit
 import Security
@@ -6,7 +9,8 @@ import GoogleSignIn
 import PlotusApp
 
 /// OS adapters only. Shared Kotlin owns accounts, sessions and every app screen.
-final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding, ASWebAuthenticationPresentationContextProviding {
+final class AuthPlatformServices: NSObject, NativeAuthHost, PHPickerViewControllerDelegate, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding, ASWebAuthenticationPresentationContextProviding {
+    private var photoCompletion: ((String?, String?) -> Void)?
     private let session = URLSession(configuration: .ephemeral)
     private var passkeyCompletion: ((String?, String?) -> Void)?
     private var passkeyOperation: String?
@@ -50,6 +54,62 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, ASAuthorizationContr
             }
             self.complete(completion, value, nil)
         }.resume()
+    }
+
+    func pickPlotImage(completion: @escaping (String?, String?) -> Void) {
+        DispatchQueue.main.async {
+            guard self.photoCompletion == nil, let presenter = self.presenter() else {
+                self.complete(completion, nil, "Couldn’t open your photos. Please try again."); return
+            }
+            var config = PHPickerConfiguration()
+            config.filter = .images
+            config.selectionLimit = 1
+            config.preferredAssetRepresentationMode = .compatible
+            let picker = PHPickerViewController(configuration: config)
+            picker.delegate = self
+            self.photoCompletion = completion
+            presenter.present(picker, animated: true)
+        }
+    }
+
+    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+        picker.dismiss(animated: true)
+        guard let completion = photoCompletion else { return }
+        photoCompletion = nil
+        guard let item = results.first?.itemProvider else { complete(completion, nil, "cancelled"); return }
+        guard let type = item.registeredTypeIdentifiers.first(where: { UTType($0)?.conforms(to: .image) == true }) else {
+            complete(completion, nil, "Choose a photo of your plot sketch."); return
+        }
+        item.loadDataRepresentation(forTypeIdentifier: type) { data, _ in
+            guard let data, data.count <= 20 * 1024 * 1024,
+                  let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 1600
+                  ] as CFDictionary),
+                  let jpeg = self.sketchJPEG(thumbnail), jpeg.count <= 2_500_000 else {
+                self.complete(completion, nil, "Couldn’t open this photo. Choose an image smaller than 20 MB."); return
+            }
+            let payload = ["mimeType": "image/jpeg", "base64": jpeg.base64EncodedString()]
+            guard let json = try? JSONSerialization.data(withJSONObject: payload), let value = String(data: json, encoding: .utf8) else {
+                self.complete(completion, nil, "Couldn’t read this photo. Please try again."); return
+            }
+            self.complete(completion, value, nil)
+        }
+    }
+
+    private func sketchJPEG(_ thumbnail: CGImage) -> Data? {
+        let size = CGSize(width: thumbnail.width, height: thumbnail.height)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            UIImage(cgImage: thumbnail).draw(in: CGRect(origin: .zero, size: size))
+        }
+        return image.jpegData(compressionQuality: 0.85)
     }
 
     func createProof() -> String {

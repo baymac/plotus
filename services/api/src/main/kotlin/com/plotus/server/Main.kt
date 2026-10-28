@@ -21,9 +21,10 @@ import kotlinx.serialization.SerializationException
 
 private val Owner = AttributeKey<UUID>("verified-owner")
 
-fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier) {
+fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sketches: SketchImports = SketchImports.configured()) {
+    monitor.subscribe(ApplicationStopped) {sketches.close()}
     install(ContentNegotiation) { json() }
-    install(RequestBodyLimit) { bodyLimit { 16 * 1024L } }
+    install(RequestBodyLimit) { bodyLimit { call -> if(call.request.path().matches(Regex("^/v1/projects/[^/]+/sketch$"))) 4 * 1024 * 1024L else 16 * 1024L } }
     install(StatusPages) {
         exception<Throwable> { call, cause ->
             if (cause is CancellationException) throw cause
@@ -69,6 +70,16 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier) {
                 if (errors.isNotEmpty()) throw ApiFailure(400,"VALIDATION_FAILED","Check the plot details.",errors)
                 if (request.revision <= 0) throw ApiFailure(400,"INVALID_REVISION","Reopen this project before saving changes.")
                 call.respond(store.savePlot(call.attributes[Owner],call.projectID(),request.revision,request.setup))
+            }
+            post("/projects/{id}/sketch") {
+                val owner=call.attributes[Owner];val project=call.projectID()
+                store.get(owner,project)
+                call.respond(HttpStatusCode.Accepted,sketches.start(owner,project,call.receive<SketchImage>()))
+            }
+            get("/projects/{id}/sketch/{job}") {
+                val owner=call.attributes[Owner];val project=call.projectID()
+                store.get(owner,project)
+                call.respond(sketches.get(owner,project,call.parameters["job"].orEmpty()))
             }
             delete("/projects/{id}") {
                 val request = call.receive<DeleteProjectRequest>()

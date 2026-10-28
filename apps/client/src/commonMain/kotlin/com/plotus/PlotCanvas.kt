@@ -30,7 +30,7 @@ import com.plotus.shared.*
 import kotlin.math.*
 
 internal enum class PlotTool { MOVE, HAND }
-internal enum class PlotSymbol { POINTER, HAND, UNDO, REDO, FIT, MORE, GRID, ZOOM_IN, ZOOM_OUT, IMAGE, CHEVRON, BACK }
+internal enum class PlotSymbol { POINTER, HAND, UNDO, REDO, FIT, MORE, GRID, ZOOM_IN, ZOOM_OUT, IMAGE, CHEVRON, BACK, DELETE, COMPASS, ROAD, BOUNDARY, CLOSE }
 internal val provisionalPlot = listOf(PlotPoint(0.0,0.0),PlotPoint(10.0,0.0),PlotPoint(10.0,8.0),PlotPoint(0.0,8.0))
 
 @Composable
@@ -39,6 +39,11 @@ internal fun PlotSymbol(symbol: PlotSymbol, color: Color, modifier: Modifier = M
         scale(size.width/20f, size.height/20f, pivot=Offset.Zero) {
             fun line(x1: Float,y1: Float,x2: Float,y2: Float) = drawLine(color,Offset(x1,y1),Offset(x2,y2),1.4f,StrokeCap.Round)
             when(symbol) {
+                PlotSymbol.CLOSE -> {line(5f,5f,15f,15f);line(5f,15f,15f,5f)}
+                PlotSymbol.DELETE -> {line(4f,5f,16f,5f);line(8f,2f,12f,2f);line(6f,5f,7f,17f);line(7f,17f,13f,17f);line(13f,17f,14f,5f);line(9f,8f,9f,14f);line(11f,8f,11f,14f)}
+                PlotSymbol.COMPASS -> {drawCircle(color,8f,Offset(10f,10f),style=Stroke(1.3f));line(13f,6f,11f,11f);line(11f,11f,6f,14f);line(6f,14f,8f,9f);line(8f,9f,13f,6f)}
+                PlotSymbol.ROAD -> {line(5f,2f,5f,18f);line(15f,2f,15f,18f);line(10f,3f,10f,6f);line(10f,9f,10f,12f);line(10f,15f,10f,18f)}
+                PlotSymbol.BOUNDARY -> drawPath(Path().apply {moveTo(3f,5f);lineTo(16f,3f);lineTo(17f,16f);lineTo(4f,17f);close()},color,style=Stroke(1.4f))
                 PlotSymbol.CHEVRON -> {line(6f,8f,10f,12f);line(10f,12f,14f,8f)}
                 PlotSymbol.BACK -> {line(12f,4f,6f,10f);line(6f,10f,12f,16f)}
                 PlotSymbol.POINTER -> drawPath(Path().apply { moveTo(4f,3f);lineTo(16f,9f);lineTo(10f,11f);lineTo(8f,17f);close() },color,style=Stroke(1.4f))
@@ -81,7 +86,7 @@ private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float
 }
 
 @Composable
-internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true, onChooseShape: () -> Unit) {
+internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true) {
     val c=LocalPlotusColors.current
     var tool by remember { mutableStateOf(PlotTool.MOVE) }
     var toolOpen by remember { mutableStateOf(false) }
@@ -121,7 +126,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boole
                     else if(dragIndex>=0) {
                         val edited=currentPoints.toMutableList()
                         edited[dragIndex]=gestureTransform.model(change.position)
-                        if(simplePolygon(edited))workspace.change(currentSetup.withVertices(edited),remember=false)
+                        if(simplePolygon(edited))workspace.change(currentSetup.withVertices(edited),remember=false) else workspace.boundaryError("Those sides would cross. Move the corner back inside the boundary.")
                         change.consume()
                     }
                 }
@@ -162,21 +167,30 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boole
                 drawText(measurer,vertexName(i),topLeft=at,style=baseStyle.copy(fontSize=11.sp,color=c.ink))
             }
             if(step!=PlotStep.BOUNDARY) {
-                val centre=screen.reduce { a,b -> a+b }/screen.size.toFloat()
-                val r=(if(compact)43 else 62)*density
-                drawCircle(c.surface,r,centre);drawCircle(c.line,r,centre,style=Stroke(density))
-                val north=setup.northDegrees*PI/180-PI/2
-                repeat(60) { i -> val a=i*PI/30;val n=Offset(cos(a).toFloat(),sin(a).toFloat());drawLine(c.border,centre+n*(r-3*density),centre+n*r,1*density) }
-                listOf("N","E","S","W").forEachIndexed { i,label ->
-                    val a=north+i*PI/2;val at=centre+Offset(cos(a).toFloat(),sin(a).toFloat())*(r-14*density)
-                    val layout=measurer.measure(label,baseStyle.copy(fontSize=11.sp,color=if(i==0)c.primary else c.muted))
-                    drawText(layout,topLeft=at-Offset(layout.size.width/2f,layout.size.height/2f))
+                val (centre,space)=compassPlacement(screen,size.width,size.height)
+                val r=minOf((if(compact)56 else 92)*density,space*.7f)
+                if(r>=8*density) {
+                    val compassScale=(r/(43*density)).coerceAtMost(1.5f)
+                    val fontSize=(11*compassScale).coerceIn(7f,14f).sp
+                    drawCircle(c.surface,r,centre);drawCircle(c.line,r,centre,style=Stroke(density))
+                    val north=setup.northDegrees*PI/180-PI/2
+                    repeat(if(r>28*density)60 else 24) { i ->
+                        val count=if(r>28*density)60 else 24
+                        val a=i*2*PI/count;val n=Offset(cos(a).toFloat(),sin(a).toFloat())
+                        drawLine(c.border,centre+n*(r-3*density*compassScale),centre+n*r,density)
+                    }
+                    if(r>=20*density)listOf("N","E","S","W").forEachIndexed { i,label ->
+                        val a=north+i*PI/2;val at=centre+Offset(cos(a).toFloat(),sin(a).toFloat())*(r-12*density*compassScale)
+                        val layout=measurer.measure(label,baseStyle.copy(fontSize=fontSize,color=if(i==0)c.primary else c.muted))
+                        drawText(layout,topLeft=at-Offset(layout.size.width/2f,layout.size.height/2f))
+                    }
+                    val n=Offset(cos(north).toFloat(),sin(north).toFloat());val cross=Offset(-n.y,n.x)
+                    val needle=r*.32f
+                    drawLine(c.ink,centre-n*needle,centre+n*needle,1.7f*density*compassScale)
+                    val tip=centre+n*needle
+                    drawLine(c.primary,tip,tip-n*needle*.5f+cross*needle*.23f,1.6f*density*compassScale)
+                    drawLine(c.primary,tip,tip-n*needle*.5f-cross*needle*.23f,1.6f*density*compassScale)
                 }
-                val n=Offset(cos(north).toFloat(),sin(north).toFloat());val cross=Offset(-n.y,n.x)
-                drawLine(c.ink,centre-n*12f*density,centre+n*13f*density,1.7f*density)
-                val tip=centre+n*14f*density
-                drawLine(c.primary,tip,tip-n*7f*density+cross*3f*density,1.6f*density)
-                drawLine(c.primary,tip,tip-n*7f*density-cross*3f*density,1.6f*density)
             }
         }
         if(showToolbar) Row(Modifier.align(Alignment.TopCenter).padding(horizontal=20.dp,vertical=12.dp).fillMaxWidth().height(52.dp)
@@ -205,9 +219,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep, compact: Boole
                 DropdownMenu(moreOpen,{moreOpen=false}) {
                     Text("Units",Modifier.padding(horizontal=12.dp,vertical=8.dp),fontSize=12.sp,color=c.muted)
                     PlotUnits.entries.forEach { unit -> DropdownMenuItem(text={Text((if(setup.units==unit)"✓  " else "")+if(unit==PlotUnits.METRES)"Metres" else "Feet & inches")},onClick={workspace.change(setup.copy(units=unit));moreOpen=false},enabled=!workspace.saving) }
-                    HorizontalDivider()
-                    DropdownMenuItem(text={Text("Choose shape")},onClick={moreOpen=false;onChooseShape()},enabled=setup.vertices.isNotEmpty()&&!workspace.saving)
-                    if(setup.lengths.size>3)DropdownMenuItem(text={Text("Remove last side")},onClick={workspace.change(setup.withSideCount(setup.lengths.size-1));moreOpen=false},enabled=!workspace.saving)
+
                 }
             }
         }
@@ -226,4 +238,22 @@ private fun pointToSegment(p: Offset,a: Offset,b: Offset): Float {
     val d=b-a;val denominator=d.x*d.x+d.y*d.y
     val t=if(denominator==0f)0f else (((p.x-a.x)*d.x+(p.y-a.y)*d.y)/denominator).coerceIn(0f,1f)
     return (p-(a+d*t)).getDistance()
+}
+
+/** Find interior room for the compass, including on concave and narrow plots. */
+internal fun compassPlacement(points:List<Offset>,width:Float,height:Float):Pair<Offset,Float> {
+    fun inside(p:Offset):Boolean {
+        var result=false
+        points.indices.forEach {i->
+            val a=points[i];val b=points[(i+1)%points.size]
+            if((a.y>p.y)!=(b.y>p.y)&&p.x<(b.x-a.x)*(p.y-a.y)/(b.y-a.y)+a.x)result=!result
+        }
+        return result
+    }
+    fun clearance(p:Offset)=minOf(points.indices.minOf {i->pointToSegment(p,points[i],points[(i+1)%points.size])},p.x,width-p.x,p.y,height-p.y).coerceAtLeast(0f)
+    val left=points.minOf {it.x};val right=points.maxOf {it.x};val top=points.minOf {it.y};val bottom=points.maxOf {it.y}
+    val centre=Offset((left+right)/2,(top+bottom)/2)
+    val candidates=listOf(centre,points.reduce {a,b->a+b}/points.size.toFloat())+(1..9).flatMap {y->(1..9).map {x->Offset(left+(right-left)*x/10,top+(bottom-top)*y/10)}}
+    val fit=candidates.filter(::inside).maxByOrNull(::clearance) ?: return centre to 0f
+    return fit to clearance(fit)
 }

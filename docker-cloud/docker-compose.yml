@@ -20,6 +20,9 @@ services:
       HOST: 0.0.0.0
       PORT: '4000'
       AUTH_INTERNAL_URL: http://auth:4001
+      PLOTUS_SKETCH_MODEL_API_KEY: ${PLOTUS_SKETCH_MODEL_API_KEY:-}
+      PLOTUS_SKETCH_MODEL_ENDPOINT: ${PLOTUS_SKETCH_MODEL_ENDPOINT:-https://api.meta.ai/v1/chat/completions}
+      PLOTUS_SKETCH_MODEL: ${PLOTUS_SKETCH_MODEL:-muse-spark-1.3}
       PLOTUS_DATABASE_URL: jdbc:postgresql://projects-db:5432/plotus
       PLOTUS_DATABASE_USER: plotus
       PLOTUS_DATABASE_PASSWORD: ${API_DB_PASSWORD:?Set the project database password}

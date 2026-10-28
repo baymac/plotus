@@ -12,15 +12,21 @@ Choose **Create project** to save it. Your projects update automatically across 
 
 Creating or opening a project takes you to **Plot setup**:
 
-1. **Boundary:** enter side lengths in feet and inches or metres. Add sides for an irregular plot, supply measured diagonals when available, or drag the corners. The drawing, measurements and area update together. Use the canvas menu to change units or choose another feasible shape.
+1. **Boundary:** enter side lengths in feet and inches or metres. Add sides for an irregular plot, delete added sides from Side 5 onward, supply measured diagonals when available, or drag the corners. The drawing, measurements and area update together. Use the canvas menu to change units.
 2. **Direction:** move the north slider to match the site's orientation.
-3. **Roads:** select road-facing sides, enter their names and widths, and set their priority. Choose **Save plot** to return to Projects.
+3. **Roads:** select road-facing sides. Priority appears when more than one side is selected.
 
-Use **Save** in the project header to keep a draft before completing every step. Back and Next keep the canvas in place while the controls scroll. Undo and Redo let you revisit edits. Reopening the project restores the saved plot on iPhone or web.
+On iPhone, choose **Boundary**, **Direction** or **Roads** from Plot setup. Each opens in a separate sheet with a fixed plot preview and scrolling controls. Choose **Done** to save and return to the three options. On desktop, use the tabs beside the canvas; **Save plot** completes the setup.
+
+Use **Save** in the project header to keep a draft. Undo and Redo let you revisit edits. Errors appear above the controls and beside the affected measurement. Reopening the project restores the saved plot on iPhone or web.
 
 Side lengths can fit more than one outline. Add measured diagonals or adjust the corners to match the surveyed boundary.
 
 If another device saves a newer version, your local edits remain available. You can keep editing or choose **Reload saved plot** to replace them with the saved version.
+
+## Start from a sketch
+
+Choose **Upload plot image** and select a photo of a hand-drawn or printed plot sketch. Plotus reads annotated dimensions, north and road-facing sides. Choose **Review measurements** to inspect and correct the extracted outline. Unclear measurements remain blank. Your existing plot stays intact until you choose to apply the result, and extracted values are saved only when you choose Save or Done.
 
 ## Keep your work organised
 
@@ -37,4 +43,4 @@ If a save fails, your entered details stay in the form so you can try again. Whe
 
 Choose **View demo** on the iPhone welcome screen to explore local sample projects without an account. Demo changes last for that session and stay separate from your saved workspace.
 
-Plot-image upload and tracing are not available yet; use manual measurements and corner editing. Floor-plan requirements and generation are the next milestone.
+Floor-plan requirements and generation are the next milestone.

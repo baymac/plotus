@@ -1,4 +1,4 @@
-plugins { kotlin("jvm"); application }
+plugins { kotlin("jvm"); kotlin("plugin.serialization"); application }
 kotlin { jvmToolchain(17) }
 application { mainClass = "com.plotus.server.MainKt" }
 dependencies {

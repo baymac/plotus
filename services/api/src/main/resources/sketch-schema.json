@@ -1,0 +1,105 @@
+{
+  "type": "object",
+  "properties": {
+    "sides": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "feet": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "inches": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "metres": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "feet",
+          "inches",
+          "metres"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "diagonals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "feet": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "inches": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "metres": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "feet",
+          "inches",
+          "metres"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "northDegrees": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "roadSides": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      }
+    },
+    "edgeBearingsDegrees": {
+      "type": "array",
+      "items": {
+        "type": [
+          "number",
+          "null"
+        ]
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "sides",
+    "diagonals",
+    "northDegrees",
+    "roadSides",
+    "edgeBearingsDegrees",
+    "notes"
+  ],
+  "additionalProperties": false
+}

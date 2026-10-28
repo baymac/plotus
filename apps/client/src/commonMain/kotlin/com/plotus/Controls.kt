@@ -54,7 +54,7 @@ fun PlotusInput(value: String, onChange: (String) -> Unit, label: String, modifi
     BasicTextField(value, onChange,
         modifier.fillMaxWidth().heightIn(min = 44.dp)
             .background(colors.surface, RoundedCornerShape(12.dp))
-            .border(if (focused) 2.dp else 1.dp, if (focused || error != null) colors.primary else colors.line, RoundedCornerShape(12.dp))
+            .border(if (focused || error != null) 2.dp else 1.dp, if (error != null) MaterialTheme.colorScheme.error else if (focused) colors.primary else colors.line, RoundedCornerShape(12.dp))
             .onFocusChanged { focused = it.isFocused }.semantics { contentDescription = label },
         enabled = enabled, textStyle = LocalTextStyle.current.copy(color = colors.ink, fontSize = 14.sp),
         cursorBrush = SolidColor(colors.primary), singleLine = true, keyboardOptions = KeyboardOptions(capitalization = capitalization, keyboardType = type),

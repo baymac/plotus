@@ -15,9 +15,9 @@ internal expect fun readAppLocation(): AppLocation?
 internal expect fun observeAppLocation(onChange: () -> Unit): () -> Unit
 internal expect fun writeAppLocation(path: String, replace: Boolean)
 
-private val plotPathPattern = Regex("^/projects/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/plot/(boundary|direction|roads)$")
-internal fun plotLocation(path: String?): Pair<String, PlotStep>? = plotPathPattern.matchEntire(path?.trimEnd('/').orEmpty())?.let { match ->
-    match.groupValues[1] to PlotStep.entries.first { it.segment == match.groupValues[2] }
+private val plotPathPattern = Regex("^/projects/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/plot(?:/(boundary|direction|roads))?$")
+internal fun plotLocation(path: String?): Pair<String, PlotStep?>? = plotPathPattern.matchEntire(path?.trimEnd('/').orEmpty())?.let { match ->
+    match.groupValues[1] to PlotStep.entries.firstOrNull { it.segment == match.groupValues[2] }
 }
 internal fun destinationForPath(path: String?): Destination? = Destination.entries.firstOrNull { it != Destination.PLOT && it.path == path?.trimEnd('/') }
     ?: plotLocation(path)?.let { Destination.PLOT }
@@ -28,9 +28,9 @@ internal class AppNavigation(initial: AppLocation?, private val updateLocation: 
     val browser = initial != null
     var destination by mutableStateOf(destinationForPath(initial?.path) ?: Destination.PROJECTS); private set
     var projectID by mutableStateOf(plotLocation(initial?.path)?.first); private set
-    var plotStep by mutableStateOf(plotLocation(initial?.path)?.second ?: PlotStep.BOUNDARY); private set
+    var plotStep by mutableStateOf(plotLocation(initial?.path)?.second); private set
     private var returnTo = safeAppPath(initial?.next)
-    val path: String get() = if (destination == Destination.PLOT) "/projects/$projectID/plot/${plotStep.segment}" else destination.path
+    val path: String get() = if (destination == Destination.PLOT) "/projects/$projectID/plot" + (plotStep?.let { "/${it.segment}" } ?: "") else destination.path
     val loginCallbackPath: String get() = "/login?next=$returnTo"
 
     fun receive(location: AppLocation?) {
@@ -38,7 +38,7 @@ internal class AppNavigation(initial: AppLocation?, private val updateLocation: 
         destination = destinationForPath(location.path) ?: Destination.PROJECTS
         val plot = plotLocation(location.path)
         projectID = plot?.first
-        plotStep = plot?.second ?: PlotStep.BOUNDARY
+        plotStep = plot?.second
         if (destination == Destination.LOGIN) returnTo = safeAppPath(location.next)
     }
     fun navigate(target: Destination, replace: Boolean = false) {
@@ -47,8 +47,8 @@ internal class AppNavigation(initial: AppLocation?, private val updateLocation: 
         destination = target; projectID = null
         if (browser) updateLocation(target.path, replace)
     }
-    fun openProject(id: String, step: PlotStep = PlotStep.BOUNDARY, replace: Boolean = false) {
-        val target = "/projects/$id/plot/${step.segment}"
+    fun openProject(id: String, step: PlotStep? = null, replace: Boolean = false) {
+        val target = "/projects/$id/plot" + (step?.let { "/${it.segment}" } ?: "")
         require(!browser || plotLocation(target) != null) { "Invalid project route" }
         if (destination == Destination.PLOT && projectID == id && plotStep == step && !replace) return
         destination = Destination.PLOT; projectID = id; plotStep = step

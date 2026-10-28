@@ -19,7 +19,7 @@ import org.jetbrains.compose.resources.*
 @Composable
 fun ProjectsScreen(projects: List<Project>, compact: Boolean, onNew: () -> Unit, onEdit: (Project) -> Unit, onDelete: (Project) -> Unit,
     loading: Boolean = false, busy: Boolean = false, error: String? = null, onRetry: (() -> Unit)? = null,
-    onOpen: (Project) -> Unit = onEdit) {
+    onOpen: (Project) -> Unit) {
     val colors = LocalPlotusColors.current
     var query by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf(ProjectSort.RECENT) }
@@ -91,7 +91,7 @@ private fun ProjectRow(project: Project, compact: Boolean, onOpen: () -> Unit, o
     var menu by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().heightIn(min = if (compact) 96.dp else 88.dp)
         .padding(horizontal = if (compact) 0.dp else 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f).heightIn(min = if (compact) 96.dp else 88.dp).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).heightIn(min = if (compact) 96.dp else 88.dp).clickable(onClickLabel="Open ${project.name}",role=androidx.compose.ui.semantics.Role.Button,onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(if (compact) 62.dp else 88.dp), contentAlignment = if (compact) Alignment.CenterStart else Alignment.Center) { GeometryBadge(project.plotSetup?.vertices.orEmpty()) }
             Column(Modifier.weight(1f)) {
                 Text(project.name, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
@@ -106,6 +106,7 @@ private fun ProjectRow(project: Project, compact: Boolean, onOpen: () -> Unit, o
         Box {
             IconAction(AppIcon.MORE, "Actions for ${project.name}", { menu = true })
             DropdownMenu(menu, { menu = false }) {
+                DropdownMenuItem(text = { Text("Open project") }, onClick = { menu = false; onOpen() })
                 DropdownMenuItem(text = { Text("Edit project") }, onClick = { menu = false; onEdit() })
                 DropdownMenuItem(text = { Text("Delete project", color = MaterialTheme.colorScheme.error) }, onClick = { menu = false; onDelete() })
             }

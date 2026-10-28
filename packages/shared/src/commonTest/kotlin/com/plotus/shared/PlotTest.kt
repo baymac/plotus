@@ -58,7 +58,20 @@ class PlotTest {
         assertEquals(listOf(0,1),removed.roads.map { it.priority })
         assertEquals(1,removed.roads.first().side)
         assertTrue(draft.copy(roads=draft.roads+draft.roads[0]).errors().containsKey("roads"))
-        assertTrue(removed.errors(completeRoads=true).isNotEmpty())
+        assertTrue(removed.errors(completeRoads=true).isEmpty())
+    }
+    @Test fun deletingAnySideOfAPentagonKeepsGeometryAndRemapsRoadsWithoutDroppingBelowFour() {
+        val pentagon=PlotSetup(lengths=listOf(8.0,6.0,5.0,7.0,10.0),diagonals=List(2){null}).rebuild().let {p->p.copy(roads=p.lengths.indices.map {PlotRoad(it,priority=it)})}
+        for(side in pentagon.lengths.indices) {
+            val reduced=pentagon.withoutSide(side)
+            assertEquals(4,reduced.lengths.size)
+            assertEquals(3,reduced.roads.size)
+            assertEquals(listOf(0,1,2),reduced.roads.map {it.priority})
+            assertTrue(reduced.errors(completeBoundary=true,completeRoads=true).isEmpty())
+            assertFailsWith<IllegalArgumentException> {reduced.withoutSide(0)}
+        }
+        val incomplete=PlotSetup().withSideCount(5).withLength(0,8.0).withoutSide(2)
+        assertEquals(4,incomplete.lengths.size);assertTrue(incomplete.vertices.isEmpty());assertTrue(incomplete.errors().isEmpty())
     }
     @Test fun malformedDiagonalArraysAreRejectedWithoutIndexingPastTheDrawing() {
         val setup = PlotSetup(lengths=listOf(3.0,4.0,3.0,4.0)).rebuild()

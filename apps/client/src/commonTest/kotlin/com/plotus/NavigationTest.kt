@@ -61,6 +61,18 @@ class PlotNavigationTest {
         navigation.receive(AppLocation("/projects/$id/plot/direction"))
         assertEquals(com.plotus.shared.PlotStep.DIRECTION,navigation.plotStep)
     }
+    @Test fun projectOverviewAndSheetsHaveDistinctProtectedLocations() {
+        val writes=mutableListOf<String>()
+        val navigation=AppNavigation(AppLocation("/projects")) {path,_->writes+=path}
+        navigation.openProject(id)
+        assertNull(navigation.plotStep);assertEquals("/projects/$id/plot",navigation.path)
+        navigation.openProject(id,com.plotus.shared.PlotStep.BOUNDARY,replace=true)
+        assertEquals("/projects/$id/plot/boundary",navigation.path)
+        navigation.openProject(id,replace=true)
+        navigation.reconcileSession(false,false)
+        navigation.reconcileSession(true,false)
+        assertEquals("/projects/$id/plot",navigation.path);assertNull(navigation.plotStep)
+    }
     @Test fun invalidProjectReturnPathsStayInsideKnownRoutes() {
         for (path in listOf("/projects/other/plot/roads","/projects/$id/plot/../account","//example.invalid/projects/$id/plot/roads")) {
             val navigation=AppNavigation(AppLocation("/login",path)) {_,_->}

@@ -6,7 +6,7 @@ It considers plot geometry, setbacks, floors, room requirements and how spaces c
 
 ## Availability
 
-The engine is not connected to the current Plotus app. Plot setup now saves manually entered boundaries, orientation and road details; floor-plan generation is still in development.
+The engine is not connected to the current Plotus app. Plot setup now saves manually entered or reviewed sketch measurements, orientation and road-facing sides; floor-plan generation is still in development.
 
 ## Existing technology
 

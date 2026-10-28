@@ -56,7 +56,6 @@ const val SQUARE_FEET_PER_SQUARE_METRE = 1.0 / (METRES_PER_FOOT * METRES_PER_FOO
         roads.forEach { road ->
             if (road.name.length > 120) put("road.${road.side}.name", "Use a road name up to 120 characters.")
             if (road.widthMetres != null && (!road.widthMetres.isFinite() || road.widthMetres <= 0 || road.widthMetres > 1000)) put("road.${road.side}.width", "Enter a valid road width.")
-            if (completeRoads && road.widthMetres == null) put("road.${road.side}.width", "Enter the road width.")
         }
         if (completeRoads && roads.isEmpty()) put("roads", "Select at least one road-facing side.")
     }
@@ -67,6 +66,20 @@ const val SQUARE_FEET_PER_SQUARE_METRE = 1.0 / (METRES_PER_FOOT * METRES_PER_FOO
         require(count in 3..12)
         return copy(lengths = List(count) { lengths.getOrNull(it) }, diagonals = List(count - 3) { diagonals.getOrNull(it) },
             roads = roads.filter { it.side < min(lengths.size, count) - 1 }.sortedBy { it.priority }.mapIndexed { i, road -> road.copy(priority = i) }).rebuild()
+    }
+    /** Remove an edge by merging its starting corner into the preceding edge. */
+    fun withoutSide(index: Int): PlotSetup {
+        require(lengths.size >= 5 && index in lengths.indices)
+        val count = lengths.size
+        val remainingRoads = roads.filter { it.side != index && it.side != (index+count-1)%count }
+            .sortedBy { it.priority }.mapIndexed { priority,road -> road.copy(side=if(road.side>index)road.side-1 else road.side,priority=priority) }
+        if(vertices.size==count) {
+            val points=vertices.filterIndexed { i,_ -> i!=index }
+            if(simplePolygon(points))return copy(roads=remainingRoads).withVertices(points)
+        }
+        val sides=lengths.filterIndexed { i,_ -> i!=index }.toMutableList()
+        sides[(index+sides.size-1)%sides.size]=null
+        return copy(lengths=sides,vertices=emptyList(),diagonals=List(count-4){null},roads=remainingRoads)
     }
     fun rebuild(variant: Int = 0): PlotSetup {
         if (lengths.any { it == null || !it.isFinite() || it <= 0 || it > 10000 } || (useDiagonals && diagonals.any { it == null || !it.isFinite() || it <= 0 })) return copy(vertices = emptyList())

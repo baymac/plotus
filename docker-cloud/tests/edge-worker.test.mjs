@@ -83,3 +83,15 @@ test("project plot deep links are protected and survive the sign-in return", asy
   const unknown=await worker.fetch(request("/projects/not-a-project/plot/roads"),env);
   assert.equal(await unknown.text(),"/projects/not-a-project/plot/roads");
 });
+
+
+test("the project overview has the same session gate as its sheets",async t=>{
+  const path="/projects/c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a/plot";
+  const anonymous=await worker.fetch(request(path),env);
+  assert.equal(anonymous.status,302);
+  assert.equal(anonymous.headers.get("Location"),"/login?next="+encodeURIComponent(path));
+  t.mock.method(globalThis,"fetch",async()=>new Response(null,{status:200}));
+  const cookie={headers:{Cookie:"__Host-plotus_refresh=fixture"}};
+  assert.equal((await worker.fetch(request(path,cookie),env)).status,200);
+  assert.equal((await worker.fetch(request("/login?next="+encodeURIComponent(path),cookie),env)).headers.get("Location"),path);
+});

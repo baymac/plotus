@@ -1,5 +1,5 @@
 const appPaths = new Set(["/projects", "/settings", "/settings/general", "/settings/account"]);
-const projectPath = /^\/projects\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\/plot\/(boundary|direction|roads)$/;
+const projectPath = /^\/projects\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\/plot(?:\/(boundary|direction|roads))?$/;
 const isAppPath = path => appPaths.has(path) || projectPath.test(path);
 const entryPaths = new Set(["/login", "/_app", "/_app/", "/_app/index.html"]);
 const appCsp = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'; upgrade-insecure-requests";

@@ -35,6 +35,7 @@ export const legalPages = [
           "Account information. When you choose Google or Facebook sign-in, Plotus receives the provider account identifier, name, and any email address and profile-picture URL the provider supplies. These identify your Plotus account and display your account details. Plotus does not receive your Google or Facebook password.",
           "Login and security information. Plotus keeps account and session identifiers, session expiry and revocation records, and credentials needed to keep you signed in and protect the service. If you add a passkey, Plotus stores its public credential information and related security metadata. Your fingerprint, face data and device unlock code are not sent to Plotus.",
           "Project information. When signed in, you can save project names, locations, plot boundaries and measurements, north direction, road details and optional client names, email addresses and phone numbers. Plotus stores these details on its backend under your account so you can access them on iPhone and web. Only provide client information you are authorised to use. The separate iPhone design preview uses temporary local sample projects.",
+          "Sketch images. When you choose Upload plot image, Plotus resizes the selected photo and sends it to the configured image-reading provider, currently Meta, to extract plot measurements. Plotus holds the image in memory during analysis and does not retain it on disk. The server’s temporary analysis results expire after roughly ten minutes. Extracted measurements are saved to your project only when you choose to save them.",
           "Support messages. If you email us, we receive your email address, message and any attachments you choose to send. Please avoid sending passwords, login codes, identity documents or confidential client material.",
         ],
       },
@@ -56,7 +57,7 @@ export const legalPages = [
         paragraphs: [
           "We use account and session information to provide sign-in, show your account, manage passkeys, prevent abuse and troubleshoot service problems. We use your saved project and client information to provide your workspace across devices. We use support messages to respond to your request. We do not sell your personal information or use it for targeted advertising.",
           "Information is processed by the services needed to provide these functions, including our hosting infrastructure, Google when you choose Google sign-in, and Meta when you choose Facebook sign-in. These providers also process information under their own privacy policies. Information may be disclosed when legally required or when necessary to protect people and the service.",
-          "The planning engine is not connected to the current app. Project and client information is not sent to an AI or planning service. We will update this policy before enabling additional collection or uses of information.",
+          "The private floor-plan engine is not connected to the current app. Sketch extraction sends only the photo you choose, with extraction instructions, to Meta’s image-understanding API. Existing project and client records are not included in that request. The provider processes the image under its own terms. Check the extracted outline and measurements before saving them.",
         ],
         links: [
           {
@@ -109,7 +110,7 @@ export const legalPages = [
         title: "The current service",
         paragraphs: [
           "Plotus is being built to help architects and residential designers organise a home-design brief and explore early planning ideas. The current app lets signed-in users save project and client details, define plot boundaries, set north and roads, search and sort projects, and change appearance. Google, Facebook and passkeys provide access to your Plotus account.",
-          "Signed-in project and plot changes are saved to your account and available across devices. Image tracing, floor-plan requirements and generation are still in development. Descriptions of that direction are not a promise that a feature is available today or will ship on a particular date.",
+          "Signed-in project and plot changes are saved to your account and available across devices. Sketch-image reading is available for review and correction. Floor-plan requirements and generation are still in development. Descriptions of that direction are not a promise that a feature is available today or will ship on a particular date.",
         ],
       },
       {
@@ -177,7 +178,7 @@ export const legalPages = [
         title: "What the demo can do today",
         paragraphs: [
           "Choose Start project on the website and sign in to open your saved workspace. Create a project, define its boundary and measurements, set north and add road details. You can also edit project details, search, sort and change the theme. A separate iPhone design preview contains temporary local sample projects.",
-          "Google or Facebook sign-in opens your Plotus account. You can add and remove passkeys in Settings → Account on iPhone or web. Plot-image upload, floor-plan requirements and generation are still in development.",
+          "Google or Facebook sign-in opens your Plotus account. You can add and remove passkeys in Settings → Account on iPhone or web. Upload a photo of a plot sketch to extract and review its measurements. Floor-plan requirements and generation are still in development.",
         ],
       },
       {

@@ -83,7 +83,7 @@ fun PlotusApp() {
                                 }, { project -> projects=saveProject(projects,project) })
                             } else workspace!!.plot(id)
                             Box(Modifier.weight(1f).fillMaxWidth()) {
-                                PlotSetupScreen(plot,navigation.plotStep,compact,{navigation.openProject(id,it)},{navigation.navigate(Destination.PROJECTS)})
+                                PlotSetupScreen(plot,navigation.plotStep,compact,{navigation.openProject(id,it,replace=compact)},{navigation.navigate(Destination.PROJECTS)})
                             }
                         } else {
                         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) 24.dp else 32.dp,

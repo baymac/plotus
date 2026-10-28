@@ -20,3 +20,5 @@ The planning engine and its CAD assets are pre-existing private technology. They
 - The marketing website uses the existing Plotus mark and fonts, newly written copy and SVG concept studies, and an original AI-generated courtyard-home illustration. Architecture/product references and asset details are recorded in [the marketing site README](../apps/marketing/README.md). The illustrations are not generated app results. Cloudflare Pages serves the website and web app, Email Routing forwards its public contact address, and Cloudflare Tunnel carries requests to the newly written public auth and project services.
 
 Private product source, customer data, generated plans and credentials are not included in the public app source.
+
+Sketch-image selection, the review flow and the authenticated Meta vision adapter were written during the event. The configured image-understanding model is an external hosted service, not event-authored model code. Images are processed by the provider; its source and credentials are outside this repository.

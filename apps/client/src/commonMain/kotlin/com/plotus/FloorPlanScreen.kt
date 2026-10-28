@@ -85,7 +85,6 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                         workspace.error?.let {FloorError(it)}
                         if(workspace.conflict)TextButton({workspace.discard();scope.launch {workspace.load(id)}}) {Text("Discard and reload")}
                         workspace.validation.values.distinct().forEach {FloorError(it)}
-                        if(workspace.project?.floorPlan?.plot?.let {it!=workspace.project?.plotSetup}==true)FloorError("The plot changed. Review and save setbacks before generating.")
                         when {
                             editing!=null->{
                                 val (homeID,previous)=editing!!
@@ -189,16 +188,16 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     val count=workspace.project!!.plotSetup!!.lengths.size
     ModeLine("Setbacks",setup.setbackMode,enabled){workspace.change(setup.copy(setbackMode=it))}
     if(setup.setbackMode==PlanMode.CUSTOM) {
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            Text("All sides",Modifier.width(70.dp),fontSize=14.sp)
-            MeasurementInput(setup.commonSetbackMetres,setup.units,"All sides setback",Modifier.weight(1f),enabled,workspace.validation["setback.all"]) {value->
-                workspace.change(setup.copy(commonSetbackMetres=value,edgeSetbacksMetres=if(setup.sameSetback)setup.edgeSetbacksMetres else List(count){value}))
-            }
-        }
-        YesNo("Different setback for each side?",!setup.sameSetback,enabled) {different->
-            workspace.change(setup.copy(sameSetback=!different,
+        YesNo("Setback same for all sides?",setup.sameSetback,enabled) {same->
+            workspace.change(setup.copy(sameSetback=same,
                 commonSetbackMetres=setup.commonSetbackMetres ?: setup.edgeSetbacksMetres.firstOrNull(),
                 edgeSetbacksMetres=List(count){i->setup.edgeSetbacksMetres.getOrNull(i) ?: setup.commonSetbackMetres}))
+        }
+        if(setup.sameSetback)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Text("All sides",Modifier.width(70.dp),fontSize=14.sp)
+            MeasurementInput(setup.commonSetbackMetres,setup.units,"All sides setback",Modifier.weight(1f),enabled,workspace.validation["setback.all"]) {value->
+                workspace.change(setup.copy(commonSetbackMetres=value))
+            }
         }
         if(!setup.sameSetback)repeat(count) {i->Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             Text(sideName(i,count),Modifier.width(70.dp),fontSize=14.sp)

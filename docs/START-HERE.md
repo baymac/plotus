@@ -32,7 +32,7 @@ Choose **Upload plot image** and select a photo of a hand-drawn or printed plot 
 
 Select **Floor plan** after completing the boundary and road-facing sides.
 
-1. Choose **Setbacks** from the two buttons below the canvas. Pick Auto or Custom. In Custom, enter All sides, then choose **Different setback for each side?** to adjust individual edges. Select the building’s floors. Change feet/inches or metres in the canvas toolbar. The section name and Save stay in the top bar. Back returns to the main canvas without saving or discarding edits.
+1. Choose **Setbacks** from the two buttons below the canvas. Pick Auto or Custom. For **Setback same for all sides?**, choose Yes to enter one distance or No to enter a distance for each edge. Select the building’s floors. Change feet/inches or metres in the canvas toolbar. The section name and Save stay in the top bar. Back returns to the main canvas without saving or discarding edits.
 2. Choose **Requirements** for BHK and **Vastu compliant**. Pick Auto or Custom on the Requirements row. Custom provides one room list; parking, lift and staircase are added from the same Add room catalogue. Room controls have standard room types without a name field.
 3. Save the requirements or choose **Generate plan**. You can return to Projects while generation runs and reopen Floor plan to check the result. A result contains a drawing for each returned floor. A no-fit result keeps the requirements available for adjustment.
 

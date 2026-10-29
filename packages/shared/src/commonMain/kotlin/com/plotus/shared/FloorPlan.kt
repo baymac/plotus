@@ -1,6 +1,7 @@
 package com.plotus.shared
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 
 @Serializable enum class FloorStep(val segment:String) { SETBACKS("setbacks"), REQUIREMENTS("requirements"), HISTORY("history") }
 @Serializable enum class PlanMode { AUTO, CUSTOM }
@@ -150,7 +151,8 @@ fun FloorPlanSetup.geometrySetup()=FloorPlanSetup(setbackMode=setbackMode,sameSe
 @Serializable data class PlanPresentation(val version:Int=1,val pngBase64:String?=null,val width:Int?=null,val height:Int?=null,
     val plotAreaSquareMetres:Double?=null,val perimeterMetres:Double?=null,val builtUpAreaSquareMetres:Double?=null,val carpetAreaSquareMetres:Double?=null,
     val northDegrees:Double=0.0,val roadPosition:String="north",val units:PlotUnits=PlotUnits.FEET_INCHES,val vectorAvailable:Boolean=false)
-@Serializable data class PlanDrawing(val id:String,val label:String,val pngBase64:String,val width:Int,val height:Int,val presentation:PlanPresentation?=null,val vectorSvgBase64:String?=null)
+/** Structured engine measurements survive saved history; absent on older drawings. */
+@Serializable data class PlanDrawing(val id:String,val label:String,val pngBase64:String,val width:Int,val height:Int,val presentation:PlanPresentation?=null,val vectorSvgBase64:String?=null,val spaceEfficiency:JsonObject?=null)
 @Serializable data class PlanExport(val filename:String,val mimeType:String,val base64:String)
 @Serializable data class GeneratedFloorPlan(val id:String,val status:String,val drawings:List<PlanDrawing> = emptyList(),val error:String?=null,val createdAt:String="",val sourceRevision:Long=0,val findings:List<PlanFinding> = emptyList())
 @Serializable data class PlanGenerations(val plans:List<GeneratedFloorPlan>,val nextBefore:String?=null)

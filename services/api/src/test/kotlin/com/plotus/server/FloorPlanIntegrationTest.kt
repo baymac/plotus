@@ -19,6 +19,7 @@ class FloorPlanIntegrationTest {
         val source=PGSimpleDataSource().apply {setURL(url!!);user="plotus";password=System.getenv("PLOTUS_TEST_DATABASE_PASSWORD")}
         val owner=UUID.randomUUID();val other=UUID.randomUUID();val projects=PostgresProjects(source).also {it.migrate()};val jobs=PostgresPlans(source)
         val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),vertices=listOf(PlotPoint(0.0,0.0),PlotPoint(18.0,0.0),PlotPoint(18.0,12.0),PlotPoint(0.0,12.0)),roads=listOf(PlotRoad(0)))
+        val efficiency=Json.parseToJsonElement("""{"revision":"plotus-space-efficiency.1","advisory_only":true,"floor":{"floor_id":"ground","bathroom_sqft":96.0,"circulation_sqft":42.0},"opportunities":[{"code":"exterior_recess_review","daylight_revalidation_required":true}],"future_measured_field":{"retained":true}}""").jsonObject
         var presentations=0;var exports=0
         val engine=object:PlanEngine {
             override suspend fun preview(project:Project,setup:FloorPlanSetup)=error("No preview required")
@@ -36,13 +37,17 @@ class FloorPlanIntegrationTest {
                 var p=projects.create(owner,ProjectDraft("Export fixture","Test city"));p=projects.savePlot(owner,UUID.fromString(p.id),p.revision,plot)
                 projects.saveFloorPlan(owner,UUID.fromString(p.id),p.revision,FloorPlanSetup(units=PlotUnits.METRES))
             }
-            val job=runBlocking {jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan.also {jobs.finish(owner,UUID.fromString(project.id),it.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","original-drawing",100,100))))}}
+            val job=runBlocking {jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan.also {jobs.finish(owner,UUID.fromString(project.id),it.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","original-drawing",100,100,spaceEfficiency=efficiency))))}}
             project=runBlocking {projects.savePlot(owner,UUID.fromString(project.id),project.revision,plot.copy(northDegrees=45.0))}
             runBlocking {service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id))}
             val base="/v1/projects/${project.id}/floor-plan/generations/${job.id}"
             suspend fun get(path:String=base,token:String="export-owner")=client.get(path){bearerAuth(token)}
             val opened=Json.decodeFromString<GeneratedFloorPlan>(get().bodyAsText());assertEquals("original-drawing",opened.drawings.single().pngBase64)
             assertEquals(80.0,opened.drawings.single().presentation?.carpetAreaSquareMetres)
+            // PostgreSQL persistence, presentation caching and HTTP encoding must
+            // keep nested measured metadata and unknown future report fields.
+            assertEquals(efficiency,opened.drawings.single().spaceEfficiency)
+            assertEquals(efficiency,runBlocking {jobs.find(owner,UUID.fromString(project.id),UUID.fromString(job.id))}?.drawings?.single()?.spaceEfficiency)
             assertEquals(opened,Json.decodeFromString<GeneratedFloorPlan>(get().bodyAsText()));assertEquals(1,presentations)
             for(format in listOf("png","pdf","dwg"))assertEquals("floor.$format",Json.decodeFromString<PlanExport>(get("$base/drawings/ground/export/$format").bodyAsText()).filename)
             assertEquals(3,exports)
@@ -57,6 +62,7 @@ class FloorPlanIntegrationTest {
         val url=System.getenv("PLOTUS_TEST_DATABASE_URL");assumeTrue(url!=null)
         val source=PGSimpleDataSource().apply {setURL(url!!);user="plotus";password=System.getenv("PLOTUS_TEST_DATABASE_PASSWORD")}
         val owner=UUID.randomUUID();val other=UUID.randomUUID();val projects=PostgresProjects(source).also {it.migrate()};val jobs=PostgresPlans(source)
+        val efficiency=Json.parseToJsonElement("""{"revision":"plotus-space-efficiency.1","floor":{"floor_id":"ground","built_up_sqft":1200.0,"carpet_sqft":940.0},"totals":{"circulation_sqft":42.0},"opportunities":[]}""").jsonObject
         val service=FloorPlans(jobs)
         try {testApplication {
             application {plotusModule(projects,IdentityVerifier {if(it=="history-owner")owner else other},floorPlans=service)}
@@ -68,7 +74,7 @@ class FloorPlanIntegrationTest {
             }
             val ids=runBlocking {(1..32).map {
                 val job=jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan
-                jobs.finish(owner,UUID.fromString(project.id),job.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","test-drawing-payload",100,100))))
+                jobs.finish(owner,UUID.fromString(project.id),job.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","test-drawing-payload",100,100,spaceEfficiency=if(it==1)null else efficiency))))
                 job.id
             }}
             val path="/v1/projects/${project.id}/floor-plan/generations"
@@ -79,10 +85,13 @@ class FloorPlanIntegrationTest {
             assertFalse(firstResponse.bodyAsText().contains("test-drawing-payload"))
             val legacy=Json.decodeFromString<PlanGenerations>(client.get(path){bearerAuth("history-owner")}.bodyAsText())
             assertEquals(ids.last(),legacy.plans.single().id);assertEquals("test-drawing-payload",legacy.plans.single().drawings.single().pngBase64)
+            assertEquals(efficiency,legacy.plans.single().drawings.single().spaceEfficiency)
             val second=Json.decodeFromString<PlanGenerations>(list("&before=${first.nextBefore}").bodyAsText())
             assertEquals(ids.reversed().drop(30),second.plans.map {it.id});assertNull(second.nextBefore)
             val exact=client.get("$path/${ids.first()}"){bearerAuth("history-owner")}
-            assertEquals("test-drawing-payload",Json.decodeFromString<GeneratedFloorPlan>(exact.bodyAsText()).drawings.single().pngBase64)
+            val oldest=Json.decodeFromString<GeneratedFloorPlan>(exact.bodyAsText()).drawings.single()
+            assertEquals("test-drawing-payload",oldest.pngBase64)
+            assertNull(oldest.spaceEfficiency) // Earlier drawings have no report.
             assertEquals(HttpStatusCode.NotFound,list(token="history-other").status)
             assertEquals(HttpStatusCode.Unauthorized,client.get(path).status)
             assertEquals(HttpStatusCode.BadRequest,list("&before=not-an-id").status)

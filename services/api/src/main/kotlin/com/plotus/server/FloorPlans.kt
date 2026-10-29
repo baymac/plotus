@@ -79,7 +79,7 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
         val preview=preview(project,setup)
         if(!preview.canGenerate)throw ApiFailure(422,"PLAN_NO_FIT",preview.findings.firstOrNull()?.message ?: "Check the floor-plan requirements.")
         val result=request("/v1/plans/generate",buildJsonObject {
-            put("programme",programme(project,setup));put("search_seconds",60);put("deterministic_limit",10);put("output_stage","architectural");put("seed",0)
+            put("programme",programme(project,setup));put("output_stage","architectural");put("seed",0)
         })
         val drawings=Json.decodeFromJsonElement<List<PlanDrawing>>(result["drawings"] ?: throw ApiFailure(502,"PLAN_INVALID","No floor drawing was returned."))
         if(drawings.isEmpty()||drawings.size>6||drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||it.pngBase64.length>6_000_000})

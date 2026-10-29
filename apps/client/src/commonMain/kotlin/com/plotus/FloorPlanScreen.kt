@@ -221,12 +221,20 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     FloorLabel("BHK")
     NumberChoices((1..6).toList(),home.bhk,enabled) {workspace.change(setup.withHome(home.copy(bhk=it)))}
     YesNo("Vastu compliant",home.vastu,enabled){workspace.change(setup.withHome(home.copy(vastu=it)))}
+    val parking=setup.parkingSelection()
+    val parkingEnabled=parking!=null&&parking.cars+parking.bikes>0
+    YesNo("Parking",parkingEnabled,enabled){workspace.change(setup.withParking(it))}
+    if(parkingEnabled&&parking!=null) {
+        val supplied=setup.sharedRooms.filter {it.kind==RoomKind.PARKING&&it.cars+it.bikes>0}
+        if(supplied.isEmpty())RoomRow(parking,enabled,"1 car · 1 bike if space · open"){onRoom(null,parking)}
+        else supplied.forEach {room->RoomRow(room,enabled){onRoom(null,room)}}
+    }
     ModeLine("Requirements",home.mode,enabled){mode->workspace.change(setup.withHome(if(mode==PlanMode.CUSTOM)home.custom() else home.copy(mode=mode)))}
     if(home.mode==PlanMode.CUSTOM) {
         home.rooms.forEach {room->RoomRow(room,enabled){onRoom(home.id,room)}}
-        setup.sharedRooms.forEach {room->RoomRow(room,enabled){onRoom(null,room)}}
+        setup.sharedRooms.filter {it.kind!=RoomKind.PARKING}.forEach {room->RoomRow(room,enabled){onRoom(null,room)}}
         PlotusButton("Add room",onAdd,Modifier.fillMaxWidth(),outline=true,enabled=enabled&&home.rooms.size+setup.sharedRooms.size<40)
-    }else setup.sharedRooms.forEach {room->RoomRow(room,enabled){onRoom(null,room)}}
+    }else setup.sharedRooms.filter {it.kind!=RoomKind.PARKING}.forEach {room->RoomRow(room,enabled){onRoom(null,room)}}
     workspace.previewError?.let {FloorError(it)}
     workspace.preview?.findings?.forEach {FloorError(it.message)}
 }
@@ -238,11 +246,11 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     }
 }
 
-@Composable private fun RoomRow(room:PlanRoom,enabled:Boolean,onClick:()->Unit) {
+@Composable private fun RoomRow(room:PlanRoom,enabled:Boolean,description:String=room.summary(),onClick:()->Unit) {
     val c=LocalPlotusColors.current
     Row(Modifier.fillMaxWidth().heightIn(min=64.dp).border(1.dp,c.line,RoundedCornerShape(10.dp)).clickable(enabled,role=Role.Button,onClick=onClick).padding(12.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         RoomIcon(room.kind)
-        Column(Modifier.weight(1f)) {Text(room.kind.title,fontSize=14.sp,fontWeight=FontWeight.Medium);Text(room.summary(),fontSize=11.sp,color=c.muted)}
+        Column(Modifier.weight(1f)) {Text(room.kind.title,fontSize=14.sp,fontWeight=FontWeight.Medium);Text(description,fontSize=11.sp,color=c.muted)}
         PlotSymbol(PlotSymbol.CHEVRON,c.muted,Modifier.size(12.dp))
     }
 }

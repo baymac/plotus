@@ -34,9 +34,10 @@ import kotlinx.serialization.json.JsonObject
 ) {
     val title get()=name.ifBlank {kind.title}
     fun summary()=buildList {
-        if(kind==RoomKind.PARKING) {add("$cars ${if(cars==1)"car" else "cars"}");if(bikes>0)add("$bikes ${if(bikes==1)"bike" else "bikes"}");add(if(covered)"covered" else "open")}
+        if(kind==RoomKind.PARKING&&cars+bikes==0)add("Disabled")
+        else if(kind==RoomKind.PARKING) {add("$cars ${if(cars==1)"car" else "cars"}");if(bikes>0)add("$bikes ${if(bikes==1)"bike" else "bikes"}");add(if(covered)"covered" else "open")}
         else {add(if(this@PlanRoom.size==RoomSize.MEDIUM)"Automatic sizing" else this@PlanRoom.size.name.lowercase().replaceFirstChar {it.uppercase()});if(attachedBathroom)add("attached bathroom");if(closet!=Closet.NONE)add(if(closet==Closet.WALK_IN)"walk-in closet" else "wardrobe");if(balcony)add("balcony");if(kind==RoomKind.KITCHEN)add(if(open)"open" else "closed");if(utility)add("utility")}
-        floor?.let {add(floorName(it))}
+        if(kind!=RoomKind.PARKING||cars+bikes>0)floor?.let {add(floorName(it))}
     }.joinToString(" · ")
 }
 @Serializable data class PlanHome(
@@ -80,7 +81,11 @@ import kotlinx.serialization.json.JsonObject
         return if(room.kind.shared||homeID==null)copy(sharedRooms=replace(sharedRooms))
         else copy(homes=homes.map {if(it.id==homeID)it.copy(rooms=replace(it.rooms),mode=PlanMode.CUSTOM) else it})
     }
-    fun withoutRoom(homeID:String?,id:String)=if(homeID==null)copy(sharedRooms=sharedRooms.filterNot {it.id==id}) else copy(homes=homes.map {if(it.id==homeID)it.copy(rooms=it.rooms.filterNot {r->r.id==id}) else it})
+    fun withoutRoom(homeID:String?,id:String):FloorPlanSetup=if(homeID==null) {
+        val parking=parkingSelection()
+        if(parking?.id==id&&sharedRooms.none {it.kind==RoomKind.PARKING&&it.id!=id&&it.cars+it.bikes>0})withParking(false)
+        else copy(sharedRooms=sharedRooms.filterNot {it.id==id})
+    }else copy(homes=homes.map {if(it.id==homeID)it.copy(rooms=it.rooms.filterNot {r->r.id==id}) else it})
     fun errors(plot:PlotSetup?,complete:Boolean=false):Map<String,String> = buildMap {
         if(buildingFloors !in 1..6)put("floors","Choose Ground to G+5.")
         if(homes.size !in 1..5||homes.map {it.id}.distinct().size!=homes.size)put("homes","Choose between one and five homes.")
@@ -106,7 +111,6 @@ import kotlinx.serialization.json.JsonObject
             if(room.cars !in 0..8||room.bikes !in 0..16)put(prefix,"Check the number of vehicles.")
             if(room.kind!=RoomKind.BEDROOM&&(room.attachedBathroom||room.closet!=Closet.NONE||room.balcony))put(prefix,"Bedroom features belong to a bedroom.")
             if(room.kind!=RoomKind.KITCHEN&&room.utility)put(prefix,"Add utility space separately for this room.")
-            if(complete&&room.kind==RoomKind.PARKING&&room.cars+room.bikes==0)put(prefix,"Choose at least one vehicle.")
         }
         homes.forEachIndexed {i,home->
             val prefix="home.${home.id}"
@@ -124,6 +128,19 @@ import kotlinx.serialization.json.JsonObject
         if(sharedRooms.size>40)put("shared","Use at most 40 shared spaces.")
         sharedRooms.forEach {room(it,"room.${it.id}");if(!it.kind.shared)put("room.${it.id}","Assign this room to a home.")}
     }
+}
+/** An explicit zero-capacity parking row means disabled; absence keeps the Automatic default. */
+fun FloorPlanSetup.parkingSelection():PlanRoom?=sharedRooms.firstOrNull {it.kind==RoomKind.PARKING&&it.cars+it.bikes>0}
+    ?: sharedRooms.firstOrNull {it.kind==RoomKind.PARKING}
+    ?: if(homes.any {it.mode==PlanMode.AUTO})PlanRoom("plotus-default-parking",RoomKind.PARKING,cars=1,bikes=1,covered=false,floor=0) else null
+fun FloorPlanSetup.withParking(enabled:Boolean):FloorPlanSetup {
+    val current=parkingSelection()
+    return if(enabled) {
+        val remaining=sharedRooms.filterNot {it.kind==RoomKind.PARKING&&it.cars+it.bikes==0}
+        copy(sharedRooms=if(homes.none {it.mode==PlanMode.AUTO}&&remaining.none {it.kind==RoomKind.PARKING})
+            remaining+PlanRoom("plotus-default-parking",RoomKind.PARKING,cars=1,bikes=1,covered=false,floor=0) else remaining)
+    }else copy(sharedRooms=sharedRooms.filterNot {it.kind==RoomKind.PARKING}+
+        (current ?: PlanRoom("plotus-default-parking",RoomKind.PARKING,covered=false,floor=0)).copy(cars=0,bikes=0))
 }
 fun validPlanID(value:String)=value.length in 1..80&&value.all {it in 'a'..'z'||it in 'A'..'Z'||it in '0'..'9'||it=='-'||it=='_'}
 fun floorName(level:Int)=when(level){0->"Ground";1->"First floor";2->"Second floor";3->"Third floor";4->"Fourth floor";else->"Fifth floor"}

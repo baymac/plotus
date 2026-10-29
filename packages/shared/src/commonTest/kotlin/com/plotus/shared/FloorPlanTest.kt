@@ -57,8 +57,21 @@ class FloorPlanTest {
         val wrong=PlanRoom("kitchen-a",RoomKind.KITCHEN,attachedBathroom=true)
         assertTrue(setup.withRoom("home-1",wrong).errors(plot).containsKey("room.kitchen-a"))
         assertFalse(validPlanID("room/../outside"));assertFalse(validPlanID("é"))
-        val parking=PlanRoom("parking",RoomKind.PARKING,cars=0,bikes=0)
+        val parking=PlanRoom("parking",RoomKind.PARKING,cars=-1,bikes=0)
         assertTrue(setup.withRoom("home-1",parking).errors(plot,true).containsKey("room.parking"))
+    }
+    @Test fun parkingDefaultsCanBeExplicitlyDisabledAndDoNotReturnAfterDeletion() {
+        val setup=FloorPlanSetup()
+        val default=setup.parkingSelection()!!
+        assertEquals(1,default.cars);assertEquals(1,default.bikes);assertFalse(default.covered)
+        val disabled=setup.withParking(false)
+        assertEquals(0,disabled.parkingSelection()!!.cars+disabled.parkingSelection()!!.bikes)
+        assertTrue(disabled.errors(plot,true).isEmpty())
+        assertEquals("Disabled",disabled.parkingSelection()!!.summary())
+        assertEquals(disabled,setup.withoutRoom(null,default.id))
+        assertEquals(1,disabled.withParking(true).parkingSelection()!!.cars)
+        val explicit=setup.withRoom(null,PlanRoom("chosen",RoomKind.PARKING,cars=2,bikes=0,covered=true))
+        assertEquals(2,explicit.parkingSelection()!!.cars)
     }
     @Test fun editingRoomsPreservesOrderAndAddingRoomsAppendsOnce() {
         val home=PlanHome("home-1").custom();val setup=FloorPlanSetup(homes=listOf(home))

@@ -154,6 +154,18 @@ class FloorPlanIntegrationTest {
             source.connection.use {c->c.prepareStatement("DELETE FROM plotus.projects WHERE owner_id IN (?,?)").use {it.setObject(1,owner);it.setObject(2,other);it.executeUpdate()}}
         }
     }
+    @Test fun disabledParkingIsAnExclusionAndUserSetbacksAreNotReplaced() {
+        val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(0))).rebuild()
+        val project=ProjectDraft("Parking fixture","Test city").toProject(UUID.randomUUID().toString()).copy(plotSetup=plot)
+        val setup=FloorPlanSetup(setbackMode=PlanMode.CUSTOM,commonSetbackMetres=.9144).withParking(false)
+        val input=programme(project,setup)
+        val parking=input["shared_requirements"]!!.jsonArray.single().jsonObject
+        assertEquals("excluded",parking["necessity"]!!.jsonPrimitive.content)
+        assertEquals(0,parking["attributes"]!!.jsonObject["cars"]!!.jsonPrimitive.int)
+        assertEquals(914.4,input["setbacks"]!!.jsonObject["common_distance_mm"]!!.jsonPrimitive.double)
+        val byEdge=programme(project,setup.copy(sameSetback=false,edgeSetbacksMetres=listOf(.3048,.6096,.9144,1.2192)))
+        assertEquals(listOf(304.8,609.6,914.4,1219.2),byEdge["setbacks"]!!.jsonObject["by_edge"]!!.jsonArray.map {it.jsonObject["distance_mm"]!!.jsonPrimitive.double})
+    }
     @Test fun adapterPreservesCoordinatesRoadPriorityAndBedroomFeatures() {
         val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(1),PlotRoad(2,priority=1)),northDegrees=-45.0).rebuild()
         val shifted=plot.copy(vertices=plot.vertices.map {PlotPoint(it.x+100,it.y+200)})

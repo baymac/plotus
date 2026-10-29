@@ -123,7 +123,7 @@ internal fun programme(project:Project,setup:FloorPlanSetup):JsonObject {
     fun edge(i:Int)="${vertexName(i)}-${vertexName((i+1)%plot.lengths.size)}"
     fun rooms(items:List<PlanRoom>,shared:Boolean=false):JsonArray=buildJsonArray {
         fun requirement(id:String,kind:String,room:PlanRoom,attributes:JsonObject?=null) {
-            addJsonObject {put("id",id);put("kind",kind);put("text",room.title);put("count",1);put("confirmed",true);put("necessity","required")
+            addJsonObject {put("id",id);put("kind",kind);put("text",room.title);put("count",1);put("confirmed",true);put("necessity",if(kind=="parking"&&room.cars+room.bikes==0)"excluded" else "required")
                 put("placement",if(room.floor!=null)"specified_floors" else if(shared)"any_building_floor" else "any_occupied_floor")
                 putJsonArray("floor_ids") {room.floor?.let {add("floor-$it")}}
                 if(attributes!=null)put("attributes",attributes)}
@@ -153,8 +153,8 @@ internal fun programme(project:Project,setup:FloorPlanSetup):JsonObject {
             put("mode",if(setup.setbackMode==PlanMode.AUTO)"automatic" else "custom")
             if(setup.setbackMode==PlanMode.CUSTOM) {
                 put("distribution",if(setup.sameSetback)"common" else "by_edge")
-                if(setup.sameSetback)put("common_distance_mm",((setup.commonSetbackMetres ?: 0.0)*1000).roundToInt())
-                else putJsonArray("by_edge") {setup.edgeSetbacksMetres.forEachIndexed {i,v->addJsonObject {put("edge_id",edge(i));put("distance_mm",((v ?: 0.0)*1000).roundToInt())}}}
+                if(setup.sameSetback)put("common_distance_mm",(setup.commonSetbackMetres ?: 0.0)*1000)
+                else putJsonArray("by_edge") {setup.edgeSetbacksMetres.forEachIndexed {i,v->addJsonObject {put("edge_id",edge(i));put("distance_mm",(v ?: 0.0)*1000)}}}
             }
         }
         putJsonArray("floors") {repeat(setup.buildingFloors) {addJsonObject {put("id","floor-$it");put("level",it);put("name",floorName(it))}}}

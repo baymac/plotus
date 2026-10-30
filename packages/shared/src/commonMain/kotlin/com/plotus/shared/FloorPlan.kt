@@ -171,5 +171,5 @@ fun FloorPlanSetup.geometrySetup()=FloorPlanSetup(setbackMode=setbackMode,sameSe
 /** Structured engine measurements survive saved history; absent on older drawings. */
 @Serializable data class PlanDrawing(val id:String,val label:String,val pngBase64:String,val width:Int,val height:Int,val presentation:PlanPresentation?=null,val vectorSvgBase64:String?=null,val spaceEfficiency:JsonObject?=null)
 @Serializable data class PlanExport(val filename:String,val mimeType:String,val base64:String)
-@Serializable data class GeneratedFloorPlan(val id:String,val status:String,val drawings:List<PlanDrawing> = emptyList(),val error:String?=null,val createdAt:String="",val sourceRevision:Long=0,val findings:List<PlanFinding> = emptyList())
+@Serializable data class GeneratedFloorPlan(val id:String,val status:String,val drawings:List<PlanDrawing> = emptyList(),val error:String?=null,val createdAt:String="",val sourceRevision:Long=0,val findings:List<PlanFinding> = emptyList(),val durationMillis:Long?=null)
 @Serializable data class PlanGenerations(val plans:List<GeneratedFloorPlan>,val nextBefore:String?=null)

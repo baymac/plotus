@@ -50,7 +50,8 @@ import org.jetbrains.skia.svg.SVGLengthContext
 @Composable internal fun GeneratedPlanCanvas(drawing:PlanDrawing,compact:Boolean,modifier:Modifier=Modifier) {
     val c=LocalPlotusColors.current
     val presentation=drawing.presentation
-    var units by remember(drawing.id) {mutableStateOf(PlotUnits.entries.firstOrNull {it.name==readPreference("plan-units")} ?: presentation?.units ?: PlotUnits.FEET_INCHES)}
+    val units=LocalMeasurementUnits.current
+    val selectUnits=LocalSetMeasurementUnits.current
     var optionsOpen by remember {mutableStateOf(false)}
     val content=presentation?.pngBase64 ?: drawing.pngBase64
     val fonts by produceState<PlanVectorFonts?>(null,drawing.vectorSvgBase64!=null) {
@@ -133,7 +134,7 @@ import org.jetbrains.skia.svg.SVGLengthContext
                 PlotToolButton(PlotSymbol.MORE,"Plan canvas options") {optionsOpen=true}
                 DropdownMenu(optionsOpen,{optionsOpen=false},containerColor=c.surface,tonalElevation=0.dp) {
                     Text("Units",Modifier.padding(horizontal=12.dp,vertical=8.dp),fontSize=12.sp,color=c.muted)
-                    PlotUnits.entries.forEach {unit->DropdownMenuItem(text={Text((if(units==unit)"✓  " else "")+if(unit==PlotUnits.METRES)"Metres" else "Feet & inches")},onClick={units=unit;writePreference("plan-units",unit.name);optionsOpen=false})}
+                    PlotUnits.entries.forEach {unit->DropdownMenuItem(text={Text((if(units==unit)"✓  " else "")+if(unit==PlotUnits.METRES)"Metres" else "Feet & inches")},onClick={selectUnits(unit);optionsOpen=false})}
                 }
             }
         }

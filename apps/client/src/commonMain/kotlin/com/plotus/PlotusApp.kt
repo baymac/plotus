@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.plotus.shared.*
 import kotlinx.coroutines.delay
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.decodeFromJsonElement
 
 @Composable
 fun PlotusApp() {
@@ -44,7 +46,21 @@ fun PlotusApp() {
     var nextId by remember { mutableStateOf(1) }
     val previewPlots = remember { mutableMapOf<String, PlotWorkspace>() }
     val account = auth.user
-    val workspace = remember(account?.id) { account?.let { ProjectWorkspace(auth, scope, it.id) } }
+    val measurements=remember(account?.id) {
+        MeasurementPreferences(scope,account?.id ?: "preview",{method,value->
+            if(account==null)value ?: AccountPreferences(PlotUnits.entries.firstOrNull {it.name==readPreference("measurement-units:preview")} ?: PlotUnits.FEET_INCHES)
+            else {
+                if(auth.user?.id!=account.id)throw AuthFailure(401,"Your account changed.")
+                val result=auth.projectRequest(method,"/v1/preferences",value?.let {authJson.encodeToString(it)})
+                if(auth.user?.id!=account.id)throw AuthFailure(401,"Your account changed.")
+                authJson.decodeFromJsonElement<AccountPreferences>(result)
+            }
+        })
+    }
+    LaunchedEffect(measurements,account?.id) {
+        if(account!=null)while(true){measurements.refresh();delay(15_000L)}
+    }
+    val workspace = remember(account?.id) { account?.let { ProjectWorkspace(auth, scope, it.id){measurements.units} } }
     LaunchedEffect(account?.id, destination) { showForm = false; editing = null; deleting = null }
     LaunchedEffect(workspace, preview, destination) {
         if (workspace != null && !preview && destination == Destination.PROJECTS) {
@@ -54,13 +70,14 @@ fun PlotusApp() {
 
     PlotusTheme(appearance) {
         val colors = LocalPlotusColors.current
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 44.dp) {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 44.dp,LocalMeasurementUnits provides measurements.units,LocalSetMeasurementUnits provides measurements::select) {
             BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
                 val compact = maxWidth < 1000.dp
                 val exit = { if (preview) preview = false else auth.signOut() }
-                if (navigation.browser && (auth.initializing || (account != null && destination == Destination.LOGIN))) {
+                if (navigation.browser && (auth.initializing || (account != null && (destination == Destination.LOGIN||measurements.loading)))) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                 }
+                else if(!navigation.browser&&account!=null&&measurements.loading)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
                 else if (!preview && account == null) Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
                     SignInScreen(compact,
                         onGoogle = { if (!navigation.browser) navigation.navigate(Destination.PROJECTS); auth.google(navigation.loginCallbackPath) },
@@ -146,8 +163,8 @@ fun PlotusApp() {
                         }) { Text(if (busy) "Deleting…" else if(changed)"Delete updated project" else if(failed)"Try again" else "Delete project") } },
                         dismissButton = { TextButton(enabled = !busy, onClick = dismiss) { Text("Cancel") } })
                 }
-                (auth.error ?: auth.notice ?: message)?.let { text ->
-                    val dismiss = { message = null; auth.dismissError(); auth.dismissNotice() }
+                (auth.error ?: auth.notice ?: message ?: measurements.error)?.let { text ->
+                    val dismiss = { message = null; auth.dismissError(); auth.dismissNotice();measurements.dismissError() }
                     AlertDialog(onDismissRequest = dismiss, title = { Text("Plotus") }, text = { Text(text) },
                         confirmButton = { TextButton(onClick = dismiss) { Text("OK") } })
                 }

@@ -9,7 +9,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.decodeFromJsonElement
 
 /** Account-owned projects. Design fixtures never enter this state. */
-class ProjectWorkspace(private val auth: AuthSession, private val scope: CoroutineScope, private val owner: String) {
+class ProjectWorkspace(private val auth: AuthSession, private val scope: CoroutineScope, private val owner: String,private val displayUnits:()->PlotUnits={PlotUnits.FEET_INCHES}) {
     var projects by mutableStateOf<List<Project>>(emptyList()); private set
     var loading by mutableStateOf(true); private set
     var busy by mutableStateOf(false); private set
@@ -20,7 +20,7 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
     private val plotEditors = mutableMapOf<String, PlotWorkspace>()
     private val floorEditors = mutableMapOf<String, FloorWorkspace>()
     fun floor(id:String):FloorWorkspace=floorEditors.getOrPut(id) {
-        liveFloorWorkspace(auth,scope,owner) {project->if(auth.user?.id==owner)projects=saveProject(projects,project)}
+        liveFloorWorkspace(auth,scope,owner,displayUnits) {project->if(auth.user?.id==owner)projects=saveProject(projects,project)}
     }
 
     fun plot(id: String): PlotWorkspace = plotEditors.getOrPut(id) {

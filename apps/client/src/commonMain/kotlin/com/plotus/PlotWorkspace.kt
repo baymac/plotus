@@ -60,15 +60,21 @@ class PlotWorkspace(
         if (remember) { undo = (undo + draft).takeLast(60); redo = emptyList() }
         if(next.northDegrees != draft.northDegrees) directionText = decimal(next.northDegrees)
         draft = next
-        val complete=next.lengths.all {it!=null} && (!next.useDiagonals||next.diagonals.all {it!=null})
-        validation = next.errors(requireBoundary||complete,requireRoads)
+        validation = if(requireBoundary||requireRoads) setupProblems(requireRoads) else emptyMap()
     }
-    fun boundaryError(message:String) { validation=validation + ("boundary" to message) }
+    val boundaryDefined get() = draft.vertices.isNotEmpty() && draft.errors(true).isEmpty()
+    val readyForFloor get() = boundaryDefined && draft.errors(true,true).isEmpty()
+    private fun setupProblems(roads:Boolean):Map<String,String> = when {
+        !boundaryDefined -> mapOf("boundary" to "Set all sides dimensions")
+        roads -> draft.errors(true,true)
+        else -> emptyMap()
+    }
+    fun boundaryError(message:String) { validation=mapOf("boundary" to message);validationAttempt++ }
     fun dismissSketch() {sketchSuggestion=null;sketchError=null}
     fun applySketch() {
         val suggestion=sketchSuggestion ?: return
         change(suggestion.setup)
-        requireBoundary=true;validation=draft.errors(completeBoundary=true);validationAttempt++
+        requireBoundary=true;validation=setupProblems(false);validationAttempt++
         sketchNotes=suggestion.notes.ifEmpty {listOf("Check the extracted outline and measurements before saving.")}
         sketchSuggestion=null
     }
@@ -112,7 +118,7 @@ class PlotWorkspace(
         val current = project ?: return
         if (loading || saving) return
         this.requireBoundary=requireBoundary;this.requireRoads=requireRoads;validationAttempt++
-        validation = draft.errors(requireBoundary, requireRoads)
+        validation = if(requireBoundary||requireRoads)setupProblems(requireRoads) else draft.errors().filterKeys { !it.startsWith("side.") && !it.startsWith("diagonal.") }
         if(directionText.toDoubleOrNull()?.let {it in -180.0..180.0} != true) validation = validation + ("direction" to "Choose a direction between −180° and 180°.")
         if (validation.isNotEmpty()) return
         if (!dirty && current.plotSetup != null) { onSaved(); return }

@@ -179,10 +179,10 @@ class PostgresPlans(private val source:DataSource) {
     /** List lightweight summaries; fetch a drawing only when its history entry is opened. */
     suspend fun history(owner:UUID,project:UUID,before:UUID?=null):PlanGenerations=db {c->
         val cursor=if(before==null)"" else " AND (created_at,id)<(SELECT created_at,id FROM plotus.plan_generations WHERE owner_id=? AND project_id=? AND id=?)"
-        c.prepareStatement("SELECT id,status,created_at,source_revision,result->>'error' AS error FROM plotus.plan_generations WHERE owner_id=? AND project_id=?$cursor ORDER BY created_at DESC,id DESC LIMIT 31").use {
+        c.prepareStatement("SELECT id,status,created_at,updated_at,source_revision,result->>'error' AS error FROM plotus.plan_generations WHERE owner_id=? AND project_id=?$cursor ORDER BY created_at DESC,id DESC LIMIT 31").use {
             it.setObject(1,owner);it.setObject(2,project)
             if(before!=null){it.setObject(3,owner);it.setObject(4,project);it.setObject(5,before)}
-            val rows=it.executeQuery().use {r->buildList {while(r.next())add(GeneratedFloorPlan(r.getObject("id").toString(),r.getString("status"),error=r.getString("error"),createdAt=r.getTimestamp("created_at").toInstant().toString(),sourceRevision=r.getLong("source_revision")))}}
+            val rows=it.executeQuery().use {r->buildList {while(r.next())add(GeneratedFloorPlan(r.getObject("id").toString(),r.getString("status"),error=r.getString("error"),createdAt=r.getTimestamp("created_at").toInstant().toString(),sourceRevision=r.getLong("source_revision"),durationMillis=r.runDurationMillis()))}}
             PlanGenerations(rows.take(30),if(rows.size>30)rows[29].id else null)
         }
     }
@@ -215,8 +215,15 @@ class PostgresPlans(private val source:DataSource) {
         it.setString(1,plan.status);it.setString(2,Json.encodeToString(plan));it.setObject(3,UUID.fromString(plan.id));it.setObject(4,owner);it.setObject(5,project);it.executeUpdate()
     };Unit}
     fun recover() {source.connection.use {c->c.createStatement().use {it.executeUpdate("UPDATE plotus.plan_generations SET status='failed',updated_at=clock_timestamp() WHERE status IN ('queued','running')")}}}
-    private fun java.sql.ResultSet.plan():GeneratedFloorPlan = getString("result")?.let {Json.decodeFromString<GeneratedFloorPlan>(it)}
-        ?: GeneratedFloorPlan(getObject("id").toString(),getString("status"),error=if(getString("status")=="failed")"Generation was interrupted. Try again." else null,createdAt=getTimestamp("created_at").toInstant().toString(),sourceRevision=getLong("source_revision"))
+    // updated_at is written when a run finishes or is recovered after interruption.
+    // Presentation caching changes only result.drawings, so later exports never extend it.
+    private fun java.sql.ResultSet.runDurationMillis():Long? =
+        if(getString("status") in listOf("ready","blocked","failed"))
+            Duration.between(getTimestamp("created_at").toInstant(),getTimestamp("updated_at").toInstant()).toMillis().coerceAtLeast(0)
+        else null
+    private fun java.sql.ResultSet.plan():GeneratedFloorPlan = (getString("result")?.let {Json.decodeFromString<GeneratedFloorPlan>(it)}
+        ?: GeneratedFloorPlan(getObject("id").toString(),getString("status"),error=if(getString("status")=="failed")"Generation was interrupted. Try again." else null,createdAt=getTimestamp("created_at").toInstant().toString(),sourceRevision=getLong("source_revision")))
+        .copy(durationMillis=runDurationMillis())
     private suspend fun <T> db(action:(java.sql.Connection)->T):T=withContext(Dispatchers.IO) {source.connection.use(action)}
 }
 
@@ -228,25 +235,25 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
     }
     suspend fun latest(owner:UUID,project:UUID)=jobs?.latest(owner,project)
     suspend fun history(owner:UUID,project:UUID,before:UUID?=null)=jobs?.history(owner,project,before) ?: PlanGenerations(emptyList())
-    suspend fun get(owner:UUID,project:UUID,id:UUID,byRequest:Boolean=false):GeneratedFloorPlan {
+    suspend fun get(owner:UUID,project:UUID,id:UUID,byRequest:Boolean=false,units:PlotUnits?=null):GeneratedFloorPlan {
         val plan=jobs?.find(owner,project,id,byRequest) ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
-        if(plan.status!="ready"||plan.drawings.all {(it.presentation?.version ?: 0)>=2}||engine==null)return plan
+        if(plan.status!="ready"||plan.drawings.all {(it.presentation?.version ?: 0)>=2&&(units==null||it.presentation?.units==units)}||engine==null)return plan
         val key=UUID.fromString(plan.id)
         val brief=jobs.snapshot(owner,project,key) ?: return plan
-        val drawings=engine.present(brief.plot,brief.setup.units,plan.drawings)
+        val drawings=engine.present(brief.plot,units ?: brief.setup.units,plan.drawings)
         require(drawings.map {it.id}==plan.drawings.map {it.id}) {"Drawing identities changed during presentation"}
         jobs.cachePresentation(owner,project,key,drawings)
         return plan.copy(drawings=drawings)
     }
-    suspend fun export(owner:UUID,project:UUID,id:UUID,drawingID:String,format:String):PlanExport {
+    suspend fun export(owner:UUID,project:UUID,id:UUID,drawingID:String,format:String,units:PlotUnits?=null):PlanExport {
         if(format !in listOf("png","pdf","dwg"))throw ApiFailure(400,"INVALID_FORMAT","Choose PNG, PDF or DWG.")
-        val plan=get(owner,project,id)
+        val plan=get(owner,project,id,units=units)
         if(plan.status!="ready")throw ApiFailure(409,"PLAN_NOT_READY","Wait for this plan to finish.")
         val drawing=plan.drawings.firstOrNull {it.id==drawingID} ?: throw ApiFailure(404,"DRAWING_NOT_FOUND","This floor drawing could not be found.")
         if(format=="dwg"&&drawing.vectorSvgBase64==null)throw ApiFailure(422,"VECTOR_UNAVAILABLE","Generate a new plan to export DWG. This older plan has a saved image only.")
         return connected().export(drawing,format)
     }
-    suspend fun start(owner:UUID,project:Project,request:StartPlanRequest):GeneratedFloorPlan {
+    suspend fun start(owner:UUID,project:Project,request:StartPlanRequest,units:PlotUnits?=null):GeneratedFloorPlan {
         val store=jobs ?: throw unavailable()
         val requestID=try {UUID.fromString(request.requestID)}catch(_:IllegalArgumentException){throw ApiFailure(400,"INVALID_REQUEST_ID","Reopen Floor plan and try again.")}
         store.find(owner,UUID.fromString(project.id),requestID,true)?.let {return it}
@@ -263,7 +270,7 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
         if(!started.created)return job
         scope.launch {
             // Include preflight and transport time beyond the engine's 240-second worker ceiling.
-            val finished=try {job.copy(status="ready",drawings=withTimeout(280000) {planner.generate(project,saved.setup)})}
+            val finished=try {job.copy(status="ready",drawings=withTimeout(280000) {planner.generate(project,if(units==null)saved.setup else saved.setup.copy(units=units))})}
                 catch(cancelled:CancellationException){if(cancelled !is TimeoutCancellationException)throw cancelled;job.copy(status="failed",error="Generation took too long. Try again.")}
                 catch(failure:Exception){job.copy(status=if((failure as? ApiFailure)?.status==422)"blocked" else "failed",error=(failure as? ApiFailure)?.message ?: "Couldn’t generate this plan. Try again.")}
             store.finish(owner,UUID.fromString(project.id),finished)

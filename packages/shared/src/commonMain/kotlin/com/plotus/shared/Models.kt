@@ -85,3 +85,9 @@ fun areaLabel(value: Int?): String {
     if (value == null) return "Not set"
     return value.toString().reversed().chunked(3).joinToString(",").reversed() + " sq ft"
 }
+
+@kotlinx.serialization.Serializable
+data class AccountPreferences(val units:PlotUnits=PlotUnits.FEET_INCHES)
+
+fun areaLabel(value:Int?,units:PlotUnits):String =
+    if(value!=null&&units==PlotUnits.METRES) "${decimal(value*METRES_PER_FOOT*METRES_PER_FOOT)} m²" else areaLabel(value)

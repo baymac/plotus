@@ -99,10 +99,10 @@ private data class PlotTransform(val scale: Float, val centre: Offset, val x: Do
     fun screen(p: PlotPoint) = Offset(centre.x+((p.x-x)*scale).toFloat(),centre.y+((p.y-y)*scale).toFloat())
     fun model(p: Offset) = PlotPoint(x+(p.x-centre.x)/scale,y+(p.y-centre.y)/scale)
 }
-private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float, zoom: Float, pan: Offset, showToolbar: Boolean, compact: Boolean): PlotTransform {
+private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float, zoom: Float, pan: Offset, showToolbar: Boolean, compact: Boolean, details:Boolean=false): PlotTransform {
     val minX=points.minOf { it.x };val maxX=points.maxOf { it.x };val minY=points.minOf { it.y };val maxY=points.maxOf { it.y }
     val width=(size.width-92*density).coerceAtLeast(20*density)
-    val top=(if(showToolbar) {if(compact)80 else 84} else if(compact)28 else 12)*density
+    val top=(if(details)140 else if(showToolbar) {if(compact)80 else 84} else if(compact)28 else 12)*density
     val bottom=(if(compact) {if(size.height/density>=180)68 else 32} else 64)*density
     val height=(size.height-top-bottom).coerceAtLeast(20*density)
     return PlotTransform(min(width/(maxX-minX).coerceAtLeast(.01),height/(maxY-minY).coerceAtLeast(.01)).toFloat()*zoom*(if(compact)1f else .84f),
@@ -110,7 +110,7 @@ private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float
 }
 
 @Composable
-internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true, readOnly:Boolean=false, envelope:FloorEnvelope?=null,showBuildable:Boolean=false,checkingBuildable:Boolean=false,onUnitsChange:((PlotUnits)->Unit)?=null) {
+internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean, modifier: Modifier = Modifier, showToolbar: Boolean = true, readOnly:Boolean=false, envelope:FloorEnvelope?=null,showBuildable:Boolean=false,checkingBuildable:Boolean=false) {
     val c=LocalPlotusColors.current
     var tool by remember(readOnly) { mutableStateOf(if(readOnly)PlotTool.HAND else PlotTool.MOVE) }
     var toolOpen by remember { mutableStateOf(false) }
@@ -121,7 +121,8 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
     var canvasSize by remember { mutableStateOf(IntSize(1,1)) }
     var dragging by remember { mutableStateOf(false) }
     var dragIndex by remember { mutableStateOf(-1) }
-    val setup=workspace.draft
+    val setup=workspace.draft.copy(units=LocalMeasurementUnits.current)
+    val selectUnits=LocalSetMeasurementUnits.current
     val points=setup.vertices.ifEmpty { provisionalPlotForSides(setup.lengths.size) }
     var fitPoints by remember { mutableStateOf(points) }
     LaunchedEffect(points,dragging) { if(!dragging)fitPoints=points }
@@ -130,7 +131,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
     val anglesEnabled=!readOnly&&(step==null||step==PlotStep.BOUNDARY)
     val currentAnglesEnabled by rememberUpdatedState(anglesEnabled)
     val density=androidx.compose.ui.platform.LocalDensity.current.density
-    val transform=plotTransform(fitPoints,canvasSize,density,zoom,pan,showToolbar,compact)
+    val transform=plotTransform(fitPoints,canvasSize,density,zoom,pan,showToolbar,compact,showBuildable&&showToolbar)
     val currentTransform by rememberUpdatedState(transform)
     var gestureTransform by remember { mutableStateOf(transform) }
     val measurer=rememberTextMeasurer()
@@ -146,7 +147,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
                     dragging=true
                     if(dragIndex>=0) {
                         val message=when {
-                            currentSetup.vertices.isEmpty()->"Enter all side lengths to adjust angles."
+                            currentSetup.vertices.isEmpty()->"Set boundary dimension"
                             currentSetup.useDiagonals->"Measured diagonals fix the angles. Turn off diagonals to adjust them."
                             currentSetup.lengths.size<4->"Side lengths fix a triangle’s angles."
                             else->null
@@ -260,12 +261,13 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
                 PlotToolButton(PlotSymbol.MORE,"Plot canvas options") {moreOpen=true}
                 DropdownMenu(moreOpen,{moreOpen=false}) {
                     Text("Units",Modifier.padding(horizontal=12.dp,vertical=8.dp),fontSize=12.sp,color=c.muted)
-                    PlotUnits.entries.forEach { unit -> DropdownMenuItem(text={Text((if(setup.units==unit)"✓  " else "")+if(unit==PlotUnits.METRES)"Metres" else "Feet & inches")},onClick={if(onUnitsChange!=null)onUnitsChange(unit) else workspace.change(setup.copy(units=unit));moreOpen=false},enabled=!workspace.saving) }
+                    PlotUnits.entries.forEach { unit -> DropdownMenuItem(text={Text((if(setup.units==unit)"✓  " else "")+if(unit==PlotUnits.METRES)"Metres" else "Feet & inches")},onClick={selectUnits(unit);moreOpen=false},enabled=!workspace.saving) }
 
                 }
             }
         }
-        if(envelope!=null&&canvasSize.height/density>=300)Row(Modifier.align(Alignment.TopStart).padding(start=if(compact)20.dp else 28.dp,top=if(showToolbar) {if(compact)58.dp else 76.dp} else 8.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+        if(anglesEnabled&&showToolbar)Text("Move vertices to change the plot shape",Modifier.align(Alignment.TopCenter).padding(top=if(compact)54.dp else 70.dp).background(c.surface,RoundedCornerShape(6.dp)).padding(horizontal=10.dp,vertical=4.dp),fontSize=11.sp,color=c.muted)
+        if(envelope!=null&&canvasSize.height/density>=300)Row(Modifier.align(Alignment.BottomStart).padding(start=if(compact)20.dp else 28.dp,bottom=80.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(12.dp).background(c.primary.copy(alpha=.16f),RoundedCornerShape(2.dp)).border(1.dp,c.primary.copy(alpha=.5f),RoundedCornerShape(2.dp)))
             Text("Setback",fontSize=10.sp,color=c.muted)
         }

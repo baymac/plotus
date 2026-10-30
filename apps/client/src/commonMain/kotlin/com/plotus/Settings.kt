@@ -7,6 +7,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import com.plotus.shared.PlotUnits
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,6 +71,18 @@ private fun SettingsChevron(modifier: Modifier = Modifier) {
 fun GeneralSettingsScreen(compact: Boolean, appearance: Appearance, onAppearance: (Appearance) -> Unit) {
     val colors = LocalPlotusColors.current
     Column(Modifier.widthIn(max=660.dp).fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val units=LocalMeasurementUnits.current
+        val selectUnits=LocalSetMeasurementUnits.current
+        Text("Measurement units",fontSize=16.sp,lineHeight=24.sp,fontWeight=FontWeight.SemiBold)
+        Column(settingsGroup().selectableGroup()) {
+            PlotUnits.entries.forEachIndexed {index,unit->
+                if(index>0)HorizontalDivider(Modifier.padding(start=16.dp),color=colors.line)
+                Row(Modifier.fillMaxWidth().heightIn(min=56.dp).selectable(units==unit,role=Role.RadioButton,onClick={selectUnits(unit)}).padding(horizontal=16.dp,vertical=6.dp),verticalAlignment=Alignment.CenterVertically) {
+                    Text(if(unit==PlotUnits.METRES)"Metres" else "Feet & inches",Modifier.weight(1f),fontSize=16.sp)
+                    RadioButton(units==unit,onClick=null)
+                }
+            }
+        }
         Text("Appearance", fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold)
         Column(settingsGroup().selectableGroup()) {
             listOf(Appearance.SYSTEM, Appearance.LIGHT, Appearance.DARK).forEachIndexed { index, option ->

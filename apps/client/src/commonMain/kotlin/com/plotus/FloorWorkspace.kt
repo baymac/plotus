@@ -15,6 +15,7 @@ class FloorWorkspace(
     private val scope:CoroutineScope,
     private val request:suspend (String,String,String?)->JsonElement,
     private val accepted:(Project)->Unit,
+    private val displayUnits:(()->PlotUnits)?=null,
 ) {
     var project by mutableStateOf<Project?>(null);private set
     var draft by mutableStateOf(FloorPlanSetup());private set
@@ -63,7 +64,7 @@ class FloorWorkspace(
         finally {loading=false}
     }
     fun change(next:FloorPlanSetup) {
-        val updated=next.singleResidence()
+        val updated=next.singleResidence().copy(units=displayUnits?.invoke() ?: next.units)
         if(saving||generating||updated==draft)return
         val previousKey=footprintKey
         draft=updated;error=null
@@ -95,10 +96,11 @@ class FloorWorkspace(
         val current=project ?: return
         if(saving||generating)return
         validationAttempt++
-        validation=if(setbacks&&!complete)draft.errors(current.plotSetup,true).filterKeys {it=="plot"||it=="floors"||it=="homes"||it.startsWith("setback")} else draft.errors(current.plotSetup,complete)
+        val setup=draft.copy(units=displayUnits?.invoke() ?: draft.units)
+        validation=if(setbacks&&!complete)setup.errors(current.plotSetup,true).filterKeys {it=="plot"||it=="floors"||it=="homes"||it.startsWith("setback")} else setup.errors(current.plotSetup,complete)
         if(validation.isNotEmpty())return
-        if(!dirty&&current.floorPlan?.setup==draft&&current.floorPlan?.plot==current.plotSetup){onSaved();return}
-        val snapshot=draft;saving=true;error=null
+        if(!dirty&&current.floorPlan?.setup==setup&&current.floorPlan?.plot==current.plotSetup){onSaved();return}
+        val snapshot=setup;saving=true;error=null
         scope.launch {
             try {
                 val updated=try {authJson.decodeFromJsonElement<Project>(request("PUT",base,authJson.encodeToString(SaveFloorPlanRequest(snapshot,current.revision))))}
@@ -107,7 +109,7 @@ class FloorWorkspace(
                     val confirmed=try {authJson.decodeFromJsonElement<Project>(request("GET","/v1/projects/${current.id}",null))}catch(cancelled:CancellationException){throw cancelled}catch(_:Exception){null}
                     if(confirmed?.floorPlan==SavedFloorPlan(snapshot,current.plotSetup!!))confirmed else throw failure
                 }
-                project=updated;saved=snapshot;conflict=false
+                project=updated;saved=snapshot;draft=snapshot;conflict=false
                 updated.buildableArea?.let {areas[it.key]=it};restoreArea();accepted(updated);onSaved()
             }catch(cancelled:CancellationException){throw cancelled}
             catch(failure:Exception){conflict=(failure as? AuthFailure)?.code=="PROJECT_CHANGED";error=if(conflict)"Project changed on another device." else failure.message ?: "Couldn’t save Floor plan."}
@@ -187,9 +189,9 @@ class FloorWorkspace(
     }
 }
 
-internal fun liveFloorWorkspace(auth:AuthSession,scope:CoroutineScope,owner:String,accepted:(Project)->Unit)=FloorWorkspace(scope,{method,path,body->
+internal fun liveFloorWorkspace(auth:AuthSession,scope:CoroutineScope,owner:String,displayUnits:(()->PlotUnits)?=null,accepted:(Project)->Unit)=FloorWorkspace(scope,{method,path,body->
     if(auth.user?.id!=owner)throw AuthFailure(401,"Sign in to open Floor plan.")
     val response=auth.projectRequest(method,path,body)
     if(auth.user?.id!=owner)throw AuthFailure(401,"Your account changed. Reopen the project.")
     response
-},accepted)
+},accepted,displayUnits)

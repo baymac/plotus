@@ -15,6 +15,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 interface ProjectStore {
+    suspend fun preferences(owner:UUID):AccountPreferences = throw ApiFailure(503,"STORAGE_UNAVAILABLE","Preferences are temporarily unavailable.")
+    suspend fun savePreferences(owner:UUID,preferences:AccountPreferences):AccountPreferences = throw ApiFailure(503,"STORAGE_UNAVAILABLE","Preferences are temporarily unavailable.")
     suspend fun healthy(): Boolean
     suspend fun list(owner: UUID): List<Project>
     suspend fun get(owner: UUID, id: UUID): Project
@@ -38,10 +40,21 @@ class PostgresProjects(internal val source: DataSource) : ProjectStore {
         }
     }
     fun migrate() {
-        val sql = listOf("001_projects.sql", "002_plot_setup.sql", "003_floor_plan.sql", "004_buildable_areas.sql").joinToString("\n") { file ->
+        val sql = listOf("001_projects.sql", "002_plot_setup.sql", "003_floor_plan.sql", "004_buildable_areas.sql", "005_account_preferences.sql").joinToString("\n") { file ->
             javaClass.getResourceAsStream("/migrations/$file")!!.bufferedReader().use { it.readText() }
         }
         source.connection.use { connection -> connection.createStatement().use { it.execute(sql) } }
+    }
+    override suspend fun preferences(owner:UUID):AccountPreferences=database {c->
+        c.prepareStatement("SELECT units FROM plotus.account_preferences WHERE owner_id=?").use {
+            it.setObject(1,owner);it.executeQuery().use {r->if(r.next())AccountPreferences(PlotUnits.valueOf(r.getString("units"))) else AccountPreferences()}
+        }
+    }
+    override suspend fun savePreferences(owner:UUID,preferences:AccountPreferences):AccountPreferences=database {c->
+        c.prepareStatement("INSERT INTO plotus.account_preferences(owner_id,units) VALUES (?,?) ON CONFLICT(owner_id) DO UPDATE SET units=EXCLUDED.units,updated_at=clock_timestamp()").use {
+            it.setObject(1,owner);it.setString(2,preferences.units.name);it.executeUpdate()
+        }
+        preferences
     }
     override suspend fun healthy(): Boolean = withContext(Dispatchers.IO) {
         source.connection.use { connection -> connection.createStatement().use { it.executeQuery("SELECT 1 FROM plotus.projects LIMIT 1").use { true } } }

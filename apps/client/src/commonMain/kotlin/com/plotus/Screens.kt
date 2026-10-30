@@ -82,11 +82,11 @@ private fun ProjectRow(project: Project, compact: Boolean, onOpen: () -> Unit, o
             Column(Modifier.weight(1f)) {
                 Text(project.name, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
                 Text(project.location, fontSize = 13.sp, color = colors.muted)
-                if (compact) Text("${areaLabel(project.areaSqFt)} · ${project.lastEdited}", fontSize = 12.sp, color = colors.subtle, lineHeight = 18.sp)
+                if (compact) Text("${areaLabel(project.areaSqFt,LocalMeasurementUnits.current)} · ${project.lastEdited}", fontSize = 12.sp, color = colors.subtle, lineHeight = 18.sp)
             }
             if (!compact) {
                 Column(Modifier.padding(horizontal=24.dp), horizontalAlignment=Alignment.End, verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Text(areaLabel(project.areaSqFt), fontSize=13.sp)
+                    Text(areaLabel(project.areaSqFt,LocalMeasurementUnits.current), fontSize=13.sp)
                     Text(project.lastEdited, color=colors.subtle, fontSize=12.sp)
                 }
             }

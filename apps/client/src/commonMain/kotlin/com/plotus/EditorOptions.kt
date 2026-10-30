@@ -27,10 +27,10 @@ internal fun EditorOptions(showDivider:Boolean=true,content: @Composable ColumnS
 }
 
 @Composable
-internal fun EditorOption(label:String,symbol:PlotSymbol,enabled:Boolean,modifier:Modifier=Modifier,onClick:()->Unit) {
+internal fun EditorOption(label:String,symbol:PlotSymbol,enabled:Boolean,modifier:Modifier=Modifier,highlighted:Boolean=false,onClick:()->Unit) {
     val c=LocalPlotusColors.current
     Column(modifier.height(60.dp).background(c.surface,RoundedCornerShape(10.dp))
-        .border(1.dp,c.line,RoundedCornerShape(10.dp)).clickable(enabled=enabled,role=Role.Button,onClick=onClick),
+        .border(1.dp,if(highlighted)c.primary else c.line,RoundedCornerShape(10.dp)).clickable(enabled=enabled,role=Role.Button,onClick=onClick),
         horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
         PlotSymbol(symbol,c.muted,Modifier.size(18.dp))
         Text(label,fontSize=13.sp,color=c.muted)
@@ -48,5 +48,13 @@ internal fun EditorOverview(compact:Boolean,modifier:Modifier,content:@Composabl
         Column(Modifier.weight(1f).fillMaxHeight(),content=content)
         VerticalDivider(color=c.line)
         Column(Modifier.width(408.dp).fillMaxHeight().background(c.surface).verticalScroll(rememberScrollState())) {options(false)}
+    }
+}
+
+@Composable
+internal fun InspectorHeader(title:String,enabled:Boolean,canSave:Boolean,onBack:()->Unit,showSave:Boolean=true,onSave:()->Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min=48.dp),verticalAlignment=Alignment.CenterVertically) {
+        EditorBack(title,"Back",enabled=enabled,onBack=onBack)
+        if(showSave)androidx.compose.material3.TextButton(onSave,enabled=enabled&&canSave) {Text("Save")}
     }
 }

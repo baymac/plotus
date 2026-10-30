@@ -55,6 +55,8 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
                 if (!header.startsWith("Bearer ")) throw ApiFailure(401,"UNAUTHENTICATED","Sign in to continue.")
                 call.attributes.put(Owner,identity.user(header.removePrefix("Bearer ")))
             }
+            get("/preferences") {call.respond(store.preferences(call.attributes[Owner]))}
+            put("/preferences") {call.respond(store.savePreferences(call.attributes[Owner],call.receive<AccountPreferences>()))}
             get("/projects") { call.respond(ProjectList(store.list(call.attributes[Owner]))) }
             get("/projects/{id}") { val owner=call.attributes[Owner];call.respond(buildableAreas.enrich(owner,store.get(owner,call.projectID()))) }
             post("/projects") {
@@ -107,17 +109,17 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
             }
             post("/projects/{id}/floor-plan/generations") {
                 val owner=call.attributes[Owner];val project=store.get(owner,call.projectID())
-                call.respond(HttpStatusCode.Accepted,floorPlans.start(owner,project,call.receive<StartPlanRequest>()))
+                call.respond(HttpStatusCode.Accepted,floorPlans.start(owner,project,call.receive<StartPlanRequest>(),store.preferences(owner).units))
             }
             get("/projects/{id}/floor-plan/generations/{job}") {
                 val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
                 val job=try {UUID.fromString(call.parameters["job"])}catch(_:IllegalArgumentException){throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")}
-                call.respond(floorPlans.get(owner,id,job,call.request.queryParameters["by"]=="request"))
+                call.respond(floorPlans.get(owner,id,job,call.request.queryParameters["by"]=="request",store.preferences(owner).units))
             }
             get("/projects/{id}/floor-plan/generations/{job}/drawings/{drawing}/export/{format}") {
                 val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
                 val job=try {UUID.fromString(call.parameters["job"])}catch(_:IllegalArgumentException){throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")}
-                call.respond(floorPlans.export(owner,id,job,call.parameters["drawing"].orEmpty(),call.parameters["format"].orEmpty()))
+                call.respond(floorPlans.export(owner,id,job,call.parameters["drawing"].orEmpty(),call.parameters["format"].orEmpty(),store.preferences(owner).units))
             }
             get("/projects/{id}/sketch/{job}") {
                 val owner=call.attributes[Owner];val project=call.projectID()

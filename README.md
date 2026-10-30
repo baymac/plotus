@@ -18,7 +18,7 @@ Choose **Start project** at [plotus.app](https://plotus.app) to open your worksp
 
 Continue to **Floor plan** to review setbacks and the buildable area, choose the building’s floors, BHK and Vastu preference. Use automatic requirements or add rooms, attached bathrooms, closets, parking and circulation. Save the brief to continue on another device.
 
-Choose **Generate plan** to request a checked concept. Generation continues when you leave the screen. If the requirements cannot produce a checked layout, Plotus asks you to adjust them. Detailed design, structural approval and construction documents still need a professional designer.
+Choose **Generate plan** to request a checked concept. Follow the elapsed time while generation runs, browse earlier plans in History, or cancel a run. Generation continues when you leave the screen. Export a completed plan as PNG, PDF or DWG. If the requirements cannot produce a checked layout, Plotus asks you to adjust them. Detailed design, structural approval and construction documents still need a professional designer.
 
 [App guide](docs/START-HERE.md) · [Design](docs/DESIGN.md)
 

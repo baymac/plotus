@@ -41,7 +41,6 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     var editing by remember {mutableStateOf<Pair<String?,PlanRoom>?>(null)}
     var viewedFloor by remember(generationID) {mutableStateOf(0)}
     var exportOpen by remember(generationID) {mutableStateOf(false)}
-    LaunchedEffect(workspace,generationID){workspace.dismissDownload()}
     val selected=step ?: FloorStep.SETBACKS
     val close:(()->Unit)->Unit={action->focus.clearFocus();keyboard?.hide();if(workspace.dirty)leaving=action else action()}
     val busy=workspace.saving||workspace.generating
@@ -60,7 +59,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
         Row(Modifier.fillMaxWidth().height(64.dp).padding(start=if(compact)8.dp else 20.dp,end=16.dp),verticalAlignment=Alignment.CenterVertically) {
             val viewed=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
             val heading=if(generationID!=null)viewed?.createdAt?.let(::planTimestamp) ?: "Floor plan" else workspace.project?.name ?: "Floor plan"
-            EditorBack(heading,if(generationID!=null)"Back to history" else "Back to projects",enabled=!busy) {if(generationID!=null)onStep(FloorStep.HISTORY) else close(onExit)}
+            EditorBack(heading,if(generationID!=null)"Back to history" else "Back to projects",enabled=!workspace.saving) {if(generationID!=null)onStep(FloorStep.HISTORY) else close(onExit)}
             if(keyboardVisible)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard") {hideKeyboard()}
             if(generationID!=null&&viewed?.status=="ready")Box {
                 TextButton({exportOpen=true},enabled=!workspace.exporting) {Text(if(workspace.exporting)"Exporting…" else "Export")}
@@ -74,7 +73,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             }
             if(generationID==null&&step==null)TextButton({
                 hideKeyboard()
-                if(workspace.generation?.status in listOf("ready","blocked","failed"))workspace.newAttempt()
+                if(workspace.generation?.status in listOf("ready","blocked","failed","cancelled"))workspace.newAttempt()
                 workspace.generate {onGeneration(it.id)}
             },enabled=!busy&&!workspace.loading&&workspace.draft.errors(workspace.project?.plotSetup,true).isEmpty()) {Text(if(busy)"Generating…" else "Generate") }
         }
@@ -87,7 +86,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             workspace.exportError?.let {message->Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Text(message,Modifier.weight(1f),fontSize=13.sp,color=MaterialTheme.colorScheme.error);PlotToolButton(PlotSymbol.CLOSE,"Dismiss export error"){workspace.dismissExportError()}}}
             val plan=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
             if(workspace.viewLoading&&plan==null)Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
-            else GenerationView(workspace,plan,compact,Modifier.weight(1f),{workspace.newAttempt();onStep(FloorStep.REQUIREMENTS)},{scope.launch {workspace.openPlan(generationID)}},viewedFloor,{viewedFloor=it})
+            else GenerationView(workspace,plan,compact,Modifier.weight(1f),{workspace.newAttempt();onStep(FloorStep.REQUIREMENTS)},{scope.launch {workspace.openPlan(generationID)}},viewedFloor,{viewedFloor=it},{onStep(FloorStep.HISTORY)})
         } else {
             val inspector:@Composable (Modifier)->Unit={modifier->
                 val scroll=rememberScrollState()
@@ -97,7 +96,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 }
                 Column(modifier.background(c.surface)) {
                     Box(Modifier.padding(horizontal=20.dp)) {
-                        InspectorHeader(editing?.second?.kind?.title ?: if(catalogue)"Add room" else when(selected){FloorStep.SETBACKS->"Setbacks";FloorStep.HISTORY->"History";else->"Requirements"},!busy,canSave&&selected!=FloorStep.HISTORY,{
+                        InspectorHeader(editing?.second?.kind?.title ?: if(catalogue)"Add room" else when(selected){FloorStep.SETBACKS->"Setbacks";FloorStep.HISTORY->"History";else->"Requirements"},!workspace.saving,canSave&&selected!=FloorStep.HISTORY,{
                             hideKeyboard()
                             when {editing!=null->editing=null;catalogue->catalogue=false;else->close {onStep(null)}}
                         },showSave=selected!=FloorStep.HISTORY) {hideKeyboard();workspace.save()}
@@ -131,7 +130,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 EditorOverview(compact,Modifier.weight(1f),content={
                     PlanningStages(Modifier.padding(horizontal=16.dp,vertical=8.dp),1,{close(onPlot)})
                     FloorPreview(workspace,compact,Modifier.fillMaxWidth().weight(1f),!keyboardVisible)
-                    workspace.generation?.takeIf {it.status in listOf("running","queued")}?.let {job->TextButton({onGeneration(job.id)},Modifier.align(Alignment.CenterHorizontally)){Text("View generation in progress")}}
+                    workspace.generation?.takeIf {it.status in listOf("running","queued","cancelling")}?.let {job->TextButton({onGeneration(job.id)},Modifier.align(Alignment.CenterHorizontally)){Text("View generation in progress")}}
                 },options={divider->
                     Column {
                         workspace.error?.let {FloorError(it)}
@@ -159,10 +158,6 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             }
         }
     }
-    workspace.readyDownload?.let {download->AlertDialog(onDismissRequest=workspace::dismissDownload,
-        title={Text("Your ${download.format.uppercase()} is ready")},text={Text(download.filename)},
-        confirmButton={TextButton(workspace::downloadPreparedPlan){Text("Download ${download.format.uppercase()}")}},
-        dismissButton={TextButton(workspace::dismissDownload){Text("Close")}})}
     leaving?.let {action->AlertDialog(onDismissRequest={leaving=null},title={Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
         Text("Save floor-plan changes?",Modifier.weight(1f),fontSize=20.sp,fontWeight=FontWeight.SemiBold)
         PlotToolButton(PlotSymbol.CLOSE,"Cancel"){leaving=null}
@@ -176,7 +171,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             EditorOption("Setback",PlotSymbol.BOUNDARY,enabled,Modifier.weight(1f)) {onSelect(FloorStep.SETBACKS)}
             EditorOption("Requirements",PlotSymbol.GRID,enabled,Modifier.weight(1f)) {onSelect(FloorStep.REQUIREMENTS)}
         }
-        Row(Modifier.fillMaxWidth().height(48.dp).border(1.dp,c.line,RoundedCornerShape(10.dp)).clickable(enabled=enabled,role=Role.Button){onSelect(FloorStep.HISTORY)},horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(48.dp).border(1.dp,c.line,RoundedCornerShape(10.dp)).clickable(role=Role.Button){onSelect(FloorStep.HISTORY)},horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically) {
             PlotSymbol(PlotSymbol.HISTORY,c.muted,Modifier.size(18.dp));Spacer(Modifier.width(8.dp));Text("History",fontSize=13.sp,color=c.muted)
         }
     }
@@ -325,8 +320,8 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 PlotSymbol(PlotSymbol.HISTORY,c.muted)
                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                     Text(planTimestamp(plan.createdAt),fontSize=14.sp,fontWeight=FontWeight.Medium)
-                    if(plan.status !in listOf("running","queued"))Text("Duration: ${runDurationLabel(plan.durationMillis)}",fontSize=12.sp,color=c.muted)
-                    if(plan.status!="ready")Text(when(plan.status){"running","queued"->"Generating…";"blocked"->"No checked layout found";else->"Couldn’t create this plan"},fontSize=12.sp,color=c.muted)
+                    if(plan.status in listOf("running","queued","cancelling"))RunningTime(plan) else Text("Duration: ${runDurationLabel(plan.durationMillis)}",fontSize=12.sp,color=c.muted)
+                    if(plan.status!="ready")Text(when(plan.status){"cancelling"->"Cancelling…";"running","queued"->"Generating…";"cancelled"->"Cancelled";"blocked"->"No checked layout found";else->"Couldn’t create this plan"},fontSize=12.sp,color=c.muted)
                 }
                 PlotSymbol(PlotSymbol.BACK,c.muted,Modifier.size(16.dp).graphicsLayer {rotationZ=180f})
             }
@@ -337,11 +332,16 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     }
 }
 
-@Composable private fun GenerationView(workspace:FloorWorkspace,plan:GeneratedFloorPlan?,compact:Boolean,modifier:Modifier,onEdit:()->Unit,onRetry:()->Unit,floor:Int,onFloor:(Int)->Unit) {
+@Composable private fun GenerationView(workspace:FloorWorkspace,plan:GeneratedFloorPlan?,compact:Boolean,modifier:Modifier,onEdit:()->Unit,onRetry:()->Unit,floor:Int,onFloor:(Int)->Unit,onHistory:()->Unit) {
     val c=LocalPlotusColors.current
-    if(plan?.status in listOf("running","queued"))Column(modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
-        CircularProgressIndicator();Spacer(Modifier.height(24.dp));FloorTitle("Creating your floor plan")
-        Text("You can leave this screen and come back.",Modifier.padding(top=8.dp),fontSize=14.sp,color=c.muted,textAlign=TextAlign.Center)
+    if(plan?.status in listOf("running","queued","cancelling"))Column(modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
+        CircularProgressIndicator();Spacer(Modifier.height(24.dp));FloorTitle(if(plan?.status=="cancelling"||workspace.cancelling)"Cancelling generation" else "Creating your floor plan")
+        Spacer(Modifier.height(12.dp));RunningTime(plan!!)
+        Spacer(Modifier.height(24.dp))
+        Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            TextButton(onHistory){Text("History")}
+            TextButton({workspace.cancelGeneration(plan.id)},enabled=!workspace.cancelling){Text(if(workspace.cancelling)"Cancelling…" else "Cancel generation")}
+        }
         workspace.error?.let {FloorError(it)}
     } else if(plan?.status=="ready") {
         Column(modifier.fillMaxWidth()) {
@@ -354,9 +354,10 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
         }
     }else Box(modifier.fillMaxWidth().padding(24.dp),contentAlignment=Alignment.Center) {
         Column(Modifier.widthIn(max=420.dp).fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally) {
-            Text(if(plan?.status=="blocked")"No checked layout found" else if(plan==null)"Couldn’t open this plan" else "Couldn’t create this plan",
+            Text(if(plan?.status=="cancelled")"Generation cancelled" else if(plan?.status=="blocked")"No checked layout found" else if(plan==null)"Couldn’t open this plan" else "Couldn’t create this plan",
                 Modifier.fillMaxWidth(),fontSize=18.sp,fontWeight=FontWeight.SemiBold,textAlign=TextAlign.Center)
-            Text(plan?.error ?: workspace.viewError ?: workspace.error ?: "Please try again.",Modifier.fillMaxWidth().padding(vertical=16.dp),fontSize=14.sp,color=c.muted,textAlign=TextAlign.Center)
+            if(plan?.status!="cancelled")Text(plan?.error ?: workspace.viewError ?: workspace.error ?: "Please try again.",Modifier.fillMaxWidth().padding(vertical=16.dp),fontSize=14.sp,color=c.muted,textAlign=TextAlign.Center)
+            else Spacer(Modifier.height(16.dp))
             PlotusButton(if(plan==null)"Try again" else "Edit requirements",if(plan==null)onRetry else onEdit)
         }
     }
@@ -389,3 +390,9 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
 @Composable private fun FloorTitle(text:String){Text(text,fontSize=18.sp,fontWeight=FontWeight.SemiBold)}
 @Composable private fun FloorLabel(text:String){Text(text,fontSize=13.sp,color=LocalPlotusColors.current.muted)}
 @Composable private fun FloorError(text:String){Text(text,fontSize=13.sp,color=MaterialTheme.colorScheme.error)}
+
+@Composable private fun RunningTime(plan:GeneratedFloorPlan) {
+    var now by remember(plan.id) {mutableStateOf(kotlin.time.Clock.System.now().toEpochMilliseconds())}
+    LaunchedEffect(plan.id,plan.status) {while(plan.status in listOf("running","queued","cancelling")){now=kotlin.time.Clock.System.now().toEpochMilliseconds();delay(1000)}}
+    Text("Elapsed: ${runDurationLabel(generationElapsedMillis(plan,now))}",fontSize=14.sp,color=LocalPlotusColors.current.muted)
+}

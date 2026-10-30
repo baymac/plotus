@@ -13,3 +13,7 @@ internal fun runDurationLabel(milliseconds:Long?):String {
         remaining.takeIf {it>0}?.let {"$it sec"},
     ).joinToString(" ")
 }
+
+internal fun generationElapsedMillis(plan:com.plotus.shared.GeneratedFloorPlan,nowMillis:Long):Long? =
+    if(plan.status !in listOf("running","queued","cancelling"))plan.durationMillis
+    else runCatching {(nowMillis-kotlin.time.Instant.parse(plan.createdAt).toEpochMilliseconds()).coerceAtLeast(0)}.getOrDefault(0)

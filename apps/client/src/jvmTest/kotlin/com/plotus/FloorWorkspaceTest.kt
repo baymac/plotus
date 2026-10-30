@@ -52,6 +52,28 @@ class FloorWorkspaceTest {
             workspace.discard();assertEquals(area.envelope,workspace.preview?.envelope)
         }finally {scope.cancel()}
     }
+    @Test fun cancellingAnActiveRunDoesNotCloseAnOlderPlanAndRecoversALostReply()=runBlocking<Unit> {
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
+        var current=GeneratedFloorPlan("active","running",createdAt="2026-10-30T10:00:00Z")
+        val older=current.copy(id="earlier",status="ready",drawings=listOf(PlanDrawing("ground","Ground","fixture",100,100)))
+        var cancellations=0
+        val workspace=FloorWorkspace(scope,{method,path,_->when {
+            path.endsWith("/cancel")->{assertEquals("POST",method);cancellations++;current=current.copy(status="cancelled",durationMillis=5000);throw AuthFailure(0,"Reply lost")}
+            path.contains("/generations?")->authJson.encodeToJsonElement(PlanGenerations(listOf(current,older.copy(drawings=emptyList()))))
+            path.endsWith("/earlier")->authJson.encodeToJsonElement(older)
+            path.endsWith("/active")->authJson.encodeToJsonElement(current)
+            else->authJson.encodeToJsonElement(initial)
+        }},{})
+        try {
+            workspace.load(initial.id);assertTrue(workspace.generating)
+            current=current.copy(status="cancelling");workspace.openPlan(current.id);assertTrue(workspace.generating)
+            workspace.openPlan(older.id);assertEquals(older,workspace.viewingPlan)
+            workspace.newAttempt();assertTrue(workspace.generating)
+            workspace.cancelGeneration(current.id)
+            assertFalse(workspace.generating);assertFalse(workspace.cancelling);assertNull(workspace.error)
+            assertEquals("cancelled",workspace.history.first().status);assertEquals(older,workspace.viewingPlan);assertEquals(1,cancellations)
+        }finally {scope.cancel()}
+    }
     private val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(0))).rebuild()
     private val initial=Project("c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a","Home","Test city",revision=2,plotSetup=plot,floorPlan=SavedFloorPlan(FloorPlanSetup(),plot))
     @Test fun lostSaveReplyRequiresTheExactSavedBriefBeforeClearingTheDraft()=runBlocking<Unit> {

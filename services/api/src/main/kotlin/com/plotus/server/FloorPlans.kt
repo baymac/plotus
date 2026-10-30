@@ -8,6 +8,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.sql.DataSource
 import kotlinx.coroutines.*
 import kotlinx.serialization.encodeToString
@@ -17,6 +18,8 @@ import kotlin.math.roundToInt
 interface PlanEngine {
     suspend fun preview(project:Project,setup:FloorPlanSetup):FloorPlanPreview
     suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing>
+    suspend fun generate(project:Project,setup:FloorPlanSetup,jobID:String):List<PlanDrawing> = generate(project,setup)
+    suspend fun cancel(jobID:String) {}
     suspend fun present(plot:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> = drawings
     suspend fun export(drawing:PlanDrawing,format:String):PlanExport = throw ApiFailure(503,"EXPORT_UNAVAILABLE","Export is temporarily unavailable.")
 }
@@ -25,16 +28,16 @@ interface PlanEngine {
 class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngine {
     private val client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build()
     private suspend fun request(path:String,body:JsonObject):JsonObject=try {withContext(Dispatchers.IO) {
-        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(if(path=="/v1/programmes/resolve")15 else 260))
+        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(when(path){"/v1/programmes/resolve"->15L;"/v1/plans/cancel"->12L;else->260L}))
             .header("Authorization","Bearer $token").header("Content-Type","application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build()
-        var response=client.send(request,HttpResponse.BodyHandlers.ofInputStream())
+        var response=runInterruptible {client.send(request,HttpResponse.BodyHandlers.ofInputStream())}
         // The service returns 429 before acquiring its worker. A just-finished
         // preview can still be releasing that worker; retry only this safe case.
         var retry=0
         while(response.statusCode()==429&&retry++<3) {
             response.body().close();delay(750L*retry)
-            response=client.send(request,HttpResponse.BodyHandlers.ofInputStream())
+            response=runInterruptible {client.send(request,HttpResponse.BodyHandlers.ofInputStream())}
         }
         val bytes=response.body().use {it.readNBytes(24*1024*1024+1)}
         if(bytes.size>24*1024*1024)throw ApiFailure(502,"PLAN_TOO_LARGE","The plan preview is too large. Try fewer floors.")
@@ -75,11 +78,14 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
         }.distinctBy {it.message}.take(20)
         return FloorPlanPreview(envelope,issues,response["generation_available"]?.jsonPrimitive?.booleanOrNull==true&&issues.isEmpty())
     }
-    override suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing> {
+    override suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing> = generateRequest(project,setup,null)
+    override suspend fun generate(project:Project,setup:FloorPlanSetup,jobID:String):List<PlanDrawing> = generateRequest(project,setup,jobID)
+    override suspend fun cancel(jobID:String) {request("/v1/plans/cancel",buildJsonObject {put("job_id",jobID)})}
+    private suspend fun generateRequest(project:Project,setup:FloorPlanSetup,jobID:String?):List<PlanDrawing> {
         val preview=preview(project,setup)
         if(!preview.canGenerate)throw ApiFailure(422,"PLAN_NO_FIT",preview.findings.firstOrNull()?.message ?: "Check the floor-plan requirements.")
         val result=request("/v1/plans/generate",buildJsonObject {
-            put("programme",programme(project,setup));put("output_stage","architectural");put("seed",0)
+            put("programme",programme(project,setup));put("output_stage","architectural");put("seed",0);jobID?.let {put("job_id",it)}
         })
         val drawings=Json.decodeFromJsonElement<List<PlanDrawing>>(result["drawings"] ?: throw ApiFailure(502,"PLAN_INVALID","No floor drawing was returned."))
         if(drawings.isEmpty()||drawings.size>6||drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||it.pngBase64.length>6_000_000})
@@ -201,7 +207,7 @@ class PostgresPlans(private val source:DataSource) {
             c.prepareStatement("SELECT * FROM plotus.plan_generations WHERE owner_id=? AND project_id=? AND request_id=?").use {
                 it.setObject(1,owner);it.setObject(2,UUID.fromString(project.id));it.setObject(3,UUID.fromString(request.requestID));it.executeQuery().use {r->if(r.next()){val found=r.plan();c.commit();return@db StartedPlan(found,false)}}
             }
-            c.createStatement().use {it.executeQuery("SELECT 1 FROM plotus.plan_generations WHERE status IN ('queued','running') LIMIT 1").use {r->if(r.next())throw ApiFailure(429,"ENGINE_BUSY","A plan is being generated. Try again shortly.")}}
+            c.createStatement().use {it.executeQuery("SELECT 1 FROM plotus.plan_generations WHERE status IN ('queued','running','cancelling') LIMIT 1").use {r->if(r.next())throw ApiFailure(429,"ENGINE_BUSY","A plan is being generated. Try again shortly.")}}
             val id=UUID.randomUUID()
             c.prepareStatement("""INSERT INTO plotus.plan_generations(id,owner_id,project_id,request_id,source_revision,snapshot,status)
                 SELECT ?,owner_id,id,?,revision,jsonb_build_object('plot',plot_setup,'floorPlan',floor_plan),'running'
@@ -214,11 +220,23 @@ class PostgresPlans(private val source:DataSource) {
     suspend fun finish(owner:UUID,project:UUID,plan:GeneratedFloorPlan)=db {c->c.prepareStatement("UPDATE plotus.plan_generations SET status=?,result=?::jsonb,updated_at=clock_timestamp() WHERE id=? AND owner_id=? AND project_id=? AND status='running'").use {
         it.setString(1,plan.status);it.setString(2,Json.encodeToString(plan));it.setObject(3,UUID.fromString(plan.id));it.setObject(4,owner);it.setObject(5,project);it.executeUpdate()
     };Unit}
-    fun recover() {source.connection.use {c->c.createStatement().use {it.executeUpdate("UPDATE plotus.plan_generations SET status='failed',updated_at=clock_timestamp() WHERE status IN ('queued','running')")}}}
+    suspend fun markCancelling(owner:UUID,project:UUID,id:UUID):GeneratedFloorPlan {
+        db {c->c.prepareStatement("UPDATE plotus.plan_generations SET status='cancelling',result=NULL,updated_at=clock_timestamp() WHERE id=? AND owner_id=? AND project_id=? AND status IN ('queued','running')").use {
+            it.setObject(1,id);it.setObject(2,owner);it.setObject(3,project);it.executeUpdate()
+        }}
+        return find(owner,project,id) ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
+    }
+    suspend fun cancel(owner:UUID,project:UUID,id:UUID):GeneratedFloorPlan {
+        db {c->c.prepareStatement("UPDATE plotus.plan_generations SET status='cancelled',updated_at=clock_timestamp() WHERE id=? AND owner_id=? AND project_id=? AND status='cancelling'").use {
+            it.setObject(1,id);it.setObject(2,owner);it.setObject(3,project);it.executeUpdate()
+        }}
+        return find(owner,project,id) ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
+    }
+    fun recover() {source.connection.use {c->c.createStatement().use {it.executeUpdate("UPDATE plotus.plan_generations SET status=CASE WHEN status='cancelling' THEN 'cancelled' ELSE 'failed' END,updated_at=clock_timestamp() WHERE status IN ('queued','running','cancelling')")}}}
     // updated_at is written when a run finishes or is recovered after interruption.
     // Presentation caching changes only result.drawings, so later exports never extend it.
     private fun java.sql.ResultSet.runDurationMillis():Long? =
-        if(getString("status") in listOf("ready","blocked","failed"))
+        if(getString("status") in listOf("ready","blocked","failed","cancelled"))
             Duration.between(getTimestamp("created_at").toInstant(),getTimestamp("updated_at").toInstant()).toMillis().coerceAtLeast(0)
         else null
     private fun java.sql.ResultSet.plan():GeneratedFloorPlan = (getString("result")?.let {Json.decodeFromString<GeneratedFloorPlan>(it)}
@@ -228,6 +246,7 @@ class PostgresPlans(private val source:DataSource) {
 }
 
 class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEngine?=null,private val scope:CoroutineScope=CoroutineScope(SupervisorJob()+Dispatchers.IO)):AutoCloseable {
+    private val running=ConcurrentHashMap<String,Job>()
     suspend fun preview(project:Project,setup:FloorPlanSetup):FloorPlanPreview {
         val errors=setup.errors(project.plotSetup,complete=true)
         if(errors.isNotEmpty())throw ApiFailure(400,"VALIDATION_FAILED","Check the floor-plan details.",errors)
@@ -255,6 +274,18 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
         if(format=="dwg"&&drawing.vectorSvgBase64==null)throw ApiFailure(422,"VECTOR_UNAVAILABLE","Generate a new plan to export DWG. This older plan has a saved image only.")
         return connected().export(drawing,format)
     }
+    suspend fun cancel(owner:UUID,project:UUID,id:UUID):GeneratedFloorPlan {
+        val store=jobs ?: throw unavailable()
+        val current=store.find(owner,project,id) ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
+        if(current.status !in listOf("running","queued","cancelling"))return current
+        val pending=store.markCancelling(owner,project,id)
+        if(pending.status!="cancelling")return pending
+        running.remove(id.toString())?.cancel()
+        // The transport cancels by a backend-generated ID, after the owned lookup.
+        // A cancellation tombstone also covers a request still in preflight.
+        connected().cancel(id.toString())
+        return store.cancel(owner,project,id)
+    }
     suspend fun start(owner:UUID,project:Project,request:StartPlanRequest,units:PlotUnits?=null):GeneratedFloorPlan {
         val store=jobs ?: throw unavailable()
         val requestID=try {UUID.fromString(request.requestID)}catch(_:IllegalArgumentException){throw ApiFailure(400,"INVALID_REQUEST_ID","Reopen Floor plan and try again.")}
@@ -270,13 +301,17 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
         val started=store.start(owner,project,request)
         val job=started.plan
         if(!started.created)return job
-        scope.launch {
+        val work=scope.launch(start=CoroutineStart.LAZY) {
+            try {
+            if(store.find(owner,UUID.fromString(project.id),UUID.fromString(job.id))?.status !in listOf("running","queued"))return@launch
             // Include preflight and transport time beyond the engine's 240-second worker ceiling.
-            val finished=try {job.copy(status="ready",drawings=withTimeout(280000) {planner.generate(project,if(units==null)saved.setup else saved.setup.copy(units=units))})}
+            val finished=try {job.copy(status="ready",drawings=withTimeout(280000) {planner.generate(project,if(units==null)saved.setup else saved.setup.copy(units=units),job.id)})}
                 catch(cancelled:CancellationException){if(cancelled !is TimeoutCancellationException)throw cancelled;job.copy(status="failed",error="Generation took too long. Try again.")}
                 catch(failure:Exception){job.copy(status=if((failure as? ApiFailure)?.status==422)"blocked" else "failed",error=(failure as? ApiFailure)?.message ?: "Couldn’t generate this plan. Try again.")}
             store.finish(owner,UUID.fromString(project.id),finished)
+            }finally {running.remove(job.id,currentCoroutineContext()[Job])}
         }
+        running[job.id]=work;work.start()
         return job
     }
     private fun connected()=engine ?: throw unavailable()

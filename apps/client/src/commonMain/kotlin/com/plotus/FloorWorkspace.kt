@@ -39,7 +39,7 @@ class FloorWorkspace(
     var viewError by mutableStateOf<String?>(null);private set
     var exporting by mutableStateOf(false);private set
     var exportError by mutableStateOf<String?>(null);private set
-    internal var readyDownload by mutableStateOf<ReadyPlanDownload?>(null);private set
+    var cancelling by mutableStateOf(false);private set
     var starting by mutableStateOf(false);private set
     private var requestID:String?=null
     private var polling:Job?=null
@@ -47,7 +47,7 @@ class FloorWorkspace(
     val footprintKey get()=project?.plotSetup?.let {draft.buildableKey(it)}
     val dirty get()=draft!=saved.singleResidence()
     val needsReview get()=project?.floorPlan?.let {it.plot!=project?.plotSetup||it.setup!=it.setup.singleResidence()}==true
-    val generating get()=starting||generation?.status in listOf("queued","running")
+    val generating get()=starting||cancelling||generation?.status in listOf("queued","running","cancelling")
     private val base get()="/v1/projects/${project!!.id}/floor-plan"
     suspend fun load(id:String) {
         if(saving||dirty)return
@@ -58,8 +58,8 @@ class FloorWorkspace(
             p.buildableArea?.let {areas[it.key]=it};restoreArea()
             validation=emptyMap();conflict=false
             loadHistory()
-            generation=history.firstOrNull {it.status in listOf("running","queued")}
-            generation?.takeIf {it.status in listOf("running","queued")}?.let {poll(it)}
+            generation=history.firstOrNull {it.status in listOf("running","queued","cancelling")}
+            generation?.takeIf {it.status in listOf("running","queued","cancelling")}?.let {poll(it)}
         }catch(cancelled:CancellationException){throw cancelled}
         catch(failure:Exception){error=failure.message ?: "Couldn’t open Floor plan."}
         finally {loading=false}
@@ -135,28 +135,45 @@ class FloorWorkspace(
             finally {starting=false}
         }
     }
-    fun newAttempt(){requestID=null;generation=null;error=null}
+    fun newAttempt(){if(generating)return;requestID=null;generation=null;error=null}
     fun exportPlan(planID:String,drawingID:String,format:String) {
         if(exporting||project==null)return
-        exporting=true;exportError=null;readyDownload=null
+        exportError=null
         val path="$base/generations/$planID/drawings/$drawingID/export/$format"
+        if(planDownloadsUseBrowser) {
+            try {downloadPlanFromUrl(ReadyPlanDownload("Plotus.$format",format,"$path?download=1"))}
+            catch(failure:Exception){exportError=failure.message ?: "Couldn’t start the download."}
+            return
+        }
+        exporting=true
         scope.launch {
             try {
                 val file=authJson.decodeFromJsonElement<PlanExport>(request("GET",path,null))
-                if(planDownloadsUseBrowser)readyDownload=ReadyPlanDownload(file.filename,format,"$path?download=1")
-                else savePlanExport(file)
+                savePlanExport(file)
             }catch(cancelled:CancellationException){throw cancelled}
             catch(_:AuthCancelled){}
             catch(failure:Exception){exportError=failure.message ?: "Couldn’t export this plan."}
             finally {exporting=false}
         }
     }
-    internal fun downloadPreparedPlan() {
-        val download=readyDownload ?: return
-        try {downloadPlanFromUrl(download)}
-        catch(failure:Exception){exportError=failure.message ?: "Couldn’t start the download. Try again."}
+    fun cancelGeneration(id:String) {
+        if(cancelling||project==null)return
+        cancelling=true;error=null
+        scope.launch {
+            try {
+                val cancelled=try {authJson.decodeFromJsonElement<GeneratedFloorPlan>(request("POST","$base/generations/$id/cancel","{}"))}
+                catch(failure:Exception) {
+                    if(failure is CancellationException)throw failure
+                    val checked=authJson.decodeFromJsonElement<GeneratedFloorPlan>(request("GET","$base/generations/$id",null))
+                    if(checked.status in listOf("running","queued","cancelling"))throw failure else checked
+                }
+                if(generation?.id==id){polling?.cancel();generation=cancelled}
+                rememberPlan(cancelled)
+            }catch(cancelled:CancellationException){throw cancelled}
+            catch(failure:Exception){error=failure.message ?: "Couldn’t cancel generation. Try again."}
+            finally {cancelling=false}
+        }
     }
-    internal fun dismissDownload(){readyDownload=null}
     fun dismissExportError(){exportError=null}
     suspend fun loadHistory(more:Boolean=false) {
         if(project==null||historyLoading)return
@@ -165,6 +182,7 @@ class FloorWorkspace(
         try {
             val page=authJson.decodeFromJsonElement<PlanGenerations>(request("GET","$base/generations?summaries=true"+(before?.let {"&before=$it"} ?: ""),null))
             history=(if(more)history+page.plans else page.plans).distinctBy {it.id};nextHistoryBefore=page.nextBefore
+            if(!more&&!generating)page.plans.firstOrNull {it.status in listOf("running","queued","cancelling")}?.let {generation=it;poll(it)}
         }catch(cancelled:CancellationException){throw cancelled}
         catch(failure:Exception){historyError=failure.message ?: "Couldn’t load history."}
         finally {historyLoading=false}
@@ -174,7 +192,7 @@ class FloorWorkspace(
         try {
             val plan=authJson.decodeFromJsonElement<GeneratedFloorPlan>(request("GET","$base/generations/$id",null))
             viewingPlan=plan
-            if(plan.status in listOf("running","queued")){generation=plan;poll(plan)}
+            if(plan.status in listOf("running","queued","cancelling")){generation=plan;poll(plan)}
         }catch(cancelled:CancellationException){throw cancelled}
         catch(failure:Exception){viewError=failure.message ?: "Couldn’t open this plan."}
         finally {viewLoading=false}
@@ -186,12 +204,12 @@ class FloorWorkspace(
     }
     private fun poll(job:GeneratedFloorPlan) {
         polling?.cancel()
-        if(job.status !in listOf("running","queued"))return
+        if(job.status !in listOf("running","queued","cancelling"))return
         polling=scope.launch {
             try {while(isActive) {
                 delay(2000)
                 val next=authJson.decodeFromJsonElement<GeneratedFloorPlan>(request("GET","$base/generations/${job.id}",null));generation=next;rememberPlan(next);error=null
-                if(next.status !in listOf("running","queued"))break
+                if(next.status !in listOf("running","queued","cancelling"))break
             }}catch(cancelled:CancellationException){throw cancelled}
             catch(failure:Exception){error="Couldn’t check generation. Reopen Floor plan to continue."}
         }

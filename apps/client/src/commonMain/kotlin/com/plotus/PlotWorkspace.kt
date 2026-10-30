@@ -33,6 +33,7 @@ class PlotWorkspace(
     var sketchSuggestion by mutableStateOf<SketchSuggestion?>(null); private set
     var sketchNotes by mutableStateOf<List<String>>(emptyList()); private set
     var validationAttempt by mutableStateOf(0); private set
+    var boundaryFeedbackAttempt by mutableStateOf(0); private set
     private var requireBoundary = false
     private var requireRoads = false
     private var undo by mutableStateOf<List<PlotSetup>>(emptyList())
@@ -63,13 +64,13 @@ class PlotWorkspace(
         validation = if(requireBoundary||requireRoads) setupProblems(requireRoads) else emptyMap()
     }
     val boundaryDefined get() = draft.vertices.isNotEmpty() && draft.errors(true).isEmpty()
-    val readyForFloor get() = boundaryDefined && draft.errors(true,true).isEmpty()
+    val readyForFloor get() = boundaryDefined && draft.errors(true,true).isEmpty() && directionText.toDoubleOrNull()?.let {it in -180.0..180.0}==true
     private fun setupProblems(roads:Boolean):Map<String,String> = when {
         !boundaryDefined -> mapOf("boundary" to "Set all sides dimensions")
         roads -> draft.errors(true,true)
         else -> emptyMap()
     }
-    fun boundaryError(message:String) { validation=mapOf("boundary" to message);validationAttempt++ }
+    fun boundaryError(message:String) { validation=mapOf("boundary" to message);validationAttempt++;boundaryFeedbackAttempt++ }
     fun dismissSketch() {sketchSuggestion=null;sketchError=null}
     fun applySketch() {
         val suggestion=sketchSuggestion ?: return

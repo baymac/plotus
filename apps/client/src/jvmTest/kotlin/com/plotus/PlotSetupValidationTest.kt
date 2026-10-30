@@ -21,6 +21,8 @@ class PlotSetupValidationTest {
             assertFalse(entered);assertFalse(workspace.readyForFloor)
             workspace.change(workspace.draft.toggleRoad(0))
             assertTrue(workspace.readyForFloor)
+            workspace.editDirection("");assertFalse(workspace.readyForFloor)
+            workspace.editDirection("0");assertTrue(workspace.readyForFloor)
             workspace.save(requireBoundary=true,requireRoads=true) {entered=true}
             assertTrue(entered);assertTrue(workspace.validation.isEmpty())
         } finally {scope.cancel()}

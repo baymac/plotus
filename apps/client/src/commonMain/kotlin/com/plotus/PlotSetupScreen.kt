@@ -44,8 +44,10 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
     var leaving by remember { mutableStateOf<(() -> Unit)?>(null) }
     var reloadOpen by remember { mutableStateOf(false) }
     val close: (() -> Unit) -> Unit = { action -> if(workspace.dirty)leaving=action else action() }
-    LaunchedEffect(workspace.validationAttempt,workspace.error) {
-        if(step!=null&&(workspace.validation.isNotEmpty()||workspace.error!=null))onStep(null)
+    var handledFeedback by remember(workspace) {mutableStateOf(workspace.boundaryFeedbackAttempt)}
+    LaunchedEffect(workspace.boundaryFeedbackAttempt) {
+        if(workspace.boundaryFeedbackAttempt>handledFeedback&&step!=null&&workspace.validation.isNotEmpty())onStep(null)
+        handledFeedback=workspace.boundaryFeedbackAttempt
     }
     val focus=LocalFocusManager.current
     val keyboardController=LocalSoftwareKeyboardController.current
@@ -58,7 +60,10 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
                 close(onExit)
             }
             if(keyboard)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard",enabled=!workspace.saving) {focus.clearFocus();keyboardController?.hide()}
-
+            if(step==null)TextButton({
+                focus.clearFocus();keyboardController?.hide()
+                workspace.save(requireBoundary=true,requireRoads=true,onSaved=onFloor)
+            },enabled=!workspace.loading&&!workspace.saving&&workspace.readyForFloor) {Text(if(workspace.saving)"Saving…" else "Next")}
         }
         if(workspace.loading)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {CircularProgressIndicator()}
         else if(workspace.project==null)Column(Modifier.fillMaxSize().padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp),horizontalAlignment=Alignment.CenterHorizontally) {
@@ -98,7 +103,6 @@ private fun PlotEditor(workspace:PlotWorkspace,step:PlotStep?,compact:Boolean,on
                     EditorOption(item.title(),when(item){PlotStep.BOUNDARY->PlotSymbol.BOUNDARY;PlotStep.DIRECTION->PlotSymbol.COMPASS;PlotStep.ROADS->PlotSymbol.ROAD},!workspace.saving,Modifier.weight(1f),highlighted=when(item){PlotStep.BOUNDARY->workspace.validation.containsKey("boundary");PlotStep.ROADS->workspace.validation.keys.any {it.startsWith("road")};else->false}) {onStep(item)}
                 }
             }
-            PlotusButton("Start Floor Plan",onFloor,Modifier.fillMaxWidth(),enabled=!workspace.saving&&workspace.readyForFloor)
         }
     }) else if(!compact)Row(modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f).fillMaxHeight()) {
@@ -139,10 +143,12 @@ internal fun PlanningStages(modifier: Modifier, selected:Int=0,onPlot:()->Unit={
 private fun PlotFields(workspace:PlotWorkspace,step:PlotStep,modifier:Modifier,onReload:(()->Unit)?=null,onBack:()->Unit={}) {
     val c=LocalPlotusColors.current
     val scroll=remember(step) {ScrollState(0)}
+    val focus=LocalFocusManager.current
+    val keyboard=LocalSoftwareKeyboardController.current
     LaunchedEffect(workspace.validationAttempt,workspace.error,workspace.validation["boundary"]) {if(workspace.validation.isNotEmpty()||workspace.error!=null)scroll.scrollTo(0)}
     Column(modifier.fillMaxWidth().background(c.surface)) {
         Box(Modifier.padding(horizontal=20.dp,vertical=8.dp)) {
-            InspectorHeader(step.title(),!workspace.saving,workspace.dirty,onBack) {workspace.save(onSaved=onBack)}
+            InspectorHeader(step.title(),!workspace.saving,workspace.dirty,onBack) {focus.clearFocus();keyboard?.hide();workspace.save()}
         }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(horizontal=20.dp,vertical=16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             if(step!=PlotStep.BOUNDARY&&onReload!=null)PlotProblems(workspace,onReload=onReload)

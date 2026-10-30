@@ -71,11 +71,11 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                     if(viewed.drawings.getOrNull(viewedFloor)?.presentation?.vectorAvailable!=true)Text("Generate a new plan for DWG",Modifier.widthIn(max=220.dp).padding(16.dp),fontSize=12.sp,color=c.muted)
                 }
             }
-            if(generationID==null&&step!=FloorStep.HISTORY)TextButton({
+            if(generationID==null&&step==null)TextButton({
                 hideKeyboard()
                 if(workspace.generation?.status in listOf("ready","blocked","failed"))workspace.newAttempt()
                 workspace.generate {onGeneration(it.id)}
-            },enabled=!busy) {Text(if(busy)"Generating…" else "Generate") }
+            },enabled=!busy&&!workspace.loading&&workspace.draft.errors(workspace.project?.plotSetup,true).isEmpty()) {Text(if(busy)"Generating…" else "Generate") }
         }
         if(workspace.loading)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
         else if(workspace.project?.plotSetup==null)Column(Modifier.fillMaxSize().padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
@@ -99,7 +99,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                         InspectorHeader(editing?.second?.kind?.title ?: if(catalogue)"Add room" else when(selected){FloorStep.SETBACKS->"Setbacks";FloorStep.HISTORY->"History";else->"Requirements"},!busy,canSave&&selected!=FloorStep.HISTORY,{
                             hideKeyboard()
                             when {editing!=null->editing=null;catalogue->catalogue=false;else->close {onStep(null)}}
-                        },showSave=selected!=FloorStep.HISTORY) {hideKeyboard();workspace.save {editing=null;catalogue=false;onStep(null)}}
+                        },showSave=selected!=FloorStep.HISTORY) {hideKeyboard();workspace.save()}
                     }
                     Column(Modifier.weight(1f).verticalScroll(scroll).padding(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
                         workspace.error?.let {FloorError(it)}

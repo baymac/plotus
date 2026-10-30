@@ -110,7 +110,7 @@ import org.jetbrains.skia.svg.SVGLengthContext
                 }
             }
         else Text("This floor drawing couldn’t be opened.",Modifier.align(Alignment.Center),color=c.muted)
-        if(presentation!=null) {
+        if(presentation!=null&&presentation.version<2) {
             val side=presentation.roadPosition
             val alignment=when(side){"west"->Alignment.CenterStart;"east"->Alignment.CenterEnd;"south"->Alignment.BottomCenter;else->Alignment.TopCenter}
             val label=Modifier.align(alignment).let {m->when(side){

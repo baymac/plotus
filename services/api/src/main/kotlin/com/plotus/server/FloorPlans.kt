@@ -230,7 +230,7 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
     suspend fun history(owner:UUID,project:UUID,before:UUID?=null)=jobs?.history(owner,project,before) ?: PlanGenerations(emptyList())
     suspend fun get(owner:UUID,project:UUID,id:UUID,byRequest:Boolean=false):GeneratedFloorPlan {
         val plan=jobs?.find(owner,project,id,byRequest) ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
-        if(plan.status!="ready"||plan.drawings.all {it.presentation!=null}||engine==null)return plan
+        if(plan.status!="ready"||plan.drawings.all {(it.presentation?.version ?: 0)>=2}||engine==null)return plan
         val key=UUID.fromString(plan.id)
         val brief=jobs.snapshot(owner,project,key) ?: return plan
         val drawings=engine.present(brief.plot,brief.setup.units,plan.drawings)

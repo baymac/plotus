@@ -26,7 +26,7 @@ class FloorPlanIntegrationTest {
             override suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing> = error("Never regenerate saved drawings")
             override suspend fun present(saved:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> {
                 presentations++;assertEquals(plot,saved);assertEquals(PlotUnits.METRES,units)
-                return drawings.map {it.copy(presentation=PlanPresentation(plotAreaSquareMetres=saved.areaSquareMetres,perimeterMetres=saved.perimeterMetres,builtUpAreaSquareMetres=100.0,carpetAreaSquareMetres=80.0,units=units,vectorAvailable=true),vectorSvgBase64="dmVjdG9yLWZpeHR1cmU=")}
+                return drawings.map {it.copy(presentation=PlanPresentation(version=2,plotAreaSquareMetres=saved.areaSquareMetres,perimeterMetres=saved.perimeterMetres,builtUpAreaSquareMetres=100.0,carpetAreaSquareMetres=80.0,units=units,vectorAvailable=true),vectorSvgBase64="dmVjdG9yLWZpeHR1cmU=")}
             }
             override suspend fun export(drawing:PlanDrawing,format:String):PlanExport {exports++;assertEquals(PlotUnits.METRES,drawing.presentation?.units);return PlanExport("floor.$format","application/octet-stream","Zml4dHVyZQ==")}
         }
@@ -37,13 +37,14 @@ class FloorPlanIntegrationTest {
                 var p=projects.create(owner,ProjectDraft("Export fixture","Test city"));p=projects.savePlot(owner,UUID.fromString(p.id),p.revision,plot)
                 projects.saveFloorPlan(owner,UUID.fromString(p.id),p.revision,FloorPlanSetup(units=PlotUnits.METRES))
             }
-            val job=runBlocking {jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan.also {jobs.finish(owner,UUID.fromString(project.id),it.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","original-drawing",100,100,spaceEfficiency=efficiency))))}}
+            val job=runBlocking {jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan.also {jobs.finish(owner,UUID.fromString(project.id),it.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","original-drawing",100,100,presentation=PlanPresentation(version=1),spaceEfficiency=efficiency))))}}
             project=runBlocking {projects.savePlot(owner,UUID.fromString(project.id),project.revision,plot.copy(northDegrees=45.0))}
             runBlocking {service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id))}
             val base="/v1/projects/${project.id}/floor-plan/generations/${job.id}"
             suspend fun get(path:String=base,token:String="export-owner")=client.get(path){bearerAuth(token)}
             val opened=Json.decodeFromString<GeneratedFloorPlan>(get().bodyAsText());assertEquals("original-drawing",opened.drawings.single().pngBase64)
             assertEquals(80.0,opened.drawings.single().presentation?.carpetAreaSquareMetres)
+            assertEquals(2,opened.drawings.single().presentation?.version)
             // PostgreSQL persistence, presentation caching and HTTP encoding must
             // keep nested measured metadata and unknown future report fields.
             assertEquals(efficiency,opened.drawings.single().spaceEfficiency)

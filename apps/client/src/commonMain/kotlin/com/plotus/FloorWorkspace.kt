@@ -39,6 +39,7 @@ class FloorWorkspace(
     var viewError by mutableStateOf<String?>(null);private set
     var exporting by mutableStateOf(false);private set
     var exportError by mutableStateOf<String?>(null);private set
+    internal var readyDownload by mutableStateOf<ReadyPlanDownload?>(null);private set
     var starting by mutableStateOf(false);private set
     private var requestID:String?=null
     private var polling:Job?=null
@@ -137,20 +138,25 @@ class FloorWorkspace(
     fun newAttempt(){requestID=null;generation=null;error=null}
     fun exportPlan(planID:String,drawingID:String,format:String) {
         if(exporting||project==null)return
-        exporting=true;exportError=null
-        val destination=try {preparePlanExport(format,"plotus-floor-plan.$format")}
-            catch(failure:Exception){exporting=false;exportError=failure.message ?: "Couldn’t export this plan.";return}
+        exporting=true;exportError=null;readyDownload=null
+        val path="$base/generations/$planID/drawings/$drawingID/export/$format"
         scope.launch {
             try {
-                destination.ready()
-                val file=authJson.decodeFromJsonElement<PlanExport>(request("GET","$base/generations/$planID/drawings/$drawingID/export/$format",null))
-                destination.save(file)
+                val file=authJson.decodeFromJsonElement<PlanExport>(request("GET",path,null))
+                if(planDownloadsUseBrowser)readyDownload=ReadyPlanDownload(file.filename,format,"$path?download=1")
+                else savePlanExport(file)
             }catch(cancelled:CancellationException){throw cancelled}
             catch(_:AuthCancelled){}
             catch(failure:Exception){exportError=failure.message ?: "Couldn’t export this plan."}
             finally {exporting=false}
         }
     }
+    internal fun downloadPreparedPlan() {
+        val download=readyDownload ?: return
+        try {downloadPlanFromUrl(download)}
+        catch(failure:Exception){exportError=failure.message ?: "Couldn’t start the download. Try again."}
+    }
+    internal fun dismissDownload(){readyDownload=null}
     fun dismissExportError(){exportError=null}
     suspend fun loadHistory(more:Boolean=false) {
         if(project==null||historyLoading)return

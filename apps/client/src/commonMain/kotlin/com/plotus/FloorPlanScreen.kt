@@ -41,6 +41,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     var editing by remember {mutableStateOf<Pair<String?,PlanRoom>?>(null)}
     var viewedFloor by remember(generationID) {mutableStateOf(0)}
     var exportOpen by remember(generationID) {mutableStateOf(false)}
+    LaunchedEffect(workspace,generationID){workspace.dismissDownload()}
     val selected=step ?: FloorStep.SETBACKS
     val close:(()->Unit)->Unit={action->focus.clearFocus();keyboard?.hide();if(workspace.dirty)leaving=action else action()}
     val busy=workspace.saving||workspace.generating
@@ -158,6 +159,10 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             }
         }
     }
+    workspace.readyDownload?.let {download->AlertDialog(onDismissRequest=workspace::dismissDownload,
+        title={Text("Your ${download.format.uppercase()} is ready")},text={Text(download.filename)},
+        confirmButton={TextButton(workspace::downloadPreparedPlan){Text("Download ${download.format.uppercase()}")}},
+        dismissButton={TextButton(workspace::dismissDownload){Text("Close")}})}
     leaving?.let {action->AlertDialog(onDismissRequest={leaving=null},title={Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
         Text("Save floor-plan changes?",Modifier.weight(1f),fontSize=20.sp,fontWeight=FontWeight.SemiBold)
         PlotToolButton(PlotSymbol.CLOSE,"Cancel"){leaving=null}

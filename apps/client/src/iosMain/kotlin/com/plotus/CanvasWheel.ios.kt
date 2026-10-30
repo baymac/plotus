@@ -1,5 +1,8 @@
 package com.plotus
 
-import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.geometry.Offset
 
-internal actual fun canvasWheelPixels(event:PointerEvent,density:Float):Float = (event.changes.firstOrNull()?.scrollDelta?.y ?: 0f)*density
+internal actual fun canvasWheelInput(event:PointerEvent,density:Float)=CanvasWheelInput(
+    (event.changes.firstOrNull()?.scrollDelta ?: Offset.Zero)/density,
+    event.keyboardModifiers.isCtrlPressed||event.keyboardModifiers.isMetaPressed,event.keyboardModifiers.isShiftPressed)

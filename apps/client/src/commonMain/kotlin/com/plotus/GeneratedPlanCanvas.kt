@@ -3,7 +3,6 @@ package com.plotus
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -21,9 +20,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.withTransform
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
@@ -66,9 +62,8 @@ import org.jetbrains.skia.svg.SVGLengthContext
     val bitmap=remember(drawing.id,content,vector) {if(vector==null)runCatching {Base64.decode(content).decodeToImageBitmap()}.getOrNull() else null}
     val drawingWidth=vector?.width ?: bitmap?.width?.toFloat() ?: 1f
     val drawingHeight=vector?.height ?: bitmap?.height?.toFloat() ?: 1f
-    val maximumZoom=if(vector!=null)32f else 8f
     var size by remember {mutableStateOf(IntSize(1,1))}
-    val viewport=rememberCanvasZoom(drawing.id)
+    val viewport=rememberCanvasZoom(drawing.id to (drawing.vectorSvgBase64 ?: content))
     var grid by remember {mutableStateOf(true)}
     val density=LocalDensity.current.density
     val filter=remember(c.ink) {
@@ -81,18 +76,7 @@ import org.jetbrains.skia.svg.SVGLengthContext
     Column(modifier.background(c.background)) {
     Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().onSizeChanged {size=it}) {
         if(vector!=null||bitmap!=null)Canvas(Modifier.fillMaxSize().semantics {contentDescription="Generated floor plan. Read-only canvas. Drag to pan, pinch or use the toolbar to zoom."+(if(vector!=null)" Vector drawing." else " Image drawing.")}
-            .pointerInput(drawing.id,maximumZoom){detectTransformGestures {centre,delta,factor,_->
-                val origin=Offset(size.width/2f,(size.height+72*density)/2f)
-                viewport.gesture(centre,delta,factor,origin,maximumZoom)
-            }}.onPointerEvent(PointerEventType.Scroll) {event->
-                val change=event.changes.firstOrNull() ?: return@onPointerEvent
-                val pixels=canvasWheelPixels(event,density)
-                if(pixels!=0f) {
-                    val origin=Offset(size.width/2f,(size.height+72*density)/2f)
-                    viewport.scroll(pixels,change.position,origin,maximumZoom)
-                    change.consume()
-                }
-            }) {
+            .canvasNavigation(viewport,Offset(size.width/2f,(size.height+72*density)/2f))) {
                 if(grid) {
                     val spacing=24*density
                     var x=16*density
@@ -129,8 +113,8 @@ import org.jetbrains.skia.svg.SVGLengthContext
             .border(1.dp,c.line,RoundedCornerShape(12.dp)).padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
             PlotToolButton(PlotSymbol.HAND,"Pan plan",selected=true) {}
             PlotToolButton(PlotSymbol.GRID,"Toggle guide dots",selected=grid){grid=!grid}
-            PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in"){viewport.step(1.15f,maximumZoom)}
-            PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out"){viewport.step(1f/1.15f,maximumZoom)}
+            PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in"){viewport.step(CanvasZoom.STEP,CanvasZoom.MAXIMUM)}
+            PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out"){viewport.step(1f/CanvasZoom.STEP,CanvasZoom.MAXIMUM)}
             Text("${(viewport.view.zoom*100).roundToInt()}%",Modifier.weight(1f),fontSize=11.sp,color=c.muted)
             PlotToolButton(PlotSymbol.FIT,"Fit plan to canvas"){viewport.reset()}
             Box {

@@ -10,10 +10,16 @@ import kotlin.math.abs
 import kotlin.math.exp
 
 internal data class CanvasView(val zoom:Float=1f,val pan:Offset=Offset.Zero)
+internal data class CanvasWheelInput(val delta:Offset,val zoom:Boolean,val horizontal:Boolean=false)
 
 /** Coalesce wheel input into a short, cursor-anchored transition. Direct gestures snap. */
 @Stable
 internal class CanvasZoom {
+    companion object {
+        const val MINIMUM=.1f
+        const val MAXIMUM=32f
+        const val STEP=1.2f
+    }
     var view by mutableStateOf(CanvasView())
         private set
     var target by mutableStateOf(CanvasView())
@@ -22,20 +28,25 @@ internal class CanvasZoom {
 
     fun scroll(pixels:Float,anchor:Offset,origin:Offset,maximum:Float) {
         if(!pixels.isFinite()||pixels==0f)return
-        val factor=exp(-pixels.coerceIn(-120f,120f)*.001f)
+        val factor=exp(-pixels.coerceIn(-120f,120f)*.0016f)
         zoomTo(target.zoom*factor,anchor,origin,maximum)
     }
     fun step(factor:Float,maximum:Float) {zoomTo(target.zoom*factor,Offset.Zero,Offset.Zero,maximum)}
     private fun zoomTo(zoom:Float,anchor:Offset,origin:Offset,maximum:Float) {
-        val next=zoom.coerceIn(.5f,maximum)
+        val next=zoom.coerceIn(MINIMUM,maximum)
         target=CanvasView(next,(target.pan+origin-anchor)*(next/target.zoom)+anchor-origin)
     }
     fun gesture(anchor:Offset,delta:Offset,factor:Float,origin:Offset,maximum:Float) {
-        val next=(view.zoom*factor).coerceIn(.5f,maximum)
+        val next=(view.zoom*factor).coerceIn(MINIMUM,maximum)
         view=CanvasView(next,(view.pan+origin-anchor)*(next/view.zoom)+anchor-origin+delta)
         target=view
     }
     fun reset() {view=CanvasView();target=view}
+    fun pan(delta:Offset,smooth:Boolean=false) {
+        if(!delta.x.isFinite()||!delta.y.isFinite())return
+        if(smooth)target=target.copy(pan=target.pan+delta)
+        else {view=view.copy(pan=view.pan+delta);target=view}
+    }
 
     fun advance(milliseconds:Float,durationScale:Float=1f) {
         if(!moving)return
@@ -64,4 +75,4 @@ internal fun rememberCanvasZoom(key:Any):CanvasZoom {
     return state
 }
 
-internal expect fun canvasWheelPixels(event:PointerEvent,density:Float):Float
+internal expect fun canvasWheelInput(event:PointerEvent,density:Float):CanvasWheelInput

@@ -138,10 +138,13 @@ class FloorWorkspace(
     fun exportPlan(planID:String,drawingID:String,format:String) {
         if(exporting||project==null)return
         exporting=true;exportError=null
+        val destination=try {preparePlanExport(format,"plotus-floor-plan.$format")}
+            catch(failure:Exception){exporting=false;exportError=failure.message ?: "Couldn’t export this plan.";return}
         scope.launch {
             try {
+                destination.ready()
                 val file=authJson.decodeFromJsonElement<PlanExport>(request("GET","$base/generations/$planID/drawings/$drawingID/export/$format",null))
-                savePlanExport(file)
+                destination.save(file)
             }catch(cancelled:CancellationException){throw cancelled}
             catch(_:AuthCancelled){}
             catch(failure:Exception){exportError=failure.message ?: "Couldn’t export this plan."}

@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,8 +115,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
     var toolOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     var grid by remember { mutableStateOf(true) }
-    var zoom by remember { mutableStateOf(1f) }
-    var pan by remember { mutableStateOf(Offset.Zero) }
+    val viewport=rememberCanvasZoom(workspace)
     var canvasSize by remember { mutableStateOf(IntSize(1,1)) }
     var dragging by remember { mutableStateOf(false) }
     var dragIndex by remember { mutableStateOf(-1) }
@@ -131,20 +129,20 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
     val anglesEnabled=!readOnly&&(step==null||step==PlotStep.BOUNDARY)
     val currentAnglesEnabled by rememberUpdatedState(anglesEnabled)
     val density=androidx.compose.ui.platform.LocalDensity.current.density
-    val transform=plotTransform(fitPoints,canvasSize,density,zoom,pan,showToolbar,compact,showBuildable&&showToolbar,anglesEnabled&&showToolbar,setup.roads.isNotEmpty())
+    val transform=plotTransform(fitPoints,canvasSize,density,viewport.view.zoom,viewport.view.pan,showToolbar,compact,showBuildable&&showToolbar,anglesEnabled&&showToolbar,setup.roads.isNotEmpty())
     val currentTransform by rememberUpdatedState(transform)
     var gestureTransform by remember { mutableStateOf(transform) }
     val measurer=rememberTextMeasurer()
     val baseStyle=LocalTextStyle.current
     Box(modifier.background(c.background).clipToBounds().onSizeChanged { canvasSize=it }) {
         Canvas(Modifier.fillMaxSize().semantics { contentDescription="Plot boundary. "+(if(anglesEnabled)"Drag corners to adjust angles with fixed side lengths. " else "Corner editing disabled. ")+"North ${decimal(setup.northDegrees)} degrees." }
-            .pointerInput(tool,workspace) {
-                detectDragGestures(onDragStart={ offset ->
-                    if(workspace.saving)return@detectDragGestures
+            .canvasNavigation(viewport,transform.centre-viewport.view.pan,
+                onEditStart={offset->
                     gestureTransform=currentTransform
-                    dragIndex=if(tool==PlotTool.MOVE && currentAnglesEnabled) currentPoints.indices.minByOrNull { i -> (gestureTransform.screen(currentPoints[i])-offset).getDistance() }
-                        ?.takeIf { (gestureTransform.screen(currentPoints[it])-offset).getDistance()<=28*density } ?: -1 else -1
-                    dragging=true
+                    dragIndex=if(tool==PlotTool.MOVE&&currentAnglesEnabled&&!workspace.saving)
+                        currentPoints.indices.minByOrNull {i->(gestureTransform.screen(currentPoints[i])-offset).getDistance()}
+                            ?.takeIf {(gestureTransform.screen(currentPoints[it])-offset).getDistance()<=28*density} ?: -1
+                        else -1
                     if(dragIndex>=0) {
                         val message=when {
                             currentSetup.vertices.isEmpty()->"Set boundary dimension"
@@ -152,21 +150,18 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
                             currentSetup.lengths.size<4->"Side lengths fix a triangle’s angles."
                             else->null
                         }
-                        if(message!=null) {workspace.boundaryError(message);dragIndex=-1}
-                        else workspace.markGestureStart()
+                        if(message!=null){workspace.boundaryError(message);dragIndex=-1}
+                        else {dragging=true;workspace.markGestureStart()}
                     }
-                },onDragEnd={dragging=false;dragIndex=-1},onDragCancel={dragging=false;dragIndex=-1}) { change,amount ->
-                    if(workspace.saving)return@detectDragGestures
-                    if(tool==PlotTool.HAND) {pan+=amount;change.consume()}
-                    else if(dragIndex>=0) {
-                        if(!currentAnglesEnabled)return@detectDragGestures
-                        val edited=currentSetup.withCornerAngle(dragIndex,gestureTransform.model(change.position))
+                    dragIndex>=0
+                },onEditDrag={position->
+                    if(currentAnglesEnabled&&!workspace.saving) {
+                        val edited=currentSetup.withCornerAngle(dragIndex,gestureTransform.model(position))
                         if(edited!=null)workspace.change(edited,remember=false)
                         else workspace.boundaryError("This angle would cross the boundary or change a side length.")
-                        change.consume()
                     }
-                }
-            }.pointerInput(workspace,step) {
+                },onEditEnd={dragging=false;dragIndex=-1}
+            ).pointerInput(workspace,step) {
                 if(step==PlotStep.ROADS&&!readOnly)detectTapGestures { position ->
                     if(workspace.saving)return@detectTapGestures
                     val p=currentPoints;val t=currentTransform
@@ -253,11 +248,11 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
             }
             if(readOnly||!compact && canvasSize.width/density>600) {
                 PlotToolButton(PlotSymbol.GRID,"Toggle guide dots",selected=grid) {grid=!grid}
-                PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in") {zoom=(zoom*1.2f).coerceAtMost(4f)}
-                PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out") {zoom=(zoom/1.2f).coerceAtLeast(.3f)}
+                PlotToolButton(PlotSymbol.ZOOM_IN,"Zoom in") {viewport.step(CanvasZoom.STEP,CanvasZoom.MAXIMUM)}
+                PlotToolButton(PlotSymbol.ZOOM_OUT,"Zoom out") {viewport.step(1f/CanvasZoom.STEP,CanvasZoom.MAXIMUM)}
             }
             Spacer(Modifier.weight(1f))
-            PlotToolButton(PlotSymbol.FIT,"Fit plot to canvas") {zoom=1f;pan=Offset.Zero;fitPoints=points}
+            PlotToolButton(PlotSymbol.FIT,"Fit plot to canvas") {viewport.reset();fitPoints=points}
             Box {
                 PlotToolButton(PlotSymbol.MORE,"Plot canvas options") {moreOpen=true}
                 DropdownMenu(moreOpen,{moreOpen=false}) {

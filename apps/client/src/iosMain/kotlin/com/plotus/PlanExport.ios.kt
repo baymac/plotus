@@ -5,6 +5,8 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+internal actual fun preparePlanExport(format:String,filename:String)=PlanExportDestination(save=::savePlanExport)
+
 internal actual suspend fun savePlanExport(file:PlanExport):Unit=suspendCancellableCoroutine {continuation->
     val host=NativeAuthBridge.host
     if(host==null)continuation.resumeWithException(AuthFailure(0,"Export is unavailable."))

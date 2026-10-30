@@ -18,6 +18,7 @@ data class Project(
     val plotSetup: PlotSetup? = null,
     val floorPlan: SavedFloorPlan? = null,
     val buildableArea: SavedBuildableArea? = null,
+    val lastOpenedSection: PlanningSection = PlanningSection.PLOT,
 )
 
 @Serializable
@@ -52,7 +53,7 @@ data class ProjectDraft(
         require(errors().isEmpty()) { "Project details are invalid." }
         return Project(id, name.trim(), location.trim(), existing?.areaSqFt, "Just now",
             if (isClient) Client(clientName.trim(), email.trim(), phone.trim()) else null,
-            existing?.revision ?: 0, existing?.updatedAt.orEmpty(), existing?.plotSetup, existing?.floorPlan,existing?.buildableArea)
+            existing?.revision ?: 0, existing?.updatedAt.orEmpty(), existing?.plotSetup, existing?.floorPlan,existing?.buildableArea,existing?.lastOpenedSection ?: PlanningSection.PLOT)
     }
 
     companion object {
@@ -91,3 +92,6 @@ data class AccountPreferences(val units:PlotUnits=PlotUnits.FEET_INCHES)
 
 fun areaLabel(value:Int?,units:PlotUnits):String =
     if(value!=null&&units==PlotUnits.METRES) "${decimal(value*METRES_PER_FOOT*METRES_PER_FOOT)} m²" else areaLabel(value)
+
+@Serializable enum class PlanningSection { PLOT, FLOOR_PLAN }
+@Serializable data class ProjectSection(val section:PlanningSection)

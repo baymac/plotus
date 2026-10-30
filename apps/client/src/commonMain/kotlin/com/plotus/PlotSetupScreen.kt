@@ -97,12 +97,12 @@ private fun PlotEditor(workspace:PlotWorkspace,step:PlotStep?,compact:Boolean,on
     },options={divider->
         EditorOptions(divider) {
             PlotProblems(workspace,onReload=onReload)
-            if(!keyboard)SketchUpload(workspace) {onStep(PlotStep.BOUNDARY)}
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 PlotStep.entries.forEach {item->
                     EditorOption(item.title(),when(item){PlotStep.BOUNDARY->PlotSymbol.BOUNDARY;PlotStep.DIRECTION->PlotSymbol.COMPASS;PlotStep.ROADS->PlotSymbol.ROAD},!workspace.saving,Modifier.weight(1f),highlighted=when(item){PlotStep.BOUNDARY->workspace.validation.containsKey("boundary");PlotStep.ROADS->workspace.validation.keys.any {it.startsWith("road")};else->false}) {onStep(item)}
                 }
             }
+            if(!keyboard)SketchUpload(workspace) {onStep(PlotStep.BOUNDARY)}
         }
     }) else if(!compact)Row(modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f).fillMaxHeight()) {

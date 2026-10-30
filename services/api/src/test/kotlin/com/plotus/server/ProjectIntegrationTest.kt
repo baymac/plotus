@@ -43,6 +43,18 @@ class ProjectIntegrationTest {
             assertEquals(project.id,list("owner-fixture").single().id)
             assertEquals(project.id,runBlocking { PostgresProjects(source).get(owner,UUID.fromString(project.id)) }.id)
             val path="/v1/projects/${project.id}"
+            suspend fun section(value:String,token:String="owner-fixture")=client.put("$path/section") {
+                bearerAuth(token);contentType(ContentType.Application.Json);setBody("""{"section":"$value"}""")
+            }
+            assertEquals(PlanningSection.PLOT,project.lastOpenedSection)
+            assertEquals(HttpStatusCode.OK,section("FLOOR_PLAN").status)
+            val resumed=runBlocking {PostgresProjects(source).get(owner,UUID.fromString(project.id))}
+            assertEquals(PlanningSection.FLOOR_PLAN,resumed.lastOpenedSection)
+            assertEquals(project.revision,resumed.revision);assertEquals(project.updatedAt,resumed.updatedAt)
+            assertEquals(PlanningSection.FLOOR_PLAN,list("owner-fixture").single().lastOpenedSection)
+            assertEquals(HttpStatusCode.NotFound,section("PLOT","other-fixture").status)
+            assertEquals(HttpStatusCode.Unauthorized,client.put("$path/section"){contentType(ContentType.Application.Json);setBody("""{"section":"PLOT"}""")}.status)
+            assertEquals(HttpStatusCode.BadRequest,section("REQUIREMENTS").status)
             assertEquals(HttpStatusCode.NotFound,client.get(path) { bearerAuth("other-fixture") }.status)
             suspend fun update(token: String, revision: Long) = client.put(path) {
                 bearerAuth(token);contentType(ContentType.Application.Json)
@@ -57,6 +69,9 @@ class ProjectIntegrationTest {
             assertEquals(HttpStatusCode.OK,updated.status)
             val latest = Json.decodeFromString<Project>(updated.bodyAsText())
             assertEquals(2L,latest.revision);assertEquals("Updated home",latest.name);assertNull(latest.client)
+            assertEquals(PlanningSection.FLOOR_PLAN,latest.lastOpenedSection)
+            assertEquals(HttpStatusCode.OK,section("PLOT").status)
+            assertEquals(PlanningSection.PLOT,list("owner-fixture").single().lastOpenedSection)
             assertEquals(HttpStatusCode.Conflict,update("owner-fixture",1).status)
             assertEquals(HttpStatusCode.Conflict,delete("owner-fixture",1).status)
             val invalid = client.post("/v1/projects") {

@@ -39,12 +39,13 @@ class FloorPlanIntegrationTest {
             }
             runBlocking {projects.savePreferences(owner,AccountPreferences(PlotUnits.METRES))}
             val job=runBlocking {jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan.also {jobs.finish(owner,UUID.fromString(project.id),it.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","original-drawing",100,100,presentation=PlanPresentation(version=1),spaceEfficiency=efficiency))))}}
-            project=runBlocking {projects.savePlot(owner,UUID.fromString(project.id),project.revision,plot.copy(northDegrees=45.0))}
+            project=runBlocking {projects.savePlot(owner,UUID.fromString(project.id),project.revision,plot.copy(northDegrees=45.0,roads=plot.roads+PlotRoad(1,priority=1)))}
             runBlocking {service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id))}
             val base="/v1/projects/${project.id}/floor-plan/generations/${job.id}"
             suspend fun get(path:String=base,token:String="export-owner")=client.get(path){bearerAuth(token)}
             val opened=Json.decodeFromString<GeneratedFloorPlan>(get().bodyAsText());assertEquals("original-drawing",opened.drawings.single().pngBase64)
             assertNotNull(opened.durationMillis)
+            assertEquals(listOf("Road"),opened.roadLabels) // Use this run's original one-road snapshot.
             assertEquals(80.0,opened.drawings.single().presentation?.carpetAreaSquareMetres)
             assertEquals(2,opened.drawings.single().presentation?.version)
             // PostgreSQL persistence, presentation caching and HTTP encoding must

@@ -47,13 +47,14 @@ class NavigationTest {
 
 class PlotNavigationTest {
     private val id = "c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a"
-    @Test fun historyDrawingDeepLinkSurvivesSignInAndBackReturnsToItsList() {
+    @Test fun reopenedHistoryStartsAtTheFloorOverviewWhileExplicitHistoryNavigationStillWorks() {
         val plan="e4fc581d-5337-466f-83d2-51e96c2a03f1"
         val route="/projects/$id/floor-plan/history/$plan"
         val navigation=AppNavigation(AppLocation(route)) {_,_->}
         navigation.reconcileSession(false,false);navigation.reconcileSession(true,false)
+        assertEquals("/projects/$id/floor-plan",navigation.path);assertNull(navigation.generationID);assertNull(navigation.floorStep)
+        navigation.openFloor(id,com.plotus.shared.FloorStep.HISTORY,generation=plan)
         assertEquals(route,navigation.path);assertEquals(plan,navigation.generationID)
-        assertEquals(com.plotus.shared.FloorStep.HISTORY,navigation.floorStep)
         navigation.openFloor(id,com.plotus.shared.FloorStep.HISTORY)
         assertNull(navigation.generationID);assertEquals("/projects/$id/floor-plan/history",navigation.path)
         navigation.openFloor(id)
@@ -78,10 +79,10 @@ class PlotNavigationTest {
         val navigation=AppNavigation(AppLocation(route)) {_,_->}
         assertEquals(Destination.FLOOR_PLAN,navigation.destination)
         navigation.reconcileSession(false,false)
-        assertEquals("/login?next=$route",navigation.loginCallbackPath)
+        assertEquals("/login?next=/projects/$id/floor-plan",navigation.loginCallbackPath)
         navigation.reconcileSession(true,false)
-        assertEquals(com.plotus.shared.FloorStep.REQUIREMENTS,navigation.floorStep)
-        assertEquals(route,navigation.path)
+        assertNull(navigation.floorStep)
+        assertEquals("/projects/$id/floor-plan",navigation.path)
         assertNull(destinationForPath("/projects/$id/floor-plan/../../outside"))
     }
     @Test fun projectDeepLinksReturnToTheSameStepAfterSignIn() {
@@ -89,12 +90,12 @@ class PlotNavigationTest {
         val route = "/projects/$id/plot/roads"
         val navigation = AppNavigation(AppLocation(route)) { path, _ -> writes += path }
         navigation.reconcileSession(false,false)
-        assertEquals("/login?next=$route", writes.last())
+        assertEquals("/login?next=/projects/$id/plot", writes.last())
         navigation.reconcileSession(true,false)
         assertEquals(Destination.PLOT,navigation.destination)
         assertEquals(id,navigation.projectID)
-        assertEquals(com.plotus.shared.PlotStep.ROADS,navigation.plotStep)
-        assertEquals(route,writes.last())
+        assertNull(navigation.plotStep)
+        assertEquals("/projects/$id/plot",writes.last())
         navigation.receive(AppLocation("/projects/$id/plot/direction"))
         assertEquals(com.plotus.shared.PlotStep.DIRECTION,navigation.plotStep)
     }
@@ -109,6 +110,35 @@ class PlotNavigationTest {
         navigation.reconcileSession(false,false)
         navigation.reconcileSession(true,false)
         assertEquals("/projects/$id/plot",navigation.path);assertNull(navigation.plotStep)
+    }
+    @Test fun openingTheRememberedSectionClearsEveryEditorAndDrawing() {
+        val navigation=AppNavigation(null) {_,_->fail("Native navigation must not write a URL")}
+        navigation.openFloor(id,com.plotus.shared.FloorStep.REQUIREMENTS)
+        navigation.openOverview(id,com.plotus.shared.PlanningSection.FLOOR_PLAN)
+        assertEquals(Destination.FLOOR_PLAN,navigation.destination);assertNull(navigation.floorStep);assertNull(navigation.generationID)
+        navigation.openProject(id,com.plotus.shared.PlotStep.BOUNDARY)
+        navigation.openOverview(id,com.plotus.shared.PlanningSection.PLOT)
+        assertEquals(Destination.PLOT,navigation.destination);assertNull(navigation.plotStep);assertNull(navigation.floorStep)
+    }
+    @Test fun browserBackIntoAClosedProjectOpensTheOverview() {
+        val navigation=AppNavigation(AppLocation("/projects")) {_,_->}
+        navigation.openFloor(id,com.plotus.shared.FloorStep.REQUIREMENTS)
+        navigation.navigate(Destination.PROJECTS)
+        navigation.receive(AppLocation("/projects/$id/floor-plan/requirements"))
+        assertNull(navigation.floorStep);assertEquals("/projects/$id/floor-plan",navigation.path)
+        navigation.openProject(id,com.plotus.shared.PlotStep.ROADS)
+        navigation.navigate(Destination.PROJECTS)
+        navigation.receive(AppLocation("/projects/$id/plot/roads"))
+        assertNull(navigation.plotStep);assertEquals("/projects/$id/plot",navigation.path)
+    }
+    @Test fun reloadingEveryPlanningSubscreenStartsAtItsSectionOverview() {
+        for(tail in listOf("plot/boundary","plot/direction","plot/roads","floor-plan/setbacks","floor-plan/requirements","floor-plan/history")) {
+            val writes=mutableListOf<String>()
+            val navigation=AppNavigation(AppLocation("/projects/$id/$tail")) {path,_->writes+=path}
+            val expected="/projects/$id/"+if(tail.startsWith("plot/"))"plot" else "floor-plan"
+            assertEquals(expected,navigation.path);assertEquals(expected,writes.last())
+            assertNull(navigation.plotStep);assertNull(navigation.floorStep);assertNull(navigation.generationID)
+        }
     }
     @Test fun invalidProjectReturnPathsStayInsideKnownRoutes() {
         for (path in listOf("/projects/other/plot/roads","/projects/$id/plot/../account","//example.invalid/projects/$id/plot/roads")) {

@@ -12,13 +12,14 @@ class WorkspaceTest {
     }
 
     @Test fun editingPreservesIdentityAndGeometryWhileRemovingDisabledClient() {
-        val existing = sampleProjects().first().copy(client = Client("Client", "test@example.com"))
+        val existing = sampleProjects().first().copy(client = Client("Client", "test@example.com"),lastOpenedSection=PlanningSection.FLOOR_PLAN)
         val saved = ProjectDraft.from(existing).copy(name = "  Courtyard  ", isClient = false).toProject(existing.id, existing)
         val projects = saveProject(sampleProjects(), saved)
         assertEquals(3, projects.size)
         assertEquals("Courtyard", projects.first().name)
         assertEquals(1500, projects.first().areaSqFt)
         assertNull(projects.first().client)
+        assertEquals(PlanningSection.FLOOR_PLAN,projects.first().lastOpenedSection)
     }
 
     @Test fun searchAndSortUseBothProjectNameAndLocation() {

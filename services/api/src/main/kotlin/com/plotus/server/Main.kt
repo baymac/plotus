@@ -70,6 +70,9 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
                 val revision = request.revision?.takeIf { it>0 } ?: throw ApiFailure(400,"INVALID_REVISION","Refresh the project before saving changes.")
                 call.respond(store.update(call.attributes[Owner],call.projectID(),revision,request.details))
             }
+            put("/projects/{id}/section") {
+                call.respond(store.saveSection(call.attributes[Owner],call.projectID(),call.receive<ProjectSection>().section))
+            }
             put("/projects/{id}/plot") {
                 val request = call.receive<SavePlotRequest>()
                 val errors = request.setup.errors()

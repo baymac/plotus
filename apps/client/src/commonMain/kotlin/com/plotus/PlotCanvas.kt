@@ -99,11 +99,11 @@ private data class PlotTransform(val scale: Float, val centre: Offset, val x: Do
     fun screen(p: PlotPoint) = Offset(centre.x+((p.x-x)*scale).toFloat(),centre.y+((p.y-y)*scale).toFloat())
     fun model(p: Offset) = PlotPoint(x+(p.x-centre.x)/scale,y+(p.y-centre.y)/scale)
 }
-private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float, zoom: Float, pan: Offset, showToolbar: Boolean, compact: Boolean, details:Boolean=false): PlotTransform {
+private fun plotTransform(points: List<PlotPoint>, size: IntSize, density: Float, zoom: Float, pan: Offset, showToolbar: Boolean, compact: Boolean, details:Boolean=false,showHint:Boolean=false,hasRoads:Boolean=false): PlotTransform {
     val minX=points.minOf { it.x };val maxX=points.maxOf { it.x };val minY=points.minOf { it.y };val maxY=points.maxOf { it.y }
     val width=(size.width-92*density).coerceAtLeast(20*density)
     val top=(if(details)140 else if(showToolbar) {if(compact)80 else 84} else if(compact)28 else 12)*density
-    val bottom=(if(compact) {if(size.height/density>=180)68 else 32} else 64)*density
+    val bottom=(if(compact) {if(size.height/density<180)32 else if(showHint)102 else if(hasRoads)86 else 68} else if(showHint)112 else 64)*density
     val height=(size.height-top-bottom).coerceAtLeast(20*density)
     return PlotTransform(min(width/(maxX-minX).coerceAtLeast(.01),height/(maxY-minY).coerceAtLeast(.01)).toFloat()*zoom*(if(compact)1f else .84f),
         Offset(size.width/2f,top+height/2+(if(compact)0 else 10)*density)+pan,(minX+maxX)/2,(minY+maxY)/2)
@@ -131,7 +131,7 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
     val anglesEnabled=!readOnly&&(step==null||step==PlotStep.BOUNDARY)
     val currentAnglesEnabled by rememberUpdatedState(anglesEnabled)
     val density=androidx.compose.ui.platform.LocalDensity.current.density
-    val transform=plotTransform(fitPoints,canvasSize,density,zoom,pan,showToolbar,compact,showBuildable&&showToolbar)
+    val transform=plotTransform(fitPoints,canvasSize,density,zoom,pan,showToolbar,compact,showBuildable&&showToolbar,anglesEnabled&&showToolbar,setup.roads.isNotEmpty())
     val currentTransform by rememberUpdatedState(transform)
     var gestureTransform by remember { mutableStateOf(transform) }
     val measurer=rememberTextMeasurer()
@@ -213,10 +213,11 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
             }
             if(setup.useDiagonals && setup.vertices.isNotEmpty()) for(i in 2 until points.lastIndex) drawLine(c.muted.copy(alpha=.6f),screen[0],screen[i],1*density,pathEffect=PathEffect.dashPathEffect(floatArrayOf(4*density,4*density)))
             screen.forEachIndexed { i,p ->
-                val label=measureLabel(setup.lengths.getOrNull(i),setup.units)
-                val text=measurer.measure(label,baseStyle.copy(fontSize=if(compact)10.sp else 11.sp,color=c.muted))
+                val road=setup.roads.firstOrNull {it.side==i}
+                val label=measureLabel(setup.lengths.getOrNull(i),setup.units)+(road?.let {"\n${roadCanvasLabel(it.priority,setup.roads.size)}"} ?: "")
+                val text=measurer.measure(label,baseStyle.copy(fontSize=if(compact)10.sp else 11.sp,lineHeight=if(compact)13.sp else 15.sp,color=c.muted))
                 val middle=(p+screen[(i+1)%screen.size])/2f+outward(i)*17f*density
-                val origin=Offset((middle.x-text.size.width/2f).coerceIn(0f,(size.width-text.size.width).coerceAtLeast(0f)),middle.y-text.size.height/2f)
+                val origin=Offset((middle.x-text.size.width/2f).coerceIn(0f,(size.width-text.size.width).coerceAtLeast(0f)),(middle.y-text.size.height/2f).coerceIn(0f,(size.height-text.size.height).coerceAtLeast(0f)))
                 drawRoundRect(c.background,origin-Offset(4*density,2*density),androidx.compose.ui.geometry.Size(text.size.width+8*density,text.size.height+4*density),androidx.compose.ui.geometry.CornerRadius(4*density))
                 drawText(text,topLeft=origin)
                 if(anglesEnabled){drawCircle(c.surface,5*density,p);drawCircle(c.primary,5*density,p,style=Stroke(1*density))}
@@ -266,21 +267,24 @@ internal fun PlotCanvas(workspace: PlotWorkspace, step: PlotStep?, compact: Bool
                 }
             }
         }
-        if(anglesEnabled&&showToolbar)Text("Move vertices to change the plot shape",Modifier.align(Alignment.TopCenter).padding(top=if(compact)54.dp else 70.dp).background(c.surface,RoundedCornerShape(6.dp)).padding(horizontal=10.dp,vertical=4.dp),fontSize=11.sp,color=c.muted)
+
         if(envelope!=null&&canvasSize.height/density>=300)Row(Modifier.align(Alignment.BottomStart).padding(start=if(compact)20.dp else 28.dp,bottom=80.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(12.dp).background(c.primary.copy(alpha=.16f),RoundedCornerShape(2.dp)).border(1.dp,c.primary.copy(alpha=.5f),RoundedCornerShape(2.dp)))
             Text("Setback",fontSize=10.sp,color=c.muted)
         }
         val area=if(setup.units==PlotUnits.METRES)setup.areaSquareMetres?.let { "${decimal(it)} m²" } else setup.areaSquareFeet?.let(::areaLabel)
-        if(!compact||canvasSize.height/density>=180)Row(Modifier.align(Alignment.BottomCenter).padding(horizontal=12.dp,vertical=if(compact)3.dp else 16.dp)
-            .widthIn(max=560.dp).fillMaxWidth().background(c.surface,RoundedCornerShape(10.dp)).border(1.dp,c.line,RoundedCornerShape(10.dp)).padding(horizontal=8.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically) {
-            val buildable=when {checkingBuildable->"Checking…";envelope?.empty==true->"0";setup.units==PlotUnits.METRES->envelope?.areaSquareMetres?.let {"${decimal(it)} m²"};else->envelope?.areaSquareMetres?.let {areaLabel((it/(METRES_PER_FOOT*METRES_PER_FOOT)).toInt())}}
-            val metrics=listOf("Area" to (area ?: "—"),"Perimeter" to measureLabel(setup.perimeterMetres,setup.units))+(if(showBuildable)listOf("Buildable" to (buildable ?: "—")) else emptyList())
-            metrics.forEachIndexed {i,(label,value)->
-                if(i>0)VerticalDivider(Modifier.height(28.dp),color=c.line)
-                Column(Modifier.weight(1f),horizontalAlignment=Alignment.CenterHorizontally) {
-                    Text(label,fontSize=10.sp,lineHeight=14.sp,color=c.muted)
-                    Text(value,fontSize=if(compact)11.sp else 12.sp,lineHeight=18.sp,color=if(label=="Buildable")c.primary else c.ink,maxLines=1)
+        if(!compact||canvasSize.height/density>=180)Column(Modifier.align(Alignment.BottomCenter).padding(horizontal=12.dp,vertical=if(compact)3.dp else 16.dp)
+            .widthIn(max=560.dp).fillMaxWidth().background(c.surface,RoundedCornerShape(10.dp)).border(1.dp,c.line,RoundedCornerShape(10.dp)).padding(horizontal=8.dp,vertical=8.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            if(anglesEnabled&&showToolbar)Text("Move vertices to change the plot shape",fontSize=10.sp,lineHeight=14.sp,color=c.muted)
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                val buildable=when {checkingBuildable->"Checking…";envelope?.empty==true->"0";setup.units==PlotUnits.METRES->envelope?.areaSquareMetres?.let {"${decimal(it)} m²"};else->envelope?.areaSquareMetres?.let {areaLabel((it/(METRES_PER_FOOT*METRES_PER_FOOT)).toInt())}}
+                val metrics=listOf("Area" to (area ?: "—"),"Perimeter" to measureLabel(setup.perimeterMetres,setup.units))+(if(showBuildable)listOf("Buildable" to (buildable ?: "—")) else emptyList())
+                metrics.forEachIndexed {i,(label,value)->
+                    if(i>0)VerticalDivider(Modifier.height(28.dp),color=c.line)
+                    Column(Modifier.weight(1f),horizontalAlignment=Alignment.CenterHorizontally) {
+                        Text(label,fontSize=10.sp,lineHeight=14.sp,color=c.muted)
+                        Text(value,fontSize=if(compact)11.sp else 12.sp,lineHeight=18.sp,color=if(label=="Buildable")c.primary else c.ink,maxLines=1)
+                    }
                 }
             }
         }

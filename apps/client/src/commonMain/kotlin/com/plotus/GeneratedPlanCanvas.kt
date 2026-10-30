@@ -47,7 +47,7 @@ import org.jetbrains.skia.svg.SVGLengthContext
  * Map paper/ink to the active palette without changing the saved engine output.
  */
 @OptIn(ExperimentalComposeUiApi::class)
-@Composable internal fun GeneratedPlanCanvas(drawing:PlanDrawing,compact:Boolean,modifier:Modifier=Modifier) {
+@Composable internal fun GeneratedPlanCanvas(drawing:PlanDrawing,compact:Boolean,modifier:Modifier=Modifier,roadLabels:List<String> = emptyList()) {
     val c=LocalPlotusColors.current
     val presentation=drawing.presentation
     val units=LocalMeasurementUnits.current
@@ -111,6 +111,9 @@ import org.jetbrains.skia.svg.SVGLengthContext
                 }
             }
         else Text("This floor drawing couldn’t be opened.",Modifier.align(Alignment.Center),color=c.muted)
+        if(roadLabels.isNotEmpty()&&(presentation==null||presentation.version>=2||roadLabels.size>1))Column(Modifier.align(Alignment.TopStart).padding(start=16.dp,end=16.dp,top=64.dp).background(c.surface,RoundedCornerShape(8.dp)).padding(horizontal=10.dp,vertical=6.dp),verticalArrangement=Arrangement.spacedBy(3.dp)) {
+            roadLabels.forEach {Text(it,fontSize=11.sp,lineHeight=14.sp,color=c.muted)}
+        }
         if(presentation!=null&&presentation.version<2) {
             val side=presentation.roadPosition
             val alignment=when(side){"west"->Alignment.CenterStart;"east"->Alignment.CenterEnd;"south"->Alignment.BottomCenter;else->Alignment.TopCenter}
@@ -119,7 +122,7 @@ import org.jetbrains.skia.svg.SVGLengthContext
                 "south"->m.padding(bottom=4.dp)
                 else->m.padding(top=if(compact)62.dp else 76.dp)
             }}
-            Text("Road (primary)",label.background(c.background,RoundedCornerShape(6.dp)).padding(horizontal=10.dp,vertical=4.dp),fontSize=12.sp,color=c.muted,textAlign=androidx.compose.ui.text.style.TextAlign.Center)
+            Text(roadLabels.firstOrNull()?.substringBefore(" · ") ?: "Road",label.background(c.background,RoundedCornerShape(6.dp)).padding(horizontal=10.dp,vertical=4.dp),fontSize=12.sp,color=c.muted,textAlign=androidx.compose.ui.text.style.TextAlign.Center)
         }
         Row(Modifier.align(Alignment.TopCenter).padding(horizontal=if(compact)12.dp else 20.dp,vertical=if(compact)6.dp else 12.dp)
             .widthIn(max=560.dp).fillMaxWidth().height(if(compact)44.dp else 52.dp).background(c.surface,RoundedCornerShape(12.dp))

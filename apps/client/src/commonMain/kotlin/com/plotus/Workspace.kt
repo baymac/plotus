@@ -17,15 +17,25 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
     var mutationError by mutableStateOf<String?>(null); private set
     var mutationErrorCode by mutableStateOf<String?>(null); private set
     private val lock = Mutex()
+    private val sectionMemory=ProjectSectionMemory(scope,owner,{id,section->
+        if(auth.user?.id!=owner)throw AuthFailure(401,"Your account changed.")
+        auth.projectRequest("PUT","/v1/projects/$id/section",authJson.encodeToString(ProjectSection(section)))
+        if(auth.user?.id!=owner)throw AuthFailure(401,"Your account changed.")
+    })
+    fun sectionFor(project:Project)=sectionMemory.section(project)
+    fun rememberSection(id:String,section:PlanningSection) {
+        projects=projects.map {if(it.id==id)it.copy(lastOpenedSection=section) else it}
+        sectionMemory.remember(id,section)
+    }
     private val plotEditors = mutableMapOf<String, PlotWorkspace>()
     private val floorEditors = mutableMapOf<String, FloorWorkspace>()
     fun floor(id:String):FloorWorkspace=floorEditors.getOrPut(id) {
-        liveFloorWorkspace(auth,scope,owner,displayUnits) {project->if(auth.user?.id==owner)projects=saveProject(projects,project)}
+        liveFloorWorkspace(auth,scope,owner,displayUnits) {project->if(auth.user?.id==owner)projects=saveProject(projects,sectionMemory.enrich(project))}
     }
 
     fun plot(id: String): PlotWorkspace = plotEditors.getOrPut(id) {
         livePlotWorkspace(auth, scope, owner, id) { project ->
-            if (auth.user?.id == owner) projects = saveProject(projects, project)
+            if (auth.user?.id == owner) projects = saveProject(projects, sectionMemory.enrich(project))
         }
     }
 
@@ -34,7 +44,7 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
         loading = true
         try {
             val result = auth.projectRequest("GET","/v1/projects")
-            if (auth.user?.id == owner) { projects = authJson.decodeFromJsonElement<ProjectList>(result).projects; error = null }
+            if (auth.user?.id == owner) { projects = authJson.decodeFromJsonElement<ProjectList>(result).projects.map(sectionMemory::enrich); projects.forEach {sectionMemory.retry(it.id)}; error = null }
         } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: Exception) { error = failureMessage(failure) }
         finally { loading = false }
@@ -47,7 +57,7 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
         val result = auth.projectRequest(if(existing==null) "POST" else "PUT",path,
             authJson.encodeToString(SaveProjectRequest(draft,existing?.revision)))
         val project = authJson.decodeFromJsonElement<Project>(result)
-        if (auth.user?.id == owner) { projects = saveProject(projects,project); error = null; onSaved(project) }
+        if (auth.user?.id == owner) { projects = saveProject(projects,sectionMemory.enrich(project)); error = null; onSaved(project) }
     }
     fun delete(project: Project, onDeleted: () -> Unit) = mutate {
         val selected=projects.firstOrNull {it.id==project.id} ?: project
@@ -59,7 +69,7 @@ class ProjectWorkspace(private val auth: AuthSession, private val scope: Corouti
             projects=saveProject(projects,changed)
             throw AuthFailure(409,"Project changed.","PROJECT_CHANGED")
         }
-        projects = projects.filterNot { it.id==project.id }; onDeleted()
+        projects = projects.filterNot { it.id==project.id }; sectionMemory.forget(project.id); onDeleted()
     }
     private fun mutate(operation: suspend () -> Unit) {
         if (busy || auth.user?.id != owner) return

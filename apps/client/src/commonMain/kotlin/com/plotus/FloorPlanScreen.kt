@@ -188,9 +188,8 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
         if(!plot.loading)PlotCanvas(plot,PlotStep.DIRECTION,compact,Modifier.fillMaxSize(),showToolbar=showToolbar,readOnly=true,envelope=workspace.preview?.envelope,showBuildable=true,checkingBuildable=workspace.previewing)
         val home=workspace.draft.homes.first()
         if(showToolbar)Column(Modifier.align(Alignment.TopStart).padding(start=16.dp,end=16.dp,top=64.dp).widthIn(max=360.dp).background(c.surface,RoundedCornerShape(6.dp)).padding(8.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-            Text("Requirements: ${if(home.mode==PlanMode.AUTO)"Auto" else "Custom"} · ${home.bhk} BHK · ${buildingLabel(workspace.draft.buildingFloors)}",fontSize=11.sp,color=c.muted)
-            Text("Vastu: ${if(home.vastu)"Yes" else "No"}",fontSize=11.sp,color=c.muted)
-            if(home.mode==PlanMode.CUSTOM)Text((home.rooms+workspace.draft.sharedRooms).groupingBy {it.kind.title}.eachCount().entries.joinToString(" · ") {"${it.value} ${it.key}"},fontSize=11.sp,color=c.muted,maxLines=2,overflow=TextOverflow.Ellipsis)
+            Text("Requirements: ${if(home.mode==PlanMode.AUTO)"Auto" else "Custom"} · ${home.bhk} BHK · ${buildingLabel(workspace.draft.buildingFloors)} · ${if(home.vastu)"Vastu" else "No Vastu"}",fontSize=11.sp,lineHeight=14.sp,color=c.muted,maxLines=1,overflow=TextOverflow.Ellipsis)
+            if(home.mode==PlanMode.CUSTOM)Text((home.rooms+workspace.draft.sharedRooms).groupingBy {it.kind.title}.eachCount().entries.joinToString(" · ") {"${it.value} ${it.key}"},fontSize=11.sp,lineHeight=14.sp,color=c.muted,maxLines=1,overflow=TextOverflow.Ellipsis)
         }
     }
 }
@@ -345,7 +344,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 plan.drawings.forEachIndexed {i,_->FloorChip(floorName(i),floor==i,true){onFloor(i)}}
             }
             val drawing=plan.drawings.getOrNull(floor)
-            if(drawing!=null)GeneratedPlanCanvas(drawing,compact,Modifier.fillMaxWidth().weight(1f))
+            if(drawing!=null)GeneratedPlanCanvas(drawing,compact,Modifier.fillMaxWidth().weight(1f),plan.roadLabels)
             else Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){FloorError("This floor drawing couldn’t be opened.")}
         }
     }else Box(modifier.fillMaxWidth().padding(24.dp),contentAlignment=Alignment.Center) {

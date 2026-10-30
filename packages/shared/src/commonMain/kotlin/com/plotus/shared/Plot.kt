@@ -203,3 +203,14 @@ fun measureLabel(metres: Double?, units: PlotUnits): String {
     val inches = (metres/METRES_PER_FOOT*12).roundToInt()
     return "${inches/12}′ ${inches%12}″"
 }
+
+fun roadCanvasLabel(priority:Int,count:Int):String = if(count==1)"Road" else when(priority) {
+    0->"Primary road"
+    1->"Secondary road"
+    2->"Tertiary road"
+    else->"Priority ${priority+1} road"
+}
+
+fun PlotSetup.roadCanvasLabels():List<String> = roads.sortedBy {it.priority}.map {
+    roadCanvasLabel(it.priority,roads.size)+(if(roads.size>1)" · ${sideName(it.side,lengths.size)}" else "")
+}

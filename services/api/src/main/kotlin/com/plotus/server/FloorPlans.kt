@@ -236,10 +236,12 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
     suspend fun latest(owner:UUID,project:UUID)=jobs?.latest(owner,project)
     suspend fun history(owner:UUID,project:UUID,before:UUID?=null)=jobs?.history(owner,project,before) ?: PlanGenerations(emptyList())
     suspend fun get(owner:UUID,project:UUID,id:UUID,byRequest:Boolean=false,units:PlotUnits?=null):GeneratedFloorPlan {
-        val plan=jobs?.find(owner,project,id,byRequest) ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
-        if(plan.status!="ready"||plan.drawings.all {(it.presentation?.version ?: 0)>=2&&(units==null||it.presentation?.units==units)}||engine==null)return plan
-        val key=UUID.fromString(plan.id)
-        val brief=jobs.snapshot(owner,project,key) ?: return plan
+        val stored=jobs?.find(owner,project,id,byRequest) ?: throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")
+        if(stored.status!="ready")return stored
+        val key=UUID.fromString(stored.id)
+        val brief=jobs.snapshot(owner,project,key) ?: return stored
+        val plan=stored.copy(roadLabels=brief.plot.roadCanvasLabels())
+        if(plan.drawings.all {(it.presentation?.version ?: 0)>=2&&(units==null||it.presentation?.units==units)}||engine==null)return plan
         val drawings=engine.present(brief.plot,units ?: brief.setup.units,plan.drawings)
         require(drawings.map {it.id}==plan.drawings.map {it.id}) {"Drawing identities changed during presentation"}
         jobs.cachePresentation(owner,project,key,drawings)

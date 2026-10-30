@@ -61,6 +61,13 @@ fun PlotusApp() {
         if(account!=null)while(true){measurements.refresh();delay(15_000L)}
     }
     val workspace = remember(account?.id) { account?.let { ProjectWorkspace(auth, scope, it.id){measurements.units} } }
+    LaunchedEffect(workspace,preview,navigation.projectID,destination) {
+        if(workspace!=null&&!preview)navigation.projectID?.let {id->when(destination) {
+            Destination.PLOT->workspace.rememberSection(id,PlanningSection.PLOT)
+            Destination.FLOOR_PLAN->workspace.rememberSection(id,PlanningSection.FLOOR_PLAN)
+            else->Unit
+        }}
+    }
     LaunchedEffect(account?.id, destination) { showForm = false; editing = null; deleting = null }
     LaunchedEffect(workspace, preview, destination) {
         if (workspace != null && !preview && destination == Destination.PROJECTS) {
@@ -118,7 +125,7 @@ fun PlotusApp() {
                                 loading = !preview && workspace?.loading == true, busy = !preview && workspace?.busy == true,
                                 error = if (preview) null else workspace?.error,
                                 onRetry = if (preview) null else { { workspace?.reload() } },
-                                onOpen = { navigation.openProject(it.id) })
+                                onOpen = { navigation.openOverview(it.id,workspace?.sectionFor(it) ?: it.lastOpenedSection) })
                             else if (destination == Destination.SETTINGS) SettingsHomeScreen { navigation.navigate(it) }
                             else if (destination == Destination.GENERAL) GeneralSettingsScreen(compact, appearance) {
                                 appearance = it; writePreference("appearance", it.name)

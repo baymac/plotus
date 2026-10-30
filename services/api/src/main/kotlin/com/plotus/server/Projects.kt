@@ -15,6 +15,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 interface ProjectStore {
+    suspend fun saveSection(owner:UUID,id:UUID,section:PlanningSection):ProjectSection = throw ApiFailure(503,"STORAGE_UNAVAILABLE","Project navigation is temporarily unavailable.")
     suspend fun preferences(owner:UUID):AccountPreferences = throw ApiFailure(503,"STORAGE_UNAVAILABLE","Preferences are temporarily unavailable.")
     suspend fun savePreferences(owner:UUID,preferences:AccountPreferences):AccountPreferences = throw ApiFailure(503,"STORAGE_UNAVAILABLE","Preferences are temporarily unavailable.")
     suspend fun healthy(): Boolean
@@ -40,7 +41,7 @@ class PostgresProjects(internal val source: DataSource) : ProjectStore {
         }
     }
     fun migrate() {
-        val sql = listOf("001_projects.sql", "002_plot_setup.sql", "003_floor_plan.sql", "004_buildable_areas.sql", "005_account_preferences.sql").joinToString("\n") { file ->
+        val sql = listOf("001_projects.sql", "002_plot_setup.sql", "003_floor_plan.sql", "004_buildable_areas.sql", "005_account_preferences.sql", "006_project_last_section.sql").joinToString("\n") { file ->
             javaClass.getResourceAsStream("/migrations/$file")!!.bufferedReader().use { it.readText() }
         }
         source.connection.use { connection -> connection.createStatement().use { it.execute(sql) } }
@@ -55,6 +56,13 @@ class PostgresProjects(internal val source: DataSource) : ProjectStore {
             it.setObject(1,owner);it.setString(2,preferences.units.name);it.executeUpdate()
         }
         preferences
+    }
+    override suspend fun saveSection(owner:UUID,id:UUID,section:PlanningSection):ProjectSection=database {c->
+        // Opening a section is navigation, not a project edit or a new input revision.
+        c.prepareStatement("UPDATE plotus.projects SET last_opened_section=? WHERE owner_id=? AND id=? RETURNING last_opened_section").use {
+            it.setString(1,section.name);it.setObject(2,owner);it.setObject(3,id)
+            it.executeQuery().use {r->if(r.next())ProjectSection(PlanningSection.valueOf(r.getString("last_opened_section"))) else throw missingProject()}
+        }
     }
     override suspend fun healthy(): Boolean = withContext(Dispatchers.IO) {
         source.connection.use { connection -> connection.createStatement().use { it.executeQuery("SELECT 1 FROM plotus.projects LIMIT 1").use { true } } }
@@ -131,7 +139,7 @@ class PostgresProjects(internal val source: DataSource) : ProjectStore {
         return Project(getObject("id").toString(),getString("name"),getString("location"),getObject("area_sq_ft") as Int?,label,
             getString("client_name")?.let { Client(it,getString("client_email"),getString("client_phone").orEmpty()) },getLong("revision"),edited.toString(),
             getString("plot_setup")?.let { Json.decodeFromString<PlotSetup>(it) },
-            getString("floor_plan")?.let {Json.decodeFromString<SavedFloorPlan>(it)})
+            getString("floor_plan")?.let {Json.decodeFromString<SavedFloorPlan>(it)},lastOpenedSection=PlanningSection.valueOf(getString("last_opened_section")))
     }
 }
 

@@ -61,21 +61,24 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             val heading=if(generationID!=null)viewed?.createdAt?.let(::planTimestamp) ?: "Floor plan" else workspace.project?.name ?: "Floor plan"
             EditorBack(heading,if(generationID!=null)"Back to history" else "Back to projects",enabled=!workspace.saving) {if(generationID!=null)onStep(FloorStep.HISTORY) else close(onExit)}
             if(keyboardVisible)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard") {hideKeyboard()}
-            if(generationID!=null&&viewed?.status=="ready")Box {
-                TextButton({exportOpen=true},enabled=!workspace.exporting) {Text(if(workspace.exporting)"Exporting…" else "Export")}
-                DropdownMenu(exportOpen,{exportOpen=false},containerColor=c.surface,tonalElevation=0.dp) {
-                    listOf("png","pdf","dwg").forEach {format->
-                        val available=format!="dwg"||viewed.drawings.getOrNull(viewedFloor)?.presentation?.vectorAvailable==true
-                        DropdownMenuItem(text={Text(format.uppercase(),color=if(available)c.ink else c.subtle)},onClick={exportOpen=false;viewed.drawings.getOrNull(viewedFloor)?.let {workspace.exportPlan(viewed.id,it.id,format)}},enabled=available)
-                    }
-                    if(viewed.drawings.getOrNull(viewedFloor)?.presentation?.vectorAvailable!=true)Text("Generate a new plan for DWG",Modifier.widthIn(max=220.dp).padding(16.dp),fontSize=12.sp,color=c.muted)
-                }
+            if(generationID!=null&&viewed?.status=="ready")TextButton({exportOpen=!exportOpen},enabled=!workspace.exporting) {
+                Text(if(workspace.exporting)"Exporting…" else "Export")
             }
             if(generationID==null&&step==null)TextButton({
                 hideKeyboard()
                 if(workspace.generation?.status in listOf("ready","blocked","failed","cancelled"))workspace.newAttempt()
                 workspace.generate {onGeneration(it.id)}
             },enabled=!busy&&!workspace.loading&&workspace.draft.errors(workspace.project?.plotSetup,true).isEmpty()) {Text(if(busy)"Generating…" else "Generate") }
+        }
+        if(exportOpen&&generationID!=null) {
+            val viewed=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
+            if(viewed?.status=="ready")Row(Modifier.fillMaxWidth().background(c.surface).padding(horizontal=16.dp,vertical=4.dp),horizontalArrangement=Arrangement.End,verticalAlignment=Alignment.CenterVertically) {
+                listOf("png","pdf","dwg").forEach {format->
+                    val available=format!="dwg"||viewed.drawings.getOrNull(viewedFloor)?.presentation?.vectorAvailable==true
+                    TextButton({viewed.drawings.getOrNull(viewedFloor)?.let {workspace.exportPlan(viewed.id,it.id,format)}},enabled=available&&!workspace.exporting) {Text(format.uppercase())}
+                }
+                PlotToolButton(PlotSymbol.CLOSE,"Close export options"){exportOpen=false}
+            }
         }
         if(workspace.loading)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
         else if(workspace.project?.plotSetup==null)Column(Modifier.fillMaxSize().padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {

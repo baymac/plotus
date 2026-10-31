@@ -175,7 +175,7 @@ export function PlanViewer({ input, callbacks }: { input: ViewerInput; callbacks
   useEffect(() => { setSelected(''); }, [scene]);
   const area = useMemo(() => scene.footprint.reduce((sum, p) => sum + polygonArea(p), 0), [scene]);
 
-  return <div className={`pv-root pv-${theme}`} role="region" aria-label={`${scene.label} 3D concept view`}
+  return <div className={`pv-root pv-${theme}`} role="region" aria-label="3D floor plan"
     tabIndex={0} onKeyDown={event => {
       if ((event.target as HTMLElement).tagName === 'INPUT' || event.altKey || event.ctrlKey || event.metaKey) return;
       const key = event.key.toLowerCase();
@@ -186,7 +186,7 @@ export function PlanViewer({ input, callbacks }: { input: ViewerInput; callbacks
       : lost ? <ViewerMessage title="3D view interrupted" detail="Switch to 2D, then reopen this floor to try again." />
       : <Canvas orthographic shadows={{ type: PCFShadowMap }} dpr={[1, 1.5]} frameloop="demand" camera={{ position: [12, 12, 14], zoom: 30, near: .01, far: 1000 }}
         gl={{ antialias: true, powerPreference: 'low-power', alpha: false }}
-        onPointerMissed={() => setSelected('')} fallback={<ViewerMessage title="3D isn’t available" detail="Use 2D to continue reviewing this floor." />}>
+        onPointerMissed={() => setSelected('')} fallback={<span>3D floor plan</span>}>
         <Suspense fallback={null}><Scene scene={scene} action={action} mode={mode} furniture={furniture} cutaway={cutaway}
           theme={theme} onSelect={setSelected} onReady={readyHandler} onLost={lostHandler} /></Suspense>
       </Canvas>}
@@ -208,7 +208,7 @@ export function PlanViewer({ input, callbacks }: { input: ViewerInput; callbacks
       </div>
       {!ready && <div className="pv-loading" role="status">Preparing 3D view…</div>}
       <div className="pv-footer">
-        <div className="pv-caption"><span className="pv-concept">Concept view</span><span>{selected || scene.label}</span><span className="pv-area">{new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(units === 'FEET_INCHES' ? area / .09290304 : area)} {units === 'FEET_INCHES' ? 'sq ft' : 'm²'}</span></div>
+        <div className="pv-caption"><span>Built-up area</span><span className="pv-area">{new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(units === 'FEET_INCHES' ? area / .09290304 : area)} {units === 'FEET_INCHES' ? 'sq ft' : 'm²'}</span>{selected && <span>{selected}</span>}</div>
         <span className="pv-hint">{mode === 'top' ? 'Drag to pan · Scroll to zoom' : 'Drag to orbit · Right-drag to pan · Scroll to zoom'}</span>
       </div>
     </>}

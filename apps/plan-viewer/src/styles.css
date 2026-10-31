@@ -17,8 +17,7 @@
 .pv-zoom-divider{height:1px;width:22px;background:var(--pv-line);margin:3px 0}
 .pv-footer{position:absolute;z-index:2;bottom:0;left:0;width:100%;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;gap:16px;pointer-events:none;background:linear-gradient(transparent,var(--pv-bg) 45%);min-height:52px}
 .pv-caption{display:flex;gap:12px;align-items:center;min-width:0;color:var(--pv-muted);font-size:11px}
-.pv-caption>span:not(.pv-concept){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pv-concept{border:1px solid var(--pv-line);border-radius:5px;padding:3px 6px;color:var(--pv-ink);font-weight:500;font-size:10px;white-space:nowrap;background:var(--pv-surface)}
+.pv-caption>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pv-area{font-variant-numeric:tabular-nums}
 .pv-hint{color:var(--pv-muted);font-size:10px;white-space:nowrap}
 .pv-message{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;gap:12px;color:var(--pv-muted);background:var(--pv-bg,#fbf9f2);font:13px/1.6 'Plotus Jakarta',system-ui,sans-serif}
@@ -27,5 +26,5 @@
 .pv-message>span{max-width:340px}
 .pv-loading{position:absolute;inset:0;display:grid;place-items:center;color:var(--pv-muted);background:var(--pv-bg);z-index:1;font-size:13px}
 @media(max-width:700px){.pv-hint{display:none}.pv-toolbar{top:12px;gap:1px;padding:4px}.pv-tool{padding:0 7px;font-size:11px;gap:5px}.pv-tool svg{width:16px;height:16px}.pv-divider{margin:0 2px}.pv-footer{padding:12px}.pv-zoom{right:12px;bottom:60px}.pv-caption{gap:8px}}
-@media(max-width:400px){.pv-toolbar .pv-tool span{display:none}.pv-toolbar .pv-tool{width:38px;height:36px}.pv-area{display:none}}
+@media(max-width:400px){.pv-toolbar .pv-tool span{display:none}.pv-toolbar .pv-tool{width:38px;height:36px}}
 @media(prefers-reduced-motion:reduce){.pv-tool{transition:none}}

@@ -7,6 +7,44 @@ import kotlinx.serialization.json.*
 import kotlin.test.*
 
 class FloorWorkspaceTest {
+    @Test fun savingOpensThePlatformPickerInsideTheClickBeforeSuspending()=runBlocking<Unit> {
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Default)
+        val finish=CompletableDeferred<Unit>()
+        var pickerThread:Thread?=null
+        val workspace=FloorWorkspace(scope,{_,path,_->when {
+            path.contains("/export/")->authJson.encodeToJsonElement(PlanExport("floor.pdf","application/pdf","JVBERi0="))
+            path.contains("/generations?")->authJson.encodeToJsonElement(PlanGenerations(emptyList()))
+            else->authJson.encodeToJsonElement(initial)
+        }},{},saveExport={pickerThread=Thread.currentThread();finish.await()})
+        try {
+            workspace.load(initial.id);workspace.prepareExport("plan","ground","pdf")
+            withTimeout(5000){while(workspace.preparedExport==null)yield()}
+            val clickThread=Thread.currentThread()
+            workspace.downloadExport()
+            assertSame(clickThread,pickerThread)
+            assertTrue(workspace.exporting)
+            finish.complete(Unit)
+            withTimeout(5000){while(workspace.exporting)yield()}
+            assertNull(workspace.exportError)
+        }finally {scope.cancel()}
+    }
+
+    @Test fun cancellingTheSavePickerIsQuietAndWriteFailuresRemainVisible()=runBlocking<Unit> {
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
+        var cancel=true
+        val workspace=FloorWorkspace(scope,{_,path,_->when {
+            path.contains("/export/")->authJson.encodeToJsonElement(PlanExport("floor.pdf","application/pdf","JVBERi0="))
+            path.contains("/generations?")->authJson.encodeToJsonElement(PlanGenerations(emptyList()))
+            else->authJson.encodeToJsonElement(initial)
+        }},{},saveExport={if(cancel)throw AuthCancelled()else throw AuthFailure(0,"Could not save this file.")})
+        try {
+            workspace.load(initial.id);workspace.prepareExport("plan","ground","pdf")
+            workspace.downloadExport();assertFalse(workspace.exporting);assertNull(workspace.exportError)
+            cancel=false;workspace.downloadExport();assertFalse(workspace.exporting)
+            assertEquals("Could not save this file.",workspace.exportError)
+        }finally {scope.cancel()}
+    }
+
     @Test fun exportsArePreparedThroughTheOwnedApiAndFailuresCanBeRetriedBeforeDownloading()=runBlocking<Unit> {
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
         val requested=mutableListOf<String>();var fail=true

@@ -16,6 +16,7 @@ class FloorWorkspace(
     private val request:suspend (String,String,String?)->JsonElement,
     private val accepted:(Project)->Unit,
     private val displayUnits:(()->PlotUnits)?=null,
+    private val saveExport:suspend (PlanExport)->Unit=::savePlanExport,
 ) {
     var project by mutableStateOf<Project?>(null);private set
     var draft by mutableStateOf(FloorPlanSetup());private set
@@ -155,7 +156,7 @@ class FloorWorkspace(
             try {
                 val file=authJson.decodeFromJsonElement<PlanExport>(request("GET",path,null))
                 if(exportEpoch==epoch) {
-                    browserDownload=if(planDownloadsUseBrowser)prepareBrowserPlanDownload(file) else null
+                    browserDownload=if(planDownloadsUseBrowser)prepareBrowserPlanDownload(file,path) else null
                     preparedExport=file
                 }
             }catch(cancelled:CancellationException){throw cancelled}
@@ -167,24 +168,22 @@ class FloorWorkspace(
         val file=preparedExport ?: return
         if(exporting)return
         exportError=null
-        if(planDownloadsUseBrowser) {
-            try {browserDownload?.let(::downloadPlanFromUrl) ?: error("Prepare this file again.")}
-            catch(failure:Exception){exportError=failure.message ?: "Couldn’t start the download."}
-        }else {
-            exporting=true
-            exportJob=scope.launch {
-                try {savePlanExport(file)}
+        exporting=true
+        val epoch=exportEpoch
+        // Open platform pickers inside the originating click, before the
+        // first suspension. Chromium requires this user-activation lifetime.
+        exportJob=scope.launch(start=CoroutineStart.UNDISPATCHED) {
+                try {saveExport(file)}
                 catch(cancelled:CancellationException){throw cancelled}
                 catch(_:AuthCancelled){}
-                catch(failure:Exception){exportError=failure.message ?: "Couldn’t save this plan."}
-                finally {exporting=false}
-            }
+                catch(failure:Exception){if(exportEpoch==epoch)exportError=failure.message ?: "Couldn’t save this plan."}
+                finally {if(exportEpoch==epoch)exporting=false}
         }
     }
     fun clearExport() {
         exportEpoch++
         exportJob?.cancel();exportJob=null;exportKey=null
-        browserDownload?.let(::releaseBrowserPlanDownload);browserDownload=null
+        browserDownload=null
         preparedExport=null;exporting=false;exportError=null
     }
     fun cancelGeneration(id:String) {

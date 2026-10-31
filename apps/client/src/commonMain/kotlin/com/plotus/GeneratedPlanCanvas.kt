@@ -101,7 +101,7 @@ import org.jetbrains.skia.svg.SVGLengthContext
                 }
             }
         else Text("This floor drawing couldn’t be opened.",Modifier.align(Alignment.Center),color=c.muted)
-        if(requirements!=null||roadLabels.isNotEmpty())Column(Modifier.align(Alignment.TopStart).padding(start=16.dp,end=16.dp,top=if(compact)60.dp else 76.dp).widthIn(max=248.dp).background(c.surface,RoundedCornerShape(10.dp)).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+        if(requirements!=null)Column(Modifier.align(Alignment.TopStart).padding(start=16.dp,end=16.dp,top=if(compact)60.dp else 76.dp).widthIn(max=248.dp).background(c.surface,RoundedCornerShape(10.dp)).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
             var expanded by remember(drawing.id,compact) {mutableStateOf(!compact)}
             requirements?.let {setup->
                 val home=setup.homes.firstOrNull()
@@ -119,7 +119,6 @@ import org.jetbrains.skia.svg.SVGLengthContext
                     setback?.let {Text(it,fontSize=11.sp,lineHeight=15.sp,color=c.muted)}
                 }
             }
-            if(requirements==null||expanded)roadLabels.forEach {Text(it,fontSize=11.sp,lineHeight=14.sp,color=c.muted)}
         }
         if(presentation!=null&&presentation.version<2) {
             val side=presentation.roadPosition

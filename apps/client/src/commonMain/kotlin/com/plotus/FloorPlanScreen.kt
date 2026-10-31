@@ -183,9 +183,10 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
         }
         workspace.exportError?.let {Text(it,color=MaterialTheme.colorScheme.error,fontSize=13.sp)}
         if(workspace.exportError!=null)TextButton({workspace.prepareExport(planID,drawing.id,selected)}){Text("Try again")}
-    }},confirmButton={TextButton({workspace.downloadExport()},enabled=workspace.preparedExportFormat==selected&&!workspace.exporting) {
-        Text(if(workspace.exporting)"Preparing…" else "Download ${selected.uppercase()}")
-    }})
+    }},confirmButton={PlanDownloadAction(workspace.preparedBrowserDownload,
+        enabled=workspace.preparedExportFormat==selected&&!workspace.exporting,
+        label=if(workspace.exporting)"Preparing…" else "Download ${selected.uppercase()}",
+        onClick={workspace.downloadExport()})})
 }
 
 @Composable private fun FloorOptions(enabled:Boolean,showDivider:Boolean,onSelect:(FloorStep)->Unit) {

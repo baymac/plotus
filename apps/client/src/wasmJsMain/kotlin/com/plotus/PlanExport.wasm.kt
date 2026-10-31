@@ -2,6 +2,18 @@
 package com.plotus
 
 import com.plotus.shared.PlanExport
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.WebElementView
+import kotlinx.browser.document
+import org.w3c.dom.HTMLAnchorElement
 
 internal actual val planDownloadsUseBrowser=true
 
@@ -33,3 +45,22 @@ internal actual fun prepareBrowserPlanDownload(file:PlanExport):ReadyPlanDownloa
 internal actual fun releaseBrowserPlanDownload(download:ReadyPlanDownload){releaseBlob(download.path)}
 internal actual fun downloadPlanFromUrl(download:ReadyPlanDownload){startPreparedDownload(download.path,download.filename)}
 internal actual suspend fun savePlanExport(file:PlanExport){throw AuthFailure(0,"Choose Download to save this file.")}
+
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+internal actual fun PlanDownloadAction(download:ReadyPlanDownload?,enabled:Boolean,label:String,onClick:()->Unit) {
+    if(download==null||!enabled) {
+        TextButton(onClick,enabled=enabled){Text(label)}
+        return
+    }
+    val color="#"+(LocalPlotusColors.current.primary.toArgb() and 0xFFFFFF).toString(16).padStart(6,'0')
+    WebElementView(factory={document.createElement("a") as HTMLAnchorElement},
+        modifier=Modifier.width(152.dp).height(48.dp),update={link->
+            link.href=download.path
+            link.download=download.filename
+            link.rel="noopener"
+            link.textContent=label
+            link.setAttribute("aria-label",label)
+            link.style.cssText="display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;height:100%;padding:0 12px;border-radius:24px;color:$color;background:transparent;font:600 14px system-ui,sans-serif;text-decoration:none;cursor:pointer;"
+        })
+}

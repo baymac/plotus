@@ -4,6 +4,14 @@ import com.plotus.shared.PlanExport
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import androidx.compose.runtime.Composable
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+
+@Composable
+internal actual fun PlanDownloadAction(download:ReadyPlanDownload?,enabled:Boolean,label:String,onClick:()->Unit) {
+    TextButton(onClick,enabled=enabled){Text(label)}
+}
 
 internal actual val planDownloadsUseBrowser=false
 internal actual fun downloadPlanFromUrl(download:ReadyPlanDownload){error("Native exports use the share sheet.")}

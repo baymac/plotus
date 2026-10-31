@@ -45,6 +45,7 @@ class FloorWorkspace(
     private var exportKey:String?=null
     private var exportEpoch=0
     val preparedExportFormat get()=if(preparedExport!=null)exportKey?.substringAfterLast('/') else null
+    internal val preparedBrowserDownload get()=if(preparedExport!=null)browserDownload else null
     var cancelling by mutableStateOf(false);private set
     var starting by mutableStateOf(false);private set
     private var requestID:String?=null

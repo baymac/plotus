@@ -1,6 +1,10 @@
+FROM node:22-bookworm-slim AS viewer-node
 FROM gradle:8.14.3-jdk17 AS build
 USER root
+COPY --from=viewer-node /usr/local/bin/node /usr/local/bin/node
+COPY --from=viewer-node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 RUN apt-get update && apt-get install -y --no-install-recommends libatomic1 && rm -rf /var/lib/apt/lists/*
+RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm
 WORKDIR /workspace
 ENV GRADLE_USER_HOME=/root/.gradle
 COPY . .

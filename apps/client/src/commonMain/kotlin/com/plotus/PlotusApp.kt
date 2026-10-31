@@ -77,7 +77,8 @@ fun PlotusApp() {
 
     PlotusTheme(appearance) {
         val colors = LocalPlotusColors.current
-        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 44.dp,LocalMeasurementUnits provides measurements.units,LocalSetMeasurementUnits provides measurements::select) {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 44.dp,LocalMeasurementUnits provides measurements.units,LocalSetMeasurementUnits provides measurements::select,
+            LocalEmbeddedViewHidden provides (auth.error != null || auth.notice != null || message != null)) {
             BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
                 val compact = maxWidth < 1000.dp
                 val exit = { if (preview) preview = false else auth.signOut() }

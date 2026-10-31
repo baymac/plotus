@@ -4,6 +4,26 @@ The planning engine is intended to help turn a site's constraints and a househol
 
 It considers plot geometry, setbacks, floors, room requirements and how spaces connect. Existing checks examine room fit, circulation and furniture placement. A designer still needs to review the result; a concept is not a construction document or structural approval.
 
+## Web concept model
+
+New accepted generations also export an optional versioned `scene3d` for each drawing. This portable model contains metre-based footprint and room polygons, walls, openings, furniture placement and stairs from that same accepted floor. It omits source CAD, internal paths, solver state and asset fingerprints. The app stores it with the owner-scoped generation, so reopening or switching between 2D and 3D does not run the planning engine again. Missing vertical dimensions use explicit conceptual defaults; window sill and lintel geometry is reconstructed in the viewer.
+
+The browser lazily loads an isolated React/Three.js viewer inside the Compose floor-plan screen. Kotlin retains navigation, authentication, project state and API access; the viewport receives only its scene and appearance. Earlier saved drawings without geometry remain 2D. The initial scope includes neutral conceptual furniture, cutaway/full-height walls, camera presets and per-floor viewing. Walkthrough, finish editing and AI rendering are deferred.
+
+The mapping uses accepted geometry directly, without tracing a floor-plan image. Millimetres become metres, and the source is projected into the same planar orientation as the displayed 2D drawing. The viewer maps planar `(x, y)` to world `(x, height, y)`.
+
+| Accepted 2D element | Concept model |
+| --- | --- |
+| Footprint, including holes | Thin floor slab preserving the outline and voids |
+| Room polygons | Thin floor surfaces with selectable room names |
+| Wall polygons with opening gaps | Extruded walls, with cutaway or full-height display |
+| Doors and windows | Existing gaps plus sill and lintel bands; simple window frames |
+| Furniture bounds and rotation | Neutral furniture primitives at the accepted placement; quarter-turn dimensions are converted into local axes |
+| Shaped casework | Extrusion of its actual polygon, preserving L-shaped counters |
+| Native stair dimensions and outline | Two rising flights and landings clipped to the accepted stairwell; older scenes retain schematic tread marks |
+
+For deployment, update the project API before enabling scene export in the private engine, then deploy the web bundle. The optional field lets the new API read older drawings; an older API does not understand the new engine field. The private service changes must be committed in its own repository before updating this repository's submodule pointer.
+
 ## Availability
 
 The Floor plan stage saves setbacks, building floors and a single residence’s room programme. A connected engine calculates the buildable envelope and runs bounded generation jobs. The app displays drawings only when the existing engine accepts the result. No-fit and unavailable states preserve the saved brief. Supported combinations are checked before generation; room sizing is automatic in this milestone.

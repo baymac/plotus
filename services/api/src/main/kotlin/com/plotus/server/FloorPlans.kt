@@ -87,14 +87,19 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
         val result=request("/v1/plans/generate",buildJsonObject {
             put("programme",programme(project,setup));put("output_stage","architectural");put("seed",0);jobID?.let {put("job_id",it)}
         })
-        val drawings=Json.decodeFromJsonElement<List<PlanDrawing>>(result["drawings"] ?: throw ApiFailure(502,"PLAN_INVALID","No floor drawing was returned."))
-        if(drawings.isEmpty()||drawings.size>6||drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||it.pngBase64.length>6_000_000})
+        val drawings=try {Json.decodeFromJsonElement<List<PlanDrawing>>(result["drawings"] ?: throw ApiFailure(502,"PLAN_INVALID","No floor drawing was returned."))}
+            catch(failure:ApiFailure){throw failure}catch(_:Exception){throw ApiFailure(502,"PLAN_INVALID","The plan preview couldn’t be opened.")}
+        if(drawings.isEmpty()||drawings.size>6||drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||it.pngBase64.length>6_000_000||it.scene3d?.isValid()==false})
             throw ApiFailure(502,"PLAN_INVALID","The plan preview couldn’t be opened.")
         return drawings.map {it.copy(presentation=it.presentation?.copy(units=setup.units))}
     }
-    override suspend fun present(plot:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> = Json.decodeFromJsonElement(request("/v1/drawings/present",buildJsonObject {
-        put("plot",Json.encodeToJsonElement(plot));put("units",units.name);put("drawings",Json.encodeToJsonElement(drawings))
-    })["drawings"] ?: throw ApiFailure(502,"PLAN_INVALID","The drawing couldn’t be opened."))
+    override suspend fun present(plot:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> {
+        val result=Json.decodeFromJsonElement<List<PlanDrawing>>(request("/v1/drawings/present",buildJsonObject {
+            put("plot",Json.encodeToJsonElement(plot));put("units",units.name);put("drawings",Json.encodeToJsonElement(drawings))
+        })["drawings"] ?: throw ApiFailure(502,"PLAN_INVALID","The drawing couldn’t be opened."))
+        if(result.any {it.scene3d?.isValid()==false})throw ApiFailure(502,"PLAN_INVALID","The drawing couldn’t be opened.")
+        return result
+    }
     override suspend fun export(drawing:PlanDrawing,format:String):PlanExport = Json.decodeFromJsonElement(request("/v1/drawings/export",buildJsonObject {
         put("drawing",Json.encodeToJsonElement(drawing));put("format",format)
     }))

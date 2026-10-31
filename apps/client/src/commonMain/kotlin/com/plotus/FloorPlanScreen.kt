@@ -79,7 +79,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             workspace.exportError?.let {message->Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Text(message,Modifier.weight(1f),fontSize=13.sp,color=MaterialTheme.colorScheme.error);PlotToolButton(PlotSymbol.CLOSE,"Dismiss export error"){workspace.dismissExportError()}}}
             val plan=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
             if(workspace.viewLoading&&plan==null)Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
-            else GenerationView(workspace,plan,compact,Modifier.weight(1f),{workspace.newAttempt();onStep(FloorStep.REQUIREMENTS)},{scope.launch {workspace.openPlan(generationID)}},viewedFloor,{viewedFloor=it},{onStep(FloorStep.HISTORY)})
+            else GenerationView(workspace,plan,compact,Modifier.weight(1f),{workspace.newAttempt();onStep(FloorStep.REQUIREMENTS)},{scope.launch {workspace.openPlan(generationID)}},viewedFloor,{viewedFloor=it},{onStep(FloorStep.HISTORY)},leaving!=null||exportOpen)
         } else {
             val inspector:@Composable (Modifier)->Unit={modifier->
                 val scroll=rememberScrollState()
@@ -357,8 +357,9 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     }
 }
 
-@Composable private fun GenerationView(workspace:FloorWorkspace,plan:GeneratedFloorPlan?,compact:Boolean,modifier:Modifier,onEdit:()->Unit,onRetry:()->Unit,floor:Int,onFloor:(Int)->Unit,onHistory:()->Unit) {
+@Composable private fun GenerationView(workspace:FloorWorkspace,plan:GeneratedFloorPlan?,compact:Boolean,modifier:Modifier,onEdit:()->Unit,onRetry:()->Unit,floor:Int,onFloor:(Int)->Unit,onHistory:()->Unit,viewerHidden:Boolean=false) {
     val c=LocalPlotusColors.current
+    var show3D by remember(plan?.id) {mutableStateOf(false)}
     if(plan?.status in listOf("running","queued","cancelling"))Column(modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
         CircularProgressIndicator();Spacer(Modifier.height(24.dp));FloorTitle(if(plan?.status=="cancelling"||workspace.cancelling)"Cancelling generation" else "Creating your floor plan")
         Spacer(Modifier.height(12.dp));RunningTime(plan!!)
@@ -370,11 +371,27 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
         workspace.error?.let {FloorError(it)}
     } else if(plan?.status=="ready") {
         Column(modifier.fillMaxWidth()) {
-            if(plan.drawings.size>1)Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=16.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                plan.drawings.forEachIndexed {i,_->FloorChip(floorName(i),floor==i,true){onFloor(i)}}
+            if(supportsPlanScene3D()||plan.drawings.size>1)Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=16.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
+                if(supportsPlanScene3D()) {
+                    FloorChip("2D",!show3D,true){show3D=false}
+                    FloorChip("3D",show3D,true){show3D=true}
+                    if(plan.drawings.size>1)Spacer(Modifier.width(8.dp))
+                }
+                if(plan.drawings.size>1)plan.drawings.forEachIndexed {i,_->FloorChip(floorName(i),floor==i,true){onFloor(i)}}
             }
             val drawing=plan.drawings.getOrNull(floor)
-            if(drawing!=null)GeneratedPlanCanvas(drawing,compact,Modifier.fillMaxWidth().weight(1f),plan.roadLabels,plan.requirements)
+            if(drawing!=null&&show3D&&supportsPlanScene3D()) {
+                val scene=drawing.scene3d
+                if(scene!=null)PlanSceneViewer(scene,Modifier.fillMaxWidth().weight(1f),viewerHidden)
+                else Box(Modifier.fillMaxWidth().weight(1f).background(c.background),contentAlignment=Alignment.Center) {
+                    Column(Modifier.widthIn(max=400.dp).padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                        Text("This saved plan has a 2D drawing",fontSize=18.sp,fontWeight=FontWeight.SemiBold,color=c.ink,textAlign=TextAlign.Center)
+                        Text("Generate a new plan to explore it in 3D.",fontSize=14.sp,color=c.muted,textAlign=TextAlign.Center)
+                        TextButton({show3D=false}) {Text("Back to 2D")}
+                    }
+                }
+            }
+            else if(drawing!=null)GeneratedPlanCanvas(drawing,compact,Modifier.fillMaxWidth().weight(1f),plan.roadLabels,plan.requirements)
             else Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){FloorError("This floor drawing couldn’t be opened.")}
         }
     }else Box(modifier.fillMaxWidth().padding(24.dp),contentAlignment=Alignment.Center) {

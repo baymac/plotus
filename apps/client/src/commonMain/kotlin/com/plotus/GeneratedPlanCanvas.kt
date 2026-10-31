@@ -3,6 +3,7 @@ package com.plotus
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -24,6 +25,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +35,9 @@ import com.plotus.shared.PlotUnits
 import com.plotus.shared.METRES_PER_FOOT
 import com.plotus.shared.decimal
 import com.plotus.shared.measureLabel
+import com.plotus.shared.FloorPlanSetup
+import com.plotus.shared.PlanMode
+import com.plotus.shared.buildingLabel
 import org.jetbrains.compose.resources.decodeToImageBitmap
 import kotlin.io.encoding.Base64
 import kotlin.math.roundToInt
@@ -43,7 +49,7 @@ import org.jetbrains.skia.svg.SVGLengthContext
  * Map paper/ink to the active palette without changing the saved engine output.
  */
 @OptIn(ExperimentalComposeUiApi::class)
-@Composable internal fun GeneratedPlanCanvas(drawing:PlanDrawing,compact:Boolean,modifier:Modifier=Modifier,roadLabels:List<String> = emptyList()) {
+@Composable internal fun GeneratedPlanCanvas(drawing:PlanDrawing,compact:Boolean,modifier:Modifier=Modifier,roadLabels:List<String> = emptyList(),requirements:FloorPlanSetup?=null) {
     val c=LocalPlotusColors.current
     val presentation=drawing.presentation
     val units=LocalMeasurementUnits.current
@@ -95,8 +101,25 @@ import org.jetbrains.skia.svg.SVGLengthContext
                 }
             }
         else Text("This floor drawing couldn’t be opened.",Modifier.align(Alignment.Center),color=c.muted)
-        if(roadLabels.isNotEmpty()&&(presentation==null||presentation.version>=2||roadLabels.size>1))Column(Modifier.align(Alignment.TopStart).padding(start=16.dp,end=16.dp,top=64.dp).background(c.surface,RoundedCornerShape(8.dp)).padding(horizontal=10.dp,vertical=6.dp),verticalArrangement=Arrangement.spacedBy(3.dp)) {
-            roadLabels.forEach {Text(it,fontSize=11.sp,lineHeight=14.sp,color=c.muted)}
+        if(requirements!=null||roadLabels.isNotEmpty())Column(Modifier.align(Alignment.TopStart).padding(start=16.dp,end=16.dp,top=if(compact)60.dp else 76.dp).widthIn(max=248.dp).background(c.surface,RoundedCornerShape(10.dp)).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+            var expanded by remember(drawing.id,compact) {mutableStateOf(!compact)}
+            requirements?.let {setup->
+                val home=setup.homes.firstOrNull()
+                Row(Modifier.fillMaxWidth().clickable(role=Role.Button,onClickLabel=if(expanded)"Collapse requirements" else "Expand requirements"){expanded=!expanded},verticalAlignment=Alignment.CenterVertically) {
+                    Text("Requirements",Modifier.weight(1f),fontSize=12.sp,fontWeight=FontWeight.SemiBold,color=c.ink)
+                    Text(if(expanded)"−" else "+",fontSize=16.sp,color=c.muted)
+                }
+                Text(listOfNotNull(home?.let {"${it.bhk} BHK"},if(setup.buildingFloors==1)"Ground floor" else buildingLabel(setup.buildingFloors)).joinToString(" · "),fontSize=11.sp,lineHeight=15.sp,color=c.ink)
+                if(expanded) {
+                    home?.let {
+                        Text("${if(it.mode==PlanMode.AUTO)"Auto" else "Custom"} · Vastu: ${if(it.vastu)"Yes" else "No"}",fontSize=11.sp,lineHeight=15.sp,color=c.muted)
+                        if(it.mode==PlanMode.CUSTOM&&it.rooms.isNotEmpty())Text(it.rooms.groupBy {room->room.kind}.entries.joinToString(" · ") {entry->"${entry.value.size} ${entry.key.title}"},fontSize=11.sp,lineHeight=15.sp,color=c.muted)
+                    }
+                    val setback=if(setup.setbackMode==PlanMode.AUTO)"Auto setback" else if(setup.sameSetback)setup.commonSetbackMetres?.let {"Setback ${measureLabel(it,units)}"} else "Custom setbacks"
+                    setback?.let {Text(it,fontSize=11.sp,lineHeight=15.sp,color=c.muted)}
+                }
+            }
+            if(requirements==null||expanded)roadLabels.forEach {Text(it,fontSize=11.sp,lineHeight=14.sp,color=c.muted)}
         }
         if(presentation!=null&&presentation.version<2) {
             val side=presentation.roadPosition

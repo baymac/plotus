@@ -7,6 +7,50 @@ import kotlinx.serialization.json.*
 import kotlin.test.*
 
 class FloorWorkspaceTest {
+    @Test fun exportsArePreparedThroughTheOwnedApiAndFailuresCanBeRetriedBeforeDownloading()=runBlocking<Unit> {
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
+        val requested=mutableListOf<String>();var fail=true
+        val workspace=FloorWorkspace(scope,{method,path,_->when {
+            path.contains("/export/")->{
+                assertEquals("GET",method);assertFalse(path.contains("download="));requested+=path
+                if(fail)throw AuthFailure(503,"Couldn’t prepare this file.")
+                val format=path.substringAfterLast('/');authJson.encodeToJsonElement(PlanExport("floor.$format","application/octet-stream","Zml4dHVyZQ=="))
+            }
+            path.contains("/generations?")->authJson.encodeToJsonElement(PlanGenerations(emptyList()))
+            else->authJson.encodeToJsonElement(initial)
+        }},{})
+        try {
+            workspace.load(initial.id);workspace.prepareExport("plan","ground","pdf")
+            assertNull(workspace.preparedExport);assertNotNull(workspace.exportError);assertFalse(workspace.exporting)
+            fail=false;workspace.prepareExport("plan","ground","pdf")
+            assertNull(workspace.exportError);assertEquals("pdf",workspace.preparedExportFormat)
+            workspace.prepareExport("plan","ground","pdf");assertEquals(2,requested.size)
+            for(format in listOf("png","dwg")) {
+                workspace.prepareExport("plan","ground",format)
+                assertEquals(format,workspace.preparedExportFormat);assertEquals("floor.$format",workspace.preparedExport?.filename)
+            }
+            workspace.clearExport();assertNull(workspace.preparedExport);assertNull(workspace.preparedExportFormat)
+        }finally {scope.cancel()}
+    }
+    @Test fun selectingAnotherFormatOrClosingTheModalDiscardsPendingExportWork()=runBlocking<Unit> {
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
+        val pdf=CompletableDeferred<Unit>();val png=CompletableDeferred<Unit>()
+        val workspace=FloorWorkspace(scope,{_,path,_->when {
+            path.contains("/export/")->{
+                val format=path.substringAfterLast('/');if(format=="pdf")pdf.await()else png.await()
+                authJson.encodeToJsonElement(PlanExport("floor.$format","application/octet-stream","Zml4dHVyZQ=="))
+            }
+            path.contains("/generations?")->authJson.encodeToJsonElement(PlanGenerations(emptyList()))
+            else->authJson.encodeToJsonElement(initial)
+        }},{})
+        try {
+            workspace.load(initial.id);workspace.prepareExport("plan","ground","pdf");assertTrue(workspace.exporting)
+            workspace.prepareExport("plan","ground","png");pdf.complete(Unit)
+            assertNull(workspace.preparedExport);assertTrue(workspace.exporting)
+            workspace.clearExport();png.complete(Unit);yield()
+            assertNull(workspace.preparedExport);assertNull(workspace.exportError);assertFalse(workspace.exporting)
+        }finally {scope.cancel()}
+    }
     @Test fun historySummariesStaySeparateFromTheOpenedDrawingAndFromNewAttempts()=runBlocking<Unit> {
         val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
         val latest=GeneratedFloorPlan("e4fc581d-5337-466f-83d2-51e96c2a03f1","ready",createdAt="2026-10-28T10:00:00Z")

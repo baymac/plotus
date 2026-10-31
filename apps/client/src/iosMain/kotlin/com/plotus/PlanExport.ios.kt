@@ -7,6 +7,8 @@ import kotlin.coroutines.resumeWithException
 
 internal actual val planDownloadsUseBrowser=false
 internal actual fun downloadPlanFromUrl(download:ReadyPlanDownload){error("Native exports use the share sheet.")}
+internal actual fun prepareBrowserPlanDownload(file:PlanExport):ReadyPlanDownload=error("Native exports use the share sheet.")
+internal actual fun releaseBrowserPlanDownload(download:ReadyPlanDownload){}
 
 internal actual suspend fun savePlanExport(file:PlanExport):Unit=suspendCancellableCoroutine {continuation->
     val host=NativeAuthBridge.host

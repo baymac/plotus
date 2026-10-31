@@ -12,6 +12,8 @@ import kotlin.coroutines.resumeWithException
 
 internal actual val planDownloadsUseBrowser=false
 internal actual fun downloadPlanFromUrl(download:ReadyPlanDownload){error("Desktop exports use the file dialog.")}
+internal actual fun prepareBrowserPlanDownload(file:PlanExport):ReadyPlanDownload=error("Desktop exports use the file dialog.")
+internal actual fun releaseBrowserPlanDownload(download:ReadyPlanDownload){}
 
 internal actual suspend fun savePlanExport(file:PlanExport):Unit=suspendCancellableCoroutine {continuation->
     EventQueue.invokeLater {

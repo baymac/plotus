@@ -39,6 +39,12 @@ class FloorWorkspace(
     var viewError by mutableStateOf<String?>(null);private set
     var exporting by mutableStateOf(false);private set
     var exportError by mutableStateOf<String?>(null);private set
+    var preparedExport by mutableStateOf<PlanExport?>(null);private set
+    private var browserDownload:ReadyPlanDownload?=null
+    private var exportJob:Job?=null
+    private var exportKey:String?=null
+    private var exportEpoch=0
+    val preparedExportFormat get()=if(preparedExport!=null)exportKey?.substringAfterLast('/') else null
     var cancelling by mutableStateOf(false);private set
     var starting by mutableStateOf(false);private set
     private var requestID:String?=null
@@ -136,25 +142,49 @@ class FloorWorkspace(
         }
     }
     fun newAttempt(){if(generating)return;requestID=null;generation=null;error=null}
-    fun exportPlan(planID:String,drawingID:String,format:String) {
-        if(exporting||project==null)return
-        exportError=null
+    fun prepareExport(planID:String,drawingID:String,format:String) {
+        if(project==null||format !in listOf("png","pdf","dwg"))return
         val path="$base/generations/$planID/drawings/$drawingID/export/$format"
-        if(planDownloadsUseBrowser) {
-            try {downloadPlanFromUrl(ReadyPlanDownload("Plotus.$format",format,"$path?download=1"))}
-            catch(failure:Exception){exportError=failure.message ?: "Couldn’t start the download."}
-            return
-        }
+        if(exportKey==path&&(preparedExport!=null||exporting))return
+        clearExport();exportKey=path
+        val epoch=exportEpoch
+        exportError=null
         exporting=true
-        scope.launch {
+        exportJob=scope.launch {
             try {
                 val file=authJson.decodeFromJsonElement<PlanExport>(request("GET",path,null))
-                savePlanExport(file)
+                if(exportEpoch==epoch) {
+                    browserDownload=if(planDownloadsUseBrowser)prepareBrowserPlanDownload(file) else null
+                    preparedExport=file
+                }
             }catch(cancelled:CancellationException){throw cancelled}
-            catch(_:AuthCancelled){}
-            catch(failure:Exception){exportError=failure.message ?: "Couldn’t export this plan."}
-            finally {exporting=false}
+            catch(failure:Exception){if(exportEpoch==epoch)exportError=failure.message ?: "Couldn’t export this plan."}
+            finally {if(exportEpoch==epoch)exporting=false}
         }
+    }
+    fun downloadExport() {
+        val file=preparedExport ?: return
+        if(exporting)return
+        exportError=null
+        if(planDownloadsUseBrowser) {
+            try {browserDownload?.let(::downloadPlanFromUrl) ?: error("Prepare this file again.")}
+            catch(failure:Exception){exportError=failure.message ?: "Couldn’t start the download."}
+        }else {
+            exporting=true
+            exportJob=scope.launch {
+                try {savePlanExport(file)}
+                catch(cancelled:CancellationException){throw cancelled}
+                catch(_:AuthCancelled){}
+                catch(failure:Exception){exportError=failure.message ?: "Couldn’t save this plan."}
+                finally {exporting=false}
+            }
+        }
+    }
+    fun clearExport() {
+        exportEpoch++
+        exportJob?.cancel();exportJob=null;exportKey=null
+        browserDownload?.let(::releaseBrowserPlanDownload);browserDownload=null
+        preparedExport=null;exporting=false;exportError=null
     }
     fun cancelGeneration(id:String) {
         if(cancelling||project==null)return

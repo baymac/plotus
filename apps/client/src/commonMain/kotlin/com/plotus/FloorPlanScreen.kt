@@ -70,16 +70,6 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 workspace.generate {onGeneration(it.id)}
             },enabled=!busy&&!workspace.loading&&workspace.draft.errors(workspace.project?.plotSetup,true).isEmpty()) {Text(if(busy)"Generating…" else "Generate") }
         }
-        if(exportOpen&&generationID!=null) {
-            val viewed=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
-            if(viewed?.status=="ready")Row(Modifier.fillMaxWidth().background(c.surface).padding(horizontal=16.dp,vertical=4.dp),horizontalArrangement=Arrangement.End,verticalAlignment=Alignment.CenterVertically) {
-                listOf("png","pdf","dwg").forEach {format->
-                    val available=format!="dwg"||viewed.drawings.getOrNull(viewedFloor)?.presentation?.vectorAvailable==true
-                    TextButton({viewed.drawings.getOrNull(viewedFloor)?.let {workspace.exportPlan(viewed.id,it.id,format)}},enabled=available&&!workspace.exporting) {Text(format.uppercase())}
-                }
-                PlotToolButton(PlotSymbol.CLOSE,"Close export options"){exportOpen=false}
-            }
-        }
         if(workspace.loading)Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
         else if(workspace.project?.plotSetup==null)Column(Modifier.fillMaxSize().padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             Text(workspace.error ?: "Complete Plot setup first.")
@@ -161,10 +151,41 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             }
         }
     }
+    if(exportOpen&&generationID!=null) {
+        val plan=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
+        val drawing=plan?.drawings?.getOrNull(viewedFloor)
+        if(plan?.status=="ready"&&drawing!=null)PlanExportDialog(workspace,plan.id,drawing) {exportOpen=false}
+    }
     leaving?.let {action->AlertDialog(onDismissRequest={leaving=null},title={Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
         Text("Save floor-plan changes?",Modifier.weight(1f),fontSize=20.sp,fontWeight=FontWeight.SemiBold)
         PlotToolButton(PlotSymbol.CLOSE,"Cancel"){leaving=null}
     }},confirmButton={TextButton({leaving=null;workspace.save {action()}}){Text("Save")}},dismissButton={TextButton({workspace.discard();leaving=null;action()}){Text("Discard")}})}
+}
+
+@Composable private fun PlanExportDialog(workspace:FloorWorkspace,planID:String,drawing:PlanDrawing,onClose:()->Unit) {
+    val c=LocalPlotusColors.current
+    var selected by remember(drawing.id) {mutableStateOf("pdf")}
+    LaunchedEffect(planID,drawing.id,selected) {workspace.prepareExport(planID,drawing.id,selected)}
+    DisposableEffect(workspace,planID,drawing.id) {onDispose {workspace.clearExport()}}
+    AlertDialog(onDismissRequest=onClose,containerColor=c.surface,title={
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+            Text("Export floor plan",Modifier.weight(1f),fontSize=20.sp,fontWeight=FontWeight.SemiBold)
+            PlotToolButton(PlotSymbol.CLOSE,"Close export options",onClick=onClose)
+        }
+    },text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        listOf("pdf" to "PDF document","png" to "PNG image","dwg" to "DWG drawing").forEach {(format,title)->
+            val available=format!="dwg"||drawing.vectorSvgBase64!=null||drawing.presentation?.vectorAvailable==true
+            Row(Modifier.fillMaxWidth().selectable(selected==format,enabled=available,role=Role.RadioButton) {selected=format;workspace.dismissExportError()}.padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
+                RadioButton(selected==format,onClick=null,enabled=available)
+                Spacer(Modifier.width(12.dp))
+                Column {Text(title,color=if(available)c.ink else c.muted);if(!available)Text("Generate a new plan for DWG",fontSize=12.sp,color=c.muted)}
+            }
+        }
+        workspace.exportError?.let {Text(it,color=MaterialTheme.colorScheme.error,fontSize=13.sp)}
+        if(workspace.exportError!=null)TextButton({workspace.prepareExport(planID,drawing.id,selected)}){Text("Try again")}
+    }},confirmButton={TextButton({workspace.downloadExport()},enabled=workspace.preparedExportFormat==selected&&!workspace.exporting) {
+        Text(if(workspace.exporting)"Preparing…" else "Download ${selected.uppercase()}")
+    }})
 }
 
 @Composable private fun FloorOptions(enabled:Boolean,showDivider:Boolean,onSelect:(FloorStep)->Unit) {
@@ -352,7 +373,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 plan.drawings.forEachIndexed {i,_->FloorChip(floorName(i),floor==i,true){onFloor(i)}}
             }
             val drawing=plan.drawings.getOrNull(floor)
-            if(drawing!=null)GeneratedPlanCanvas(drawing,compact,Modifier.fillMaxWidth().weight(1f),plan.roadLabels)
+            if(drawing!=null)GeneratedPlanCanvas(drawing,compact,Modifier.fillMaxWidth().weight(1f),plan.roadLabels,plan.requirements)
             else Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){FloorError("This floor drawing couldn’t be opened.")}
         }
     }else Box(modifier.fillMaxWidth().padding(24.dp),contentAlignment=Alignment.Center) {

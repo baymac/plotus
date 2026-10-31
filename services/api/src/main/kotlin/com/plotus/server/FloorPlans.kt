@@ -259,7 +259,7 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
         if(stored.status!="ready")return stored
         val key=UUID.fromString(stored.id)
         val brief=jobs.snapshot(owner,project,key) ?: return stored
-        val plan=stored.copy(roadLabels=brief.plot.roadCanvasLabels())
+        val plan=stored.copy(roadLabels=brief.plot.roadCanvasLabels(),requirements=brief.setup.singleResidence())
         if(plan.drawings.all {(it.presentation?.version ?: 0)>=2&&(units==null||it.presentation?.units==units)}||engine==null)return plan
         val drawings=engine.present(brief.plot,units ?: brief.setup.units,plan.drawings)
         require(drawings.map {it.id}==plan.drawings.map {it.id}) {"Drawing identities changed during presentation"}

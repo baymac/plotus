@@ -38,6 +38,10 @@ Select **Floor plan** after completing the boundary and road-facing sides.
 
 The computed buildable area is saved with the project and reused on iPhone and web. Changing floors, BHK, Vastu or rooms keeps the same footprint. Only plot or setback changes require a new calculation.
 
+On the web, open a newly generated plan and choose **3D** above the drawing. Drag to orbit, pan with the alternate mouse button, and scroll or pinch to zoom. The viewer also offers isometric and top views, fit, furniture visibility and cutaway or full-height walls. Floor selection applies to both 2D and 3D. These are concept models of the saved layout; opening the view does not generate another plan. Earlier saved plans without model geometry continue to open in 2D. Walkthrough and AI image rendering are deferred.
+
+**Export** opens a dialog with PNG, PDF and DWG options. Close the dialog to return to the canvas. The original 2D drawing remains the export source while you review its 3D model.
+
 Room dimensions are automatic in this milestone. Some catalogue entries remain marked Coming later, and the engine reports unsupported combinations before generation. If the boundary or direction changes, review and save setbacks again before generating. A floor-plan concept still needs a designer’s review.
 
 ## Keep your work organised

@@ -47,12 +47,17 @@ class NavigationTest {
 
 class PlotNavigationTest {
     private val id = "c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a"
-    @Test fun reopenedHistoryStartsAtTheFloorOverviewWhileExplicitHistoryNavigationStillWorks() {
+    @Test fun savedDrawingLinksSurviveReloadSignInAndBrowserHistory() {
         val plan="e4fc581d-5337-466f-83d2-51e96c2a03f1"
         val route="/projects/$id/floor-plan/history/$plan"
         val navigation=AppNavigation(AppLocation(route)) {_,_->}
+        assertEquals(route,navigation.path);assertEquals(plan,navigation.generationID)
         navigation.reconcileSession(false,false);navigation.reconcileSession(true,false)
-        assertEquals("/projects/$id/floor-plan",navigation.path);assertNull(navigation.generationID);assertNull(navigation.floorStep)
+        assertEquals(route,navigation.path);assertEquals(plan,navigation.generationID)
+        navigation.navigate(Destination.PROJECTS)
+        navigation.receive(AppLocation(route))
+        assertEquals(route,navigation.path);assertEquals(plan,navigation.generationID)
+        assertEquals(com.plotus.shared.FloorStep.HISTORY,navigation.floorStep)
         navigation.openFloor(id,com.plotus.shared.FloorStep.HISTORY,generation=plan)
         assertEquals(route,navigation.path);assertEquals(plan,navigation.generationID)
         navigation.openFloor(id,com.plotus.shared.FloorStep.HISTORY)
@@ -61,6 +66,18 @@ class PlotNavigationTest {
         assertNull(navigation.floorStep);assertNull(navigation.generationID)
         assertNull(destinationForPath("/projects/$id/floor-plan/setbacks/$plan"))
         assertNull(destinationForPath("/projects/$id/floor-plan/history/../../settings"))
+    }
+    @Test fun savedDrawingLoginReturnKeepsTheDrawingButRejectsUnknownRoutes() {
+        val plan="e4fc581d-5337-466f-83d2-51e96c2a03f1"
+        val route="/projects/$id/floor-plan/history/$plan"
+        val navigation=AppNavigation(AppLocation("/login",route)) {_,_->}
+        navigation.reconcileSession(true,false)
+        assertEquals(route,navigation.path);assertEquals(plan,navigation.generationID)
+        for(invalid in listOf("$route/extra","/projects/$id/floor-plan/setbacks/$plan")) {
+            val rejected=AppNavigation(AppLocation("/login",invalid)) {_,_->}
+            rejected.reconcileSession(true,false)
+            assertEquals(Destination.PROJECTS,rejected.destination)
+        }
     }
     @Test fun floorOverviewAndInlineControlsKeepTheirOwnLocations() {
         val navigation=AppNavigation(AppLocation("/projects")) {_,_->}

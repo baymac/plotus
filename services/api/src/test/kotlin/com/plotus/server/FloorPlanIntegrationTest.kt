@@ -20,6 +20,9 @@ class FloorPlanIntegrationTest {
         val owner=UUID.randomUUID();val other=UUID.randomUUID();val projects=PostgresProjects(source).also {it.migrate()};val jobs=PostgresPlans(source)
         val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),vertices=listOf(PlotPoint(0.0,0.0),PlotPoint(18.0,0.0),PlotPoint(18.0,12.0),PlotPoint(0.0,12.0)),roads=listOf(PlotRoad(0)))
         val efficiency=Json.parseToJsonElement("""{"revision":"plotus-space-efficiency.1","advisory_only":true,"floor":{"floor_id":"ground","bathroom_sqft":96.0,"circulation_sqft":42.0},"opportunities":[{"code":"exterior_recess_review","daylight_revalidation_required":true}],"future_measured_field":{"retained":true}}""").jsonObject
+        val scene=PlanScene3D(label="Ground",floorHeightMetres=3.2,wallHeightMetres=3.2,wallThicknessMetres=.2,
+            footprint=listOf(PlanScenePolygon(listOf(PlanScenePoint(0.0,0.0),PlanScenePoint(8.0,0.0),PlanScenePoint(8.0,6.0),PlanScenePoint(0.0,6.0)))),walls=emptyList(),
+            furniture=listOf(PlanSceneFurniture("bed-1","bed",PlanScenePoint(3.0,3.0),1.5,2.0,90.0)))
         var presentations=0;var exports=0;var expectedUnits=PlotUnits.METRES
         val engine=object:PlanEngine {
             override suspend fun preview(project:Project,setup:FloorPlanSetup)=error("No preview required")
@@ -28,7 +31,7 @@ class FloorPlanIntegrationTest {
                 presentations++;assertEquals(plot,saved);assertEquals(expectedUnits,units)
                 return drawings.map {it.copy(presentation=PlanPresentation(version=2,plotAreaSquareMetres=saved.areaSquareMetres,perimeterMetres=saved.perimeterMetres,builtUpAreaSquareMetres=100.0,carpetAreaSquareMetres=80.0,units=units,vectorAvailable=true),vectorSvgBase64="dmVjdG9yLWZpeHR1cmU=")}
             }
-            override suspend fun export(drawing:PlanDrawing,format:String):PlanExport {exports++;assertEquals(expectedUnits,drawing.presentation?.units);return PlanExport("floor.$format","application/octet-stream","Zml4dHVyZQ==")}
+            override suspend fun export(drawing:PlanDrawing,format:String):PlanExport {exports++;assertEquals(expectedUnits,drawing.presentation?.units);assertEquals(scene,drawing.scene3d);return PlanExport("floor.$format","application/octet-stream","Zml4dHVyZQ==")}
         }
         val service=FloorPlans(jobs,engine)
         try {testApplication {
@@ -38,7 +41,7 @@ class FloorPlanIntegrationTest {
                 projects.saveFloorPlan(owner,UUID.fromString(p.id),p.revision,FloorPlanSetup(units=PlotUnits.METRES))
             }
             runBlocking {projects.savePreferences(owner,AccountPreferences(PlotUnits.METRES))}
-            val job=runBlocking {jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan.also {jobs.finish(owner,UUID.fromString(project.id),it.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","original-drawing",100,100,presentation=PlanPresentation(version=1),spaceEfficiency=efficiency))))}}
+            val job=runBlocking {jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan.also {jobs.finish(owner,UUID.fromString(project.id),it.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","original-drawing",100,100,presentation=PlanPresentation(version=1),spaceEfficiency=efficiency,scene3d=scene))))}}
             project=runBlocking {projects.savePlot(owner,UUID.fromString(project.id),project.revision,plot.copy(northDegrees=45.0,roads=plot.roads+PlotRoad(1,priority=1)))}
             project=runBlocking {projects.saveFloorPlan(owner,UUID.fromString(project.id),project.revision,FloorPlanSetup(homes=listOf(PlanHome("home-1",bhk=5,vastu=false))))}
             runBlocking {service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id))}
@@ -53,6 +56,7 @@ class FloorPlanIntegrationTest {
             // PostgreSQL persistence, presentation caching and HTTP encoding must
             // keep nested measured metadata and unknown future report fields.
             assertEquals(efficiency,opened.drawings.single().spaceEfficiency)
+            assertEquals(scene,opened.drawings.single().scene3d)
             assertEquals(efficiency,runBlocking {jobs.find(owner,UUID.fromString(project.id),UUID.fromString(job.id))}?.drawings?.single()?.spaceEfficiency)
             assertEquals(opened,Json.decodeFromString<GeneratedFloorPlan>(get().bodyAsText()));assertEquals(1,presentations)
             for(format in listOf("png","pdf","dwg"))assertEquals("floor.$format",Json.decodeFromString<PlanExport>(get("$base/drawings/ground/export/$format").bodyAsText()).filename)

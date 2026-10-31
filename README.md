@@ -20,7 +20,11 @@ Continue to **Floor plan** to review setbacks and the buildable area, choose the
 
 Choose **Generate plan** to request a checked concept. Follow the elapsed time while generation runs, browse earlier plans in History, or cancel a run. Generation continues when you leave the screen. Export a completed plan as PNG, PDF or DWG. If the requirements cannot produce a checked layout, Plotus asks you to adjust them. Detailed design, structural approval and construction documents still need a professional designer.
 
+On the web, newly generated plans also include a **3D** concept view. Switch between the original 2D drawing and a simple model of the same floor, orbit or pan around it, view it from above, and show furniture or full-height walls. The model uses restrained materials to explain the layout. Earlier saved drawings remain available in 2D.
+
 [App guide](docs/START-HERE.md) · [Design](docs/DESIGN.md)
+
+Web builds also require Node.js 22.12+ and npm. Gradle builds the isolated React 3D viewer in `apps/plan-viewer` and packages it with the Compose web app. It loads in the browser when 3D is opened; native builds keep their existing Compose screens.
 
 ## Website
 

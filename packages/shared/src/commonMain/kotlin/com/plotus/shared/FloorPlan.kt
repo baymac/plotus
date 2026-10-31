@@ -169,7 +169,7 @@ fun FloorPlanSetup.geometrySetup()=FloorPlanSetup(setbackMode=setbackMode,sameSe
     val plotAreaSquareMetres:Double?=null,val perimeterMetres:Double?=null,val builtUpAreaSquareMetres:Double?=null,val carpetAreaSquareMetres:Double?=null,
     val northDegrees:Double=0.0,val roadPosition:String="north",val units:PlotUnits=PlotUnits.FEET_INCHES,val vectorAvailable:Boolean=false)
 /** Structured engine measurements survive saved history; absent on older drawings. */
-@Serializable data class PlanDrawing(val id:String,val label:String,val pngBase64:String,val width:Int,val height:Int,val presentation:PlanPresentation?=null,val vectorSvgBase64:String?=null,val spaceEfficiency:JsonObject?=null)
+@Serializable data class PlanDrawing(val id:String,val label:String,val pngBase64:String,val width:Int,val height:Int,val presentation:PlanPresentation?=null,val vectorSvgBase64:String?=null,val spaceEfficiency:JsonObject?=null,val scene3d:PlanScene3D?=null)
 @Serializable data class PlanExport(val filename:String,val mimeType:String,val base64:String)
 @Serializable data class GeneratedFloorPlan(val id:String,val status:String,val drawings:List<PlanDrawing> = emptyList(),val error:String?=null,val createdAt:String="",val sourceRevision:Long=0,val findings:List<PlanFinding> = emptyList(),val durationMillis:Long?=null,val roadLabels:List<String> = emptyList(),val requirements:FloorPlanSetup?=null)
 @Serializable data class PlanGenerations(val plans:List<GeneratedFloorPlan>,val nextBefore:String?=null)

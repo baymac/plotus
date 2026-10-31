@@ -12,11 +12,17 @@ await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
 await cp(resolve(root, "apps/marketing/dist"), out, { recursive: true });
 await cp(app, resolve(out, "_app"), { recursive: true });
-const version = createHash("sha256").update(await readFile(resolve(app, "plotus.js"))).digest("hex").slice(0,12);
+const versionHash = createHash("sha256");
+for (const file of ["plotus.js", "plan-viewer-bridge.js", "plan-viewer/viewer.js"]) {
+  versionHash.update(await readFile(resolve(app, file)));
+}
+const version = versionHash.digest("hex").slice(0,12);
 let html = await readFile(resolve(out, "_app/index.html"), "utf8");
 if (!html.includes('src="plotus.js"') || !html.includes('href="/favicon.png"')) throw new Error("Unexpected app entry format");
 html = html.replace("</head>", '    <base href="/_app/">\n</head>')
-  .replace('src="plotus.js"', `src="/_app/plotus.js?v=${version}"`).replace('href="/favicon.png"', 'href="/_app/favicon.png"');
+  .replace('src="plotus.js"', `src="/_app/plotus.js?v=${version}"`)
+  .replace('src="plan-viewer-bridge.js"', `src="/_app/plan-viewer-bridge.js?v=${version}"`)
+  .replace('href="/favicon.png"', 'href="/_app/favicon.png"');
 await writeFile(resolve(out, "_app/index.html"), html);
 await cp(resolve(root, "docker-cloud/edge-worker.mjs"), resolve(out, "_worker.js"));
 await writeFile(resolve(out, "_routes.json"), JSON.stringify({ version: 1,

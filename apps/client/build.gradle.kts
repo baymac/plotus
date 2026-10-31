@@ -46,3 +46,25 @@ kotlin {
 }
 compose.resources { packageOfResClass = "com.plotus.resources" }
 compose.desktop { application { mainClass = "com.plotus.MainKt" } }
+
+// The optional browser viewport is built locally and shipped with the Wasm app.
+// Native targets retain their shared Compose screens without this dependency.
+val planViewerDirectory = rootProject.layout.projectDirectory.dir("apps/plan-viewer")
+val installPlanViewer by tasks.registering(Exec::class) {
+    workingDir(planViewerDirectory)
+    commandLine("npm", "ci", "--no-audit", "--no-fund")
+    inputs.files(planViewerDirectory.file("package.json"), planViewerDirectory.file("package-lock.json"))
+    outputs.file(planViewerDirectory.file("node_modules/.package-lock.json"))
+    outputs.upToDateWhen { planViewerDirectory.file("node_modules/.bin/vite").asFile.exists() }
+}
+val buildPlanViewer by tasks.registering(Exec::class) {
+    dependsOn(installPlanViewer)
+    workingDir(planViewerDirectory)
+    commandLine("npm", "run", "build")
+    inputs.files(fileTree(planViewerDirectory) { exclude("node_modules/**", "dist/**") })
+    outputs.dir(planViewerDirectory.dir("dist"))
+}
+tasks.named<Copy>("wasmJsProcessResources") {
+    dependsOn(buildPlanViewer)
+    from(planViewerDirectory.dir("dist")) { into("plan-viewer") }
+}

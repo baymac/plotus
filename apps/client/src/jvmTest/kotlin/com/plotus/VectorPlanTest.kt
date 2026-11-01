@@ -7,6 +7,16 @@ import kotlin.test.*
 import org.jetbrains.skia.Surface
 
 class VectorPlanTest {
+    @Test fun `empty labels preserve the vector plan and its room projection`() {
+        val base=java.nio.file.Path.of("src/commonMain/composeResources/font")
+        val bytes=java.nio.file.Files.readAllBytes(base.resolve("jakarta_regular.ttf"))
+        val fonts=PlanVectorFonts.decode(bytes,bytes)
+        val svg="""<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 60 40" data-plotus-frame="designed"><path d="M10 10H50V30H10Z" fill="none" stroke="black"/><text x="20" y="20"> </text><text x="30" y="25"></text></svg>"""
+        try {
+            val vector=assertNotNull(VectorPlan.decode(Base64.encode(svg.encodeToByteArray()),fonts))
+            try {assertNotNull(vector.projection);assertEquals(120f,vector.width)}finally{vector.close()}
+        }finally {fonts.close()}
+    }
     @Test fun `retained geometry resolves subpixel details when zoomed`() {
         // These strokes share one pixel at preview size, but are six pixels
         // apart at 16x. A scaled preview cannot reproduce the white gap.

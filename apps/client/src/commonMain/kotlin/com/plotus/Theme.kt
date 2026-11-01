@@ -22,6 +22,7 @@ data class PlotusColors(
     val background: Color, val surface: Color, val ink: Color, val muted: Color,
     val subtle: Color, val line: Color, val border: Color, val primary: Color,
     val onPrimary: Color, val active: Color, val quiet: Color, val dark: Boolean,
+    val success:Color=if(dark)Color(0xFF8BC49B) else Color(0xFF166A36),
 )
 
 val LightColors = PlotusColors(Color(0xFFFBF9F2), Color.White, Color(0xFF22221E), Color(0xFF77756E),

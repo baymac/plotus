@@ -52,11 +52,15 @@ internal class PlanVectorFonts private constructor(private val regular:Typeface,
             val bytes=ByteArray(stream.bytesWritten())
             check(stream.read(bytes,0,bytes.size))
             val outlined=bytes.decodeToString()
-            val start=outlined.indexOf('>',outlined.indexOf("<svg"))+1
+            val root=outlined.indexOf("<svg")
+            val start=outlined.indexOf('>',root)+1
             val end=outlined.lastIndexOf("</svg>")
-            require(start>0&&end>=start)
+            // Empty/whitespace labels can legitimately emit a self-closing SVG.
+            // They must not force the entire floor plan to the raster fallback.
+            val empty=root>=0&&start>root&&outlined.substring(root,start).trimEnd().endsWith("/>")
+            require(root>=0&&start>root&&(empty||end>=start))
             // Preserve parent transforms, fill and saved label metadata.
-            "<g${match.groupValues[1]}>${outlined.substring(start,end)}</g>"
+            "<g${match.groupValues[1]}>${if(empty)"" else outlined.substring(start,end)}</g>"
         }finally {stream.close()}
     }
 

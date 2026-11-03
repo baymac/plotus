@@ -30,10 +30,9 @@ internal actual val planDownloadsUseBrowser=true
 private external fun validateFile(base64:String,mime:String)
 
 @JsFun("""(element,action)=>{
- // Keep the picker invocation in the actual native link click. A supported
- // browser saves to a user-selected handle; other browsers follow the owned
- // HTTPS attachment URL through their normal download manager.
- element.onclick=typeof window.showSaveFilePicker==='function'?event=>{event.preventDefault();action();}:null;
+ // The prepared link is an owned HTTPS attachment. Let the browser's native
+ // download manager handle its Content-Disposition and save location.
+ element.onclick=null;
 }""")
 private external fun bindSaveAction(element:HTMLAnchorElement,action:()->Unit)
 

@@ -44,7 +44,7 @@ interface PlanEngine {
 class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngine {
     private val client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build()
     private suspend fun request(path:String,body:JsonObject):JsonObject=try {withContext(Dispatchers.IO) {
-        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(when(path){"/v1/programmes/resolve"->15L;"/v1/reports/client"->20L;"/v1/plans/cancel"->12L;"/v1/plans/optimization-status"->8L;else->260L}))
+        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(when(path){"/v1/programmes/resolve"->15L;"/v1/reports/client"->60L;"/v1/plans/cancel"->12L;"/v1/plans/optimization-status"->8L;else->260L}))
             .header("Authorization","Bearer $token").header("Content-Type","application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build()
         var response=runInterruptible {client.send(request,HttpResponse.BodyHandlers.ofInputStream())}
@@ -70,9 +70,9 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
             }
         }
         if(response.statusCode()==504)throw ApiFailure(504,"PLAN_TIMED_OUT","Generation reached its time limit. Try again.")
-        if(response.statusCode()!=200)throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")
+        if(response.statusCode()!=200){System.err.println("planning_http_failure path=$path status=${response.statusCode()}");throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")}
         try {Json.parseToJsonElement(bytes.decodeToString()).jsonObject}catch(_:Exception){throw ApiFailure(502,"ENGINE_INVALID_RESPONSE","The plan preview couldn’t be opened.")}
-    }}catch(failure:IOException){throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")}
+    }}catch(failure:IOException){System.err.println("planning_transport_failure path=$path type=${failure.javaClass.simpleName}");throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")}
     override suspend fun preview(project:Project,setup:FloorPlanSetup):FloorPlanPreview {
         val local=setup.capabilityFindings()
         val response=request("/v1/programmes/resolve",buildJsonObject {put("programme",programme(project,setup))})

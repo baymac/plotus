@@ -60,7 +60,8 @@ final class AuthPlatformServices: NSObject, NativeAuthHost, PHPickerViewControll
               let url = URL(string: path, relativeTo: base)?.absoluteURL else {
             complete(completion, nil, "Sign-in isn’t configured on this device."); return
         }
-        var request = URLRequest(url: url, timeoutInterval: 25)
+        let clientReport = path.hasSuffix("/export/pdf") && path.contains("/floor-plan/generations/")
+        var request = URLRequest(url: url, timeoutInterval: clientReport ? 90 : 25)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

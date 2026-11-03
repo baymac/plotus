@@ -16,7 +16,8 @@ import kotlin.js.Promise
  const headers={'Accept':'application/json','Content-Type':'application/json'};
  if(bearer)headers.Authorization='Bearer '+bearer;
  if(csrf)headers['X-CSRF-Token']=csrf;
- const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),25000);
+ const report=/\/floor-plan\/generations\/[0-9a-f-]+\/drawings\/[A-Za-z0-9_-]+\/export\/pdf$/.test(path);
+ const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),report?90000:25000);
  return fetch(url,{method,credentials:'include',headers,body:body||undefined,signal:controller.signal})
   .then(async response=>JSON.stringify({status:response.status,body:await response.text()}))
   .catch(()=>JSON.stringify({status:0,body:JSON.stringify({error:{code:'NETWORK_UNAVAILABLE',message:'Couldn’t connect. Try again.'}})}))

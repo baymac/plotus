@@ -160,9 +160,15 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
                 call.respond(floorPlans.get(owner,id,saved,units=store.preferences(owner).units))
             }
             get("/projects/{id}/floor-plan/generations/{job}/drawings/{drawing}/export/{format}") {
-                val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
+                val owner=call.attributes[Owner];val id=call.projectID();val project=store.get(owner,id)
                 val job=try {UUID.fromString(call.parameters["job"])}catch(_:IllegalArgumentException){throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")}
-                call.respond(floorPlans.export(owner,id,job,call.parameters["drawing"].orEmpty(),call.parameters["format"].orEmpty(),store.preferences(owner).units))
+                val format=call.parameters["format"].orEmpty()
+                var review:PlanReviewReport?=null;var ai:AIPlanReview?=null
+                if(format=="pdf") {
+                    review=kotlinx.coroutines.withTimeoutOrNull(6000){try {planReviews.review(owner,project,job)}catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}catch(_:Exception){null}}
+                    ai=kotlinx.coroutines.withTimeoutOrNull(45000){try {planReviews.explain(owner,project,job)}catch(cancelled:kotlinx.coroutines.CancellationException){throw cancelled}catch(_:Exception){null}}
+                }
+                call.respond(floorPlans.export(owner,id,job,call.parameters["drawing"].orEmpty(),format,store.preferences(owner).units,project,review,ai))
             }
             get("/projects/{id}/sketch/{job}") {
                 val owner=call.attributes[Owner];val project=call.projectID()

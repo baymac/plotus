@@ -14,6 +14,8 @@ Account settings also let you add a passkey on iPhone or web. Appearance options
 
 Choose **Start project** at [plotus.app](https://plotus.app) to open your workspace. Sign-in is required on the web. The iPhone's separate **View demo** option contains temporary sample projects.
 
+New workspaces also receive their own **Demo project** with a checked floor plan, 3D view and downloadable client report. Its plot and requirements match the saved generation, so you can edit the example or generate a new plan. Deleting the demo removes it permanently from your workspace.
+
 ## Plan the home
 
 Continue to **Floor plan** to review setbacks and the buildable area, choose the building’s floors, BHK and Vastu preference. Use automatic requirements or add rooms, attached bathrooms, closets, parking and circulation. Save the brief to continue on another device.

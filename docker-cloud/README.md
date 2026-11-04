@@ -34,4 +34,6 @@ This builds the landing site and optimised Kotlin app together, then deploys the
 
 The optional private engine remains excluded from the default deployment.
 
+To install the new-account demo, configure `PLOTUS_DEMO_SOURCE_PROJECT_ID` and `PLOTUS_DEMO_SOURCE_GENERATION_ID` with an existing checked generation before starting the API. The immutable template is retained in the project database under `PLOTUS_DEMO_TEMPLATE_KEY` (default `welcome-v1`); the source IDs can then be removed. New accounts receive an independently owned copy on their first verified workspace request. Existing projects and the source project are unchanged.
+
 The optional private planning service is configured with `PLOTUS_ENGINE_URL` and `PLOTUS_ENGINE_SERVICE_TOKEN` in the private environment file. The URL must be reachable from the API container. Leave both blank to save floor-plan requirements without generation. Never put the service token in web or iOS configuration.

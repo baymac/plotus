@@ -15,6 +15,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 interface ProjectStore {
+    suspend fun initializeWorkspace(owner:UUID) {}
     suspend fun saveSection(owner:UUID,id:UUID,section:PlanningSection):ProjectSection = throw ApiFailure(503,"STORAGE_UNAVAILABLE","Project navigation is temporarily unavailable.")
     suspend fun preferences(owner:UUID):AccountPreferences = throw ApiFailure(503,"STORAGE_UNAVAILABLE","Preferences are temporarily unavailable.")
     suspend fun savePreferences(owner:UUID,preferences:AccountPreferences):AccountPreferences = throw ApiFailure(503,"STORAGE_UNAVAILABLE","Preferences are temporarily unavailable.")
@@ -28,7 +29,7 @@ interface ProjectStore {
     suspend fun savePlot(owner: UUID, id: UUID, revision: Long, setup: PlotSetup): Project
 }
 
-class PostgresProjects(internal val source: DataSource) : ProjectStore {
+class PostgresProjects(internal val source: DataSource, private val welcomeTemplateKey: String? = null) : ProjectStore {
     companion object {
         fun configured(): PostgresProjects {
             val url = System.getenv("PLOTUS_DATABASE_URL") ?: error("PLOTUS_DATABASE_URL is required")
@@ -37,11 +38,15 @@ class PostgresProjects(internal val source: DataSource) : ProjectStore {
                 password = System.getenv("PLOTUS_DATABASE_PASSWORD") ?: error("PLOTUS_DATABASE_PASSWORD is required")
                 loginTimeout = 5; socketTimeout = 10
             }
-            return PostgresProjects(source).also { it.migrate() }
+            val key = System.getenv("PLOTUS_DEMO_TEMPLATE_KEY")?.trim()?.takeIf { it.isNotEmpty() } ?: WelcomeProjects.DEFAULT_KEY
+            return PostgresProjects(source,key).also {
+                it.migrate()
+                WelcomeProjects(source,key).publishConfigured()
+            }
         }
     }
     fun migrate() {
-        val sql = listOf("001_projects.sql", "002_plot_setup.sql", "003_floor_plan.sql", "004_buildable_areas.sql", "005_account_preferences.sql", "006_project_last_section.sql", "007_generation_cancellation.sql", "008_plan_reviews.sql").joinToString("\n") { file ->
+        val sql = listOf("001_projects.sql", "002_plot_setup.sql", "003_floor_plan.sql", "004_buildable_areas.sql", "005_account_preferences.sql", "006_project_last_section.sql", "007_generation_cancellation.sql", "008_plan_reviews.sql", "009_welcome_projects.sql").joinToString("\n") { file ->
             javaClass.getResourceAsStream("/migrations/$file")!!.bufferedReader().use { it.readText() }
         }
         source.connection.use { connection -> connection.createStatement().use { it.execute(sql) } }
@@ -67,7 +72,11 @@ class PostgresProjects(internal val source: DataSource) : ProjectStore {
     override suspend fun healthy(): Boolean = withContext(Dispatchers.IO) {
         source.connection.use { connection -> connection.createStatement().use { it.executeQuery("SELECT 1 FROM plotus.projects LIMIT 1").use { true } } }
     }
+    override suspend fun initializeWorkspace(owner:UUID) { database { connection ->
+        welcomeTemplateKey?.let { WelcomeProjects(source,it).provision(connection,owner) }
+    } }
     override suspend fun list(owner: UUID): List<Project> = database { connection ->
+        welcomeTemplateKey?.let { WelcomeProjects(source,it).provision(connection,owner) }
         connection.prepareStatement("SELECT * FROM plotus.projects WHERE owner_id=? ORDER BY updated_at DESC,id").use {
             it.setObject(1, owner)
             it.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.project()) } }

@@ -18,6 +18,30 @@ import kotlin.test.*
 
 /** Optional visual check of the actual Compose screens, with isolated synthetic data. */
 class PlanReviewRenderTest {
+    @Test fun renderActualPrivateDraftWithItsReviewNotice()=runBlocking<Unit> {
+        val input=System.getenv("PLOTUS_DRAFT_RESULT_FIXTURE") ?: return@runBlocking
+        val output=System.getenv("PLOTUS_DRAFT_RENDER_DIR") ?: return@runBlocking
+        val drawings=authJson.decodeFromJsonElement<List<PlanDrawing>>(authJson.parseToJsonElement(File(input).readText()).jsonObject["drawings"]!!)
+        assertTrue(drawings.all {it.assessment?.kind=="draft"})
+        File(output).mkdirs()
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
+        val workspace=FloorWorkspace(scope,{_,_,_->error("No network during render")},{})
+        val plan=GeneratedFloorPlan("private-draft-render","ready",drawings=drawings,draft=true)
+        try {
+            for(appearance in listOf(Appearance.LIGHT,Appearance.DARK))for(compact in listOf(true,false)) {
+                val scene=ImageComposeScene(if(compact)390 else 1280,if(compact)844 else 900,density=Density(1f),coroutineContext=Dispatchers.Unconfined) {
+                    PlotusTheme(appearance) {GenerationView(workspace,plan,compact,Modifier.fillMaxSize(),{},{},0,{},{})}
+                }
+                try {
+                    repeat(3){scene.render().close();delay(50)}
+                    val image=scene.render()
+                    try {File(output,"draft-${if(compact)"mobile" else "desktop"}-${appearance.name.lowercase()}.png")
+                        .writeBytes(image.encodeToData(EncodedImageFormat.PNG)!!.bytes)}finally {image.close()}
+                }finally {scene.close()}
+            }
+        }finally {scope.cancel()}
+    }
+
     @Test fun renderReviewAndFocusedImprovementAtBothSizesAndAppearances()=runBlocking<Unit> {
         val output=System.getenv("PLOTUS_REVIEW_RENDER_DIR") ?: return@runBlocking
         File(output).mkdirs()

@@ -76,7 +76,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             if(keyboardVisible)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard") {hideKeyboard()}
             if(!compact&&generationID!=null&&viewed?.status=="ready"&&reviewRoute==null) {
                 PlotusButton("Review plan",{onReview(PlanReviewRoute(ReviewView.REVIEW))},outline=true)
-                PlotusButton("Optimize",{workspace.reviews.prepare();onReview(PlanReviewRoute(ReviewView.OPTIMIZE))},outline=true)
+                if(!viewed.draft)PlotusButton("Optimize",{workspace.reviews.prepare();onReview(PlanReviewRoute(ReviewView.OPTIMIZE))},outline=true)
             }
             if(generationID!=null&&viewed?.status=="ready")TextButton({exportOpen=!exportOpen},enabled=!workspace.exporting) {
                 Text(if(workspace.exporting)"Exporting…" else "Export")
@@ -105,7 +105,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                     HorizontalDivider(color=c.line)
                     Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                         PlotusButton("Review plan",{onReview(PlanReviewRoute(ReviewView.REVIEW))},Modifier.weight(1f).height(48.dp),outline=true)
-                        PlotusButton("Optimize",{workspace.reviews.prepare();onReview(PlanReviewRoute(ReviewView.OPTIMIZE))},Modifier.weight(1f).height(48.dp))
+                        if(!plan.draft)PlotusButton("Optimize",{workspace.reviews.prepare();onReview(PlanReviewRoute(ReviewView.OPTIMIZE))},Modifier.weight(1f).height(48.dp))
                     }
                 }
             }
@@ -381,7 +381,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)) {
                     Text(planTimestamp(plan.createdAt),fontSize=14.sp,fontWeight=FontWeight.Medium)
                     if(plan.status in listOf("running","queued","cancelling"))RunningTime(plan) else Text("Duration: ${runDurationLabel(plan.durationMillis)}",fontSize=12.sp,color=c.muted)
-                    if(plan.status!="ready")Text(when(plan.status){"cancelling"->"Cancelling…";"running","queued"->"Generating…";"cancelled"->"Cancelled";"blocked"->"No checked layout found";else->"Couldn’t create this plan"},fontSize=12.sp,color=c.muted)
+                    if(plan.status!="ready"||plan.draft)Text(if(plan.draft)"Draft · Needs review" else when(plan.status){"cancelling"->"Cancelling…";"running","queued"->"Generating…";"cancelled"->"Cancelled";"blocked"->"No checked layout found";else->"Couldn’t create this plan"},fontSize=12.sp,color=c.muted)
                 }
                 PlotSymbol(PlotSymbol.BACK,c.muted,Modifier.size(16.dp).graphicsLayer {rotationZ=180f})
             }
@@ -392,11 +392,13 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     }
 }
 
-@Composable private fun GenerationView(workspace:FloorWorkspace,plan:GeneratedFloorPlan?,compact:Boolean,modifier:Modifier,onEdit:()->Unit,onRetry:()->Unit,floor:Int,onFloor:(Int)->Unit,onHistory:()->Unit,viewerHidden:Boolean=false) {
+@Composable internal fun GenerationView(workspace:FloorWorkspace,plan:GeneratedFloorPlan?,compact:Boolean,modifier:Modifier,onEdit:()->Unit,onRetry:()->Unit,floor:Int,onFloor:(Int)->Unit,onHistory:()->Unit,viewerHidden:Boolean=false) {
     val c=LocalPlotusColors.current
     var show3D by remember(plan?.id) {mutableStateOf(false)}
     if(plan?.status in listOf("running","queued","cancelling"))Column(modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
         CircularProgressIndicator();Spacer(Modifier.height(24.dp));FloorTitle(if(plan?.status=="cancelling"||workspace.cancelling)"Cancelling generation" else "Creating your floor plan")
+        if(plan?.status!="cancelling"&&!workspace.cancelling)Text("We’ll show a concept draft if a fully checked layout isn’t found.",
+            Modifier.widthIn(max=360.dp).padding(top=12.dp),fontSize=13.sp,color=c.muted,textAlign=TextAlign.Center)
         Spacer(Modifier.height(12.dp));RunningTime(plan!!)
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -406,6 +408,15 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
         workspace.error?.let {FloorError(it)}
     } else if(plan?.status=="ready") {
         Column(modifier.fillMaxWidth()) {
+            plan.drawings.getOrNull(floor)?.assessment?.let {assessment->
+                Column(Modifier.fillMaxWidth().background(c.surface).padding(horizontal=20.dp,vertical=12.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                    Text(if(assessment.source=="meta_guided_solver")"Meta-assisted draft · Needs review" else "Draft · Needs review",fontSize=14.sp,fontWeight=FontWeight.SemiBold,color=c.ink)
+                    Text(if(assessment.furnishingPending)"A room-layout concept using your brief. Furniture, fixtures and detailed access still need review."
+                        else if(assessment.automaticTargetsFlexible)"A concept using your brief. Automatic room targets may vary; review the checks before developing it."
+                        else "A concept using your brief. Review the remaining checks before developing it.",fontSize=12.sp,color=c.muted)
+                    assessment.issues.firstOrNull()?.let {Text(it,fontSize=12.sp,color=c.muted)}
+                }
+            }
             if(supportsPlanScene3D()||plan.drawings.size>1)Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=16.dp,vertical=8.dp),horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
                 if(supportsPlanScene3D()) {
                     FloorChip("2D",!show3D,true){show3D=false}

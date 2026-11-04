@@ -17,12 +17,31 @@ import kotlin.math.roundToInt
 
 internal fun OptimizedRevision.validateRevision() {
     if(!review.isValid()||review.sourceHash==null||!review.requiredChecksPass||drawings.isEmpty()||drawings.size>6||
-        drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||
+        drawings.any {it.assessment!=null||it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||
             it.pngBase64.length>6_000_000||it.scene3d?.isValid()==false}||
         comparisons.size>32||comparisons.any {it.current?.isFinite()==false||it.revised?.isFinite()==false}||
         goals.size>16||goals.any {goal->!goal.current.isFinite()||!goal.revised.isFinite()||
             comparisons.none {it.id==goal.id&&it.current==goal.current&&it.revised==goal.revised}})
         throw ApiFailure(502,"OPTIMIZATION_INVALID","The revision didn’t pass the required checks.")
+}
+
+internal fun validateGeneratedDrawings(drawings:List<PlanDrawing>) {
+    fun validDraft(drawing:PlanDrawing):Boolean {
+        val assessment=drawing.assessment ?: return true
+        val report=drawing.review
+        val model=assessment.model
+        return assessment.kind=="draft"&&assessment.source in setOf("native_candidate","compact_solver","meta_guided_solver","geometry_solver")&&
+            assessment.failedChecks in 0..10000&&assessment.issues.size<=6&&
+            assessment.issues.all {it.isNotBlank()&&it.length<=200}&&
+            (model==null||model.length<=120)&&drawing.analysisID==null&&
+            (report==null||report.isValid()&&!report.canOptimize&&!report.requiredChecksPass&&report.designScore==null)
+    }
+    val draft=drawings.any {it.assessment!=null}
+    if(drawings.isEmpty()||drawings.size>6||drawings.map {it.id}.distinct().size!=drawings.size||
+        drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||
+            it.pngBase64.length>6_000_000||it.scene3d?.isValid()==false||!validDraft(it)}||
+        draft&&(drawings.any {it.assessment==null}||drawings.first().review==null))
+        throw ApiFailure(502,"PLAN_INVALID","The plan preview couldn’t be opened.")
 }
 
 /** Expose actionable failure categories without returning native paths or source. */
@@ -152,8 +171,8 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
         })
         val drawings=try {Json.decodeFromJsonElement<List<PlanDrawing>>(result["drawings"] ?: throw ApiFailure(502,"PLAN_INVALID","No floor drawing was returned."))}
             catch(failure:ApiFailure){throw failure}catch(_:Exception){throw ApiFailure(502,"PLAN_INVALID","The plan preview couldn’t be opened.")}
-        if(drawings.isEmpty()||drawings.size>6||drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||it.pngBase64.length>6_000_000||it.scene3d?.isValid()==false})
-            throw ApiFailure(502,"PLAN_INVALID","The plan preview couldn’t be opened.")
+        validateGeneratedDrawings(drawings)
+        if(drawings.size!=setup.buildingFloors)throw ApiFailure(502,"PLAN_INVALID","The result did not include every requested floor.")
         return drawings.map {it.copy(presentation=it.presentation?.copy(units=setup.units))}
     }
     override suspend fun present(plot:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> {
@@ -262,10 +281,10 @@ class PostgresPlans(private val source:DataSource) {
     /** List lightweight summaries; fetch a drawing only when its history entry is opened. */
     suspend fun history(owner:UUID,project:UUID,before:UUID?=null):PlanGenerations=db {c->
         val cursor=if(before==null)"" else " AND (created_at,id)<(SELECT created_at,id FROM plotus.plan_generations WHERE owner_id=? AND project_id=? AND id=?)"
-        c.prepareStatement("SELECT id,status,created_at,updated_at,source_revision,result->>'error' AS error,result->>'durationMillis' AS saved_duration_ms FROM plotus.plan_generations WHERE owner_id=? AND project_id=?$cursor ORDER BY created_at DESC,id DESC LIMIT 31").use {
+        c.prepareStatement("SELECT id,status,created_at,updated_at,source_revision,result->>'error' AS error,result->>'durationMillis' AS saved_duration_ms,result->>'draft' AS draft FROM plotus.plan_generations WHERE owner_id=? AND project_id=?$cursor ORDER BY created_at DESC,id DESC LIMIT 31").use {
             it.setObject(1,owner);it.setObject(2,project)
             if(before!=null){it.setObject(3,owner);it.setObject(4,project);it.setObject(5,before)}
-            val rows=it.executeQuery().use {r->buildList {while(r.next())add(GeneratedFloorPlan(r.getObject("id").toString(),r.getString("status"),error=r.getString("error"),createdAt=r.getTimestamp("created_at").toInstant().toString(),sourceRevision=r.getLong("source_revision"),durationMillis=r.runDurationMillis(r.getString("saved_duration_ms")?.toLongOrNull())))} }
+            val rows=it.executeQuery().use {r->buildList {while(r.next())add(GeneratedFloorPlan(r.getObject("id").toString(),r.getString("status"),error=r.getString("error"),createdAt=r.getTimestamp("created_at").toInstant().toString(),sourceRevision=r.getLong("source_revision"),durationMillis=r.runDurationMillis(r.getString("saved_duration_ms")?.toLongOrNull()),draft=r.getString("draft")=="true"))} }
             PlanGenerations(rows.take(30),if(rows.size>30)rows[29].id else null)
         }
     }
@@ -387,7 +406,8 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
             try {
             if(store.find(owner,UUID.fromString(project.id),UUID.fromString(job.id))?.status !in listOf("running","queued"))return@launch
             // Include preflight and transport time beyond the engine's 240-second worker ceiling.
-            val finished=try {job.copy(status="ready",drawings=withTimeout(280000) {planner.generate(project,if(units==null)saved.setup else saved.setup.copy(units=units),job.id)})}
+            val finished=try {val drawings=withTimeout(280000) {planner.generate(project,if(units==null)saved.setup else saved.setup.copy(units=units),job.id)}
+                job.copy(status="ready",drawings=drawings,draft=drawings.any {it.assessment?.kind=="draft"})}
                 catch(cancelled:CancellationException){if(cancelled !is TimeoutCancellationException)throw cancelled;job.copy(status="failed",error="Generation took too long. Try again.")}
                 catch(failure:Exception){job.copy(status=if((failure as? ApiFailure)?.status==422)"blocked" else "failed",error=(failure as? ApiFailure)?.message ?: "Couldn’t generate this plan. Try again.")}
             store.finish(owner,UUID.fromString(project.id),finished)

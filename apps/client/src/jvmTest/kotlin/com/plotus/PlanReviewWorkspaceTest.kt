@@ -61,4 +61,35 @@ class PlanReviewWorkspaceTest {
             assertEquals("no_improvement",model.optimization?.status)
         }finally {scope.cancel()}
     }
+    @Test fun oneSelectedGoalIsSentWithABoundedThreeAttemptRequest()=runBlocking<Unit> {
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
+        var submitted:StartOptimizationRequest?=null
+        val evidence=report('a').let {it.copy(findings=it.findings+it.findings.single().copy(
+            id="passage",operation=ReviewOperation.SHORTEN_PASSAGE))}
+        val job=PlanOptimization("job","plan","no_improvement","2026-11-04T10:00:00Z")
+        val model=PlanReviewWorkspace(scope,{method,path,body->when {
+            method=="POST"->{submitted=authJson.decodeFromString<StartOptimizationRequest>(body!!);authJson.encodeToJsonElement(job)}
+            path.contains("?summary=true")->authJson.encodeToJsonElement(job)
+            path.endsWith("/optimizations")->authJson.encodeToJsonElement(CurrentOptimization())
+            else->authJson.encodeToJsonElement(evidence)
+        }},{})
+        try {
+            model.attachProject("project");model.open("plan")
+            assertEquals(setOf(ReviewOperation.CONSOLIDATE_OPEN_SPACE),model.selectedOperations)
+            model.choose(ReviewOperation.SHORTEN_PASSAGE)
+            model.start {}
+            withTimeout(2000){while(model.starting)yield()}
+            assertEquals(listOf(ReviewOperation.SHORTEN_PASSAGE),submitted?.operations)
+            assertEquals(3,submitted?.maxCandidates)
+        }finally {scope.cancel()}
+    }
+    @Test fun anEmptyReviewDoesNotInventAnOptimizationGoal()=runBlocking<Unit> {
+        val scope=CoroutineScope(SupervisorJob()+Dispatchers.Unconfined)
+        val model=PlanReviewWorkspace(scope,{_,path,_->if(path.endsWith("/optimizations"))
+            authJson.encodeToJsonElement(CurrentOptimization()) else authJson.encodeToJsonElement(report('a').copy(findings=emptyList()))},{})
+        try {
+            model.attachProject("project");model.open("plan")
+            assertTrue(model.selectedOperations.isEmpty())
+        }finally {scope.cancel()}
+    }
 }

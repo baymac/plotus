@@ -12,7 +12,24 @@ import kotlin.math.roundToInt
     CONSOLIDATE_OPEN_SPACE("Consolidate outdoor space"), SHORTEN_PASSAGE("Shorten the passage"),
     BALANCE_ROOM_PROPORTIONS("Improve useful room proportions"), IMPROVE_CONNECTIVITY("Improve room connections"),
     IMPROVE_WINDOW_ACCESS("Improve exterior window access"), IMPROVE_PRIVACY("Improve room privacy"),
-    IMPROVE_PARKING_ACCESS("Improve parking and entry access"), IMPROVE_VASTU_ALIGNMENT("Improve Vastu alignment")
+    IMPROVE_PARKING_ACCESS("Improve parking and entry access"), IMPROVE_VASTU_ALIGNMENT("Improve Vastu alignment");
+    val goal get()=when(this) {
+        CONSOLIDATE_OPEN_SPACE->"Reduce unexplained outdoor area or exterior wall turns"
+        SHORTEN_PASSAGE->"Reduce passage area"
+        BALANCE_ROOM_PROPORTIONS->"Reduce service area above comfort targets"
+        IMPROVE_CONNECTIVITY->"Improve the measured room-connection score"
+        IMPROVE_WINDOW_ACCESS->"Reduce rooms using courts or improve the daylight score"
+        IMPROVE_PRIVACY->"Improve the measured privacy score"
+        IMPROVE_PARKING_ACCESS->"Improve the measured parking and access score"
+        IMPROVE_VASTU_ALIGNMENT->"Improve the measured Vastu score"
+    }
+    val measurementIDs get()=when(this) {
+        CONSOLIDATE_OPEN_SPACE->setOf("unexplained","wallTurns")
+        SHORTEN_PASSAGE->setOf("circulation")
+        BALANCE_ROOM_PROPORTIONS->setOf("serviceExcess")
+        IMPROVE_WINDOW_ACCESS->setOf("courtDependentRooms")
+        else->emptySet()
+    }
 }
 @Serializable data class ReviewFinding(val id:String,val code:String,val metricID:String,val priority:String,val title:String,val explanation:String,
     val operation:ReviewOperation?=null,val measurements:List<ReviewMeasurement> = emptyList(),val roomIDs:List<String> = emptyList(),val floorIDs:List<String> = emptyList())
@@ -23,17 +40,21 @@ import kotlin.math.roundToInt
     val metrics:List<ReviewMetric> = emptyList(),val gates:List<ReviewCheck> = emptyList(),val findings:List<ReviewFinding> = emptyList(),
     val vastu:VastuReview=VastuReview(),val measurements:List<ReviewMeasurement> = emptyList(),val canOptimize:Boolean=false) {
     val requiredChecksPass get()=gates.filter {it.hard}.let {it.isNotEmpty()&&it.all {g->g.status=="pass"}}
+    val priorities get()=findings.filter {it.priority=="critical"}+
+        findings.filter {it.priority!="critical"}.distinctBy {it.operation ?: it.id}.take(3)
 }
-@Serializable data class AIReviewRecommendation(val findingID:String,val explanation:String)
+@Serializable data class AIReviewRecommendation(val findingID:String,val explanation:String,val nextStep:String="")
 @Serializable data class AIPlanReview(val status:String,val summary:String="",val recommendations:List<AIReviewRecommendation> = emptyList(),
     val model:String?=null,val generatedAt:String="")
 @Serializable data class ReviewComparison(val id:String,val title:String,val unit:String,val current:Double?=null,val revised:Double?=null)
+@Serializable data class ImprovementGoal(val operation:ReviewOperation,val id:String,val title:String,val unit:String,val current:Double,val revised:Double)
 @Serializable data class OptimizedRevision(val drawings:List<PlanDrawing>,val review:PlanReviewReport,val comparisons:List<ReviewComparison> = emptyList(),
-    val tradeoffs:List<String> = emptyList())
+    val tradeoffs:List<String> = emptyList(),val goals:List<ImprovementGoal> = emptyList())
 @Serializable data class StartOptimizationRequest(val requestID:String,val profile:String="balanced_v1",val operations:List<ReviewOperation> = emptyList(),val maxCandidates:Int=5)
 @Serializable data class PlanOptimization(val id:String,val basePlanID:String,val status:String,val createdAt:String,val updatedAt:String="",
     val requested:Int=5,val checked:Int=0,val valid:Int=0,val distinct:Int=0,val baseReview:PlanReviewReport?=null,
-    val revision:OptimizedRevision?=null,val revisionHash:String?=null,val error:String?=null,val appliedPlanID:String?=null) {
+    val revision:OptimizedRevision?=null,val revisionHash:String?=null,val error:String?=null,val appliedPlanID:String?=null,
+    val operations:List<ReviewOperation> = emptyList()) {
     val running get()=status in listOf("queued","running","cancelling")
 }
 @Serializable data class EngineOptimizationResult(val status:String,val requested:Int,val checked:Int,val valid:Int,val distinct:Int,

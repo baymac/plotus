@@ -15,7 +15,7 @@ import kotlin.test.*
 
 /** Synthetic account identities and plan data are isolated to the local test server. */
 class PlanReviewIntegrationTest {
-    private fun report(score:Int,hash:Char)=PlanReviewReport(rulesVersion="plotus-architect-review.1",
+    private fun report(score:Int,hash:Char)=PlanReviewReport(rulesVersion="plotus-architect-review.2",
         sourceHash=hash.toString().repeat(64),designScore=score,designLevel=if(score>=90)"Excellent" else "Good",
         metrics=listOf("space" to 25,"circulation" to 20,"function" to 20,"daylight" to 15,"privacy" to 10,"access" to 10)
             .map {ReviewMetric(it.first,it.first,it.second,score.toDouble())},

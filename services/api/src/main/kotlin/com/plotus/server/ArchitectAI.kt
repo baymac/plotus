@@ -22,9 +22,11 @@ internal fun checkedExplanation(value:ArchitectExplanation,report:PlanReviewRepo
     val prohibited=Regex("\\d|https?://|\\b(compliant|certified|approved|guaranteed|legally|code-compliance|feet|foot|metres?|meters?|percent|inches|sqft)\\b|\\bwill (improve|increase|fix)\\b",RegexOption.IGNORE_CASE)
     fun valid(text:String)=text.isNotBlank()&&text.length<=800&&text.none {it<' '&&it!='\n'}&&!prohibited.containsMatchIn(text)
     val critical=report.findings.filter {it.priority=="critical"}.map {it.id}.toSet()
-    if(!valid(value.summary)||value.summary.length>320||value.recommendations.size>80||value.recommendations.map {it.findingID}.distinct().size!=value.recommendations.size||
+    if(!valid(value.summary)||value.summary.length>320||report.findings.isNotEmpty()&&value.recommendations.isEmpty()||
+        value.recommendations.size>80||value.recommendations.map {it.findingID}.distinct().size!=value.recommendations.size||
         !value.recommendations.map {it.findingID}.containsAll(critical)||
-        value.recommendations.any {it.findingID !in allowed||!valid(it.explanation)})
+        value.recommendations.size>maxOf(3,critical.size)||
+        value.recommendations.any {it.findingID !in allowed||!valid(it.explanation)||!valid(it.nextStep)})
         throw ApiFailure(502,"AI_REVIEW_INVALID","AI recommendations are unavailable. The measured review is still available.")
     return AIPlanReview("ready",value.summary,value.recommendations.sortedBy {if(it.findingID in critical)0 else 1},model,Instant.now().toString())
 }
@@ -40,8 +42,12 @@ class MetaArchitectAI(private val endpoint:URI,private val key:String,private va
                 putJsonObject("summary"){put("type","string")}
                 putJsonObject("recommendations"){put("type","array");putJsonObject("items"){
                     put("type","object");put("additionalProperties",false)
-                    putJsonArray("required"){add("findingID");add("explanation")}
-                    putJsonObject("properties"){putJsonObject("findingID"){put("type","string")};putJsonObject("explanation"){put("type","string")}}
+                    putJsonArray("required"){add("findingID");add("explanation");add("nextStep")}
+                    putJsonObject("properties"){
+                        putJsonObject("findingID"){put("type","string")}
+                        putJsonObject("explanation"){put("type","string")}
+                        putJsonObject("nextStep"){put("type","string")}
+                    }
                 }}
             }
         }

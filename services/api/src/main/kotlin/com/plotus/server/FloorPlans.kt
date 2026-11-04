@@ -19,8 +19,25 @@ internal fun OptimizedRevision.validateRevision() {
     if(!review.isValid()||review.sourceHash==null||!review.requiredChecksPass||drawings.isEmpty()||drawings.size>6||
         drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||
             it.pngBase64.length>6_000_000||it.scene3d?.isValid()==false}||
-        comparisons.size>32||comparisons.any {it.current?.isFinite()==false||it.revised?.isFinite()==false})
+        comparisons.size>32||comparisons.any {it.current?.isFinite()==false||it.revised?.isFinite()==false}||
+        goals.size>16||goals.any {goal->!goal.current.isFinite()||!goal.revised.isFinite()||
+            comparisons.none {it.id==goal.id&&it.current==goal.current&&it.revised==goal.revised}})
         throw ApiFailure(502,"OPTIMIZATION_INVALID","The revision didn’t pass the required checks.")
+}
+
+/** Expose actionable failure categories without returning native paths or source. */
+internal fun generationCheckMessage(error:JsonObject?):String {
+    val failures=runCatching {error?.get("report")?.jsonObject?.get("validation")?.jsonObject
+        ?.get("hard_failures")?.jsonArray?.map {it.jsonPrimitive.content}.orEmpty()}.getOrDefault(emptyList())
+    val checks=buildList {
+        if(failures.any {"source_fit:" in it&&"kitchen" in it})add("kitchen fixtures and access")
+        if(failures.any {"parking" in it||"road_access" in it})add("parking and entrance access")
+        if(failures.any {"unexplained_pockets" in it})add("usable outdoor space")
+        if(failures.any {"privacy" in it||"sightline" in it})add("room privacy")
+        if(failures.any {"window" in it||"exterior_air" in it})add("exterior window access")
+    }.take(2)
+    return if(checks.isEmpty())"No complete plan passed the checks in this run. Your brief is saved; review the requirements or try another run."
+        else "This run did not find an arrangement that passed "+checks.joinToString(" and ")+" checks. Your brief is saved for review."
 }
 
 interface PlanEngine {
@@ -66,7 +83,7 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
                 "search_budget_exhausted"->ApiFailure(422,"PLAN_SEARCH_LIMIT","Search limit reached. Try again or simplify the requirements.")
                 "generation_resource_limit"->ApiFailure(503,"PLAN_RESOURCE_LIMIT","Generation resources are busy. Try again shortly.")
                 "solver_model_error","architectural_detail_error","graph_drafting_error"->ApiFailure(503,"PLAN_ENGINE_ERROR","Couldn’t complete generation. Please try again.")
-                else->ApiFailure(422,"PLAN_NO_FIT","No plan passed the layout checks. Adjust setbacks or requirements and try again.")
+                else->ApiFailure(422,"PLAN_NO_FIT",generationCheckMessage(upstream))
             }
         }
         if(response.statusCode()==504)throw ApiFailure(504,"PLAN_TIMED_OUT","Generation reached its time limit. Try again.")
@@ -114,7 +131,7 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
             put("job_id",jobID);put("seed",(UUID.fromString(jobID).leastSignificantBits and 0x7fffffff).toInt())
         })
         return Json.decodeFromJsonElement<EngineOptimizationResult>(this.request("/v1/plans/optimize",body)).also {
-            if(it.status !in listOf("ready","no_improvement")||it.requested !in 5..10||it.checked !in 0..it.requested||
+            if(it.status !in listOf("ready","no_improvement")||it.requested !in 1..10||it.checked !in 0..it.requested||
                 it.valid !in 0..it.checked||it.distinct !in 0..it.valid)throw ApiFailure(502,"OPTIMIZATION_INVALID","The revision couldn’t be opened.")
             it.revision?.let {revision->
                 revision.validateRevision()

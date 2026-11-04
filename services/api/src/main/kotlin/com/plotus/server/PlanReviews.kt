@@ -13,7 +13,7 @@ class PlanReviews(private val jobs:PostgresPlans?=null,private val store:Postgre
     private val running=ConcurrentHashMap<String,Job>()
     private val aiSlots=Semaphore(2)
     private val aiRunning=ConcurrentHashMap.newKeySet<String>()
-    private val rulesVersion="plotus-architect-review.1"
+    private val rulesVersion="plotus-architect-review.2"
     private fun storage()=store ?: throw ApiFailure(503,"REVIEW_UNAVAILABLE","Plan review is temporarily unavailable.")
     private fun planner()=engine ?: throw ApiFailure(503,"REVIEW_UNAVAILABLE","Plan review is temporarily unavailable.")
     private suspend fun base(owner:UUID,project:UUID,id:UUID):Pair<GeneratedFloorPlan,SavedFloorPlan> {
@@ -36,7 +36,7 @@ class PlanReviews(private val jobs:PostgresPlans?=null,private val store:Postgre
         val report=review(owner,project,id)
         val projectID=UUID.fromString(project.id)
         val hash=report.sourceHash ?: return AIPlanReview("unavailable","The measured review is still available.")
-        storage().ai(owner,projectID,id,hash)?.takeIf {it.status=="ready"}?.let {return it}
+        storage().ai(owner,projectID,id,hash)?.takeIf {it.status=="ready"&&it.recommendations.all {r->r.nextStep.isNotBlank()}}?.let {return it}
         if(report.findings.isEmpty())return AIPlanReview("not_needed","No measured recommendations need an AI explanation.")
         val provider=ai ?: return AIPlanReview("unavailable","The measured review and solver optimization are still available.")
         val key=owner.toString()+"/"+id+"/"+hash
@@ -78,15 +78,14 @@ class PlanReviews(private val jobs:PostgresPlans?=null,private val store:Postgre
         val projectID=UUID.fromString(project.id)
         val requestID=try {UUID.fromString(request.requestID)}catch(_:IllegalArgumentException){throw ApiFailure(400,"INVALID_REQUEST_ID","Reopen Optimize and try again.")}
         storage().find(owner,projectID,requestID,true)?.let {return it}
-        if(request.profile!="balanced_v1"||request.maxCandidates !in 5..10||request.operations.size>8||request.operations.distinct().size!=request.operations.size)
-            throw ApiFailure(400,"INVALID_OPTIMIZATION","Use Balanced and between five and ten candidate attempts.")
+        if(request.profile!="balanced_v1"||request.maxCandidates !in 1..10||request.operations.size>8||request.operations.distinct().size!=request.operations.size)
+            throw ApiFailure(400,"INVALID_OPTIMIZATION","Choose an improvement and between one and ten attempts.")
         val (original,brief)=base(owner,projectID,baseID)
         val report=review(owner,project,baseID)
         if(!report.canOptimize)throw ApiFailure(409,"OPTIMIZATION_UNAVAILABLE","Generate a new plan with measured geometry before optimizing.")
         val planner=planner()
-        val chosen=request.operations.ifEmpty {report.findings.mapNotNull {it.operation}.distinct().ifEmpty {
-            listOf(ReviewOperation.CONSOLIDATE_OPEN_SPACE,ReviewOperation.SHORTEN_PASSAGE,ReviewOperation.BALANCE_ROOM_PROPORTIONS)
-        }}
+        val chosen=request.operations.ifEmpty {report.priorities.mapNotNull {it.operation}.take(1)}
+        if(chosen.isEmpty())throw ApiFailure(409,"NO_IMPROVEMENT_GOAL","No measured improvement is flagged for this plan.")
         val selected=request.copy(operations=chosen)
         val started=storage().start(owner,projectID,baseID,selected,report)
         if(!started.created)return started.job

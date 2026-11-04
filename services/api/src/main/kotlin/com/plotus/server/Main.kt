@@ -53,7 +53,9 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
             intercept(ApplicationCallPipeline.Call) {
                 val header = call.request.header(HttpHeaders.Authorization).orEmpty()
                 if (!header.startsWith("Bearer ")) throw ApiFailure(401,"UNAUTHENTICATED","Sign in to continue.")
-                call.attributes.put(Owner,identity.user(header.removePrefix("Bearer ")))
+                val owner=identity.user(header.removePrefix("Bearer "))
+                call.attributes.put(Owner,owner)
+                store.initializeWorkspace(owner)
             }
             get("/preferences") {call.respond(store.preferences(call.attributes[Owner]))}
             put("/preferences") {call.respond(store.savePreferences(call.attributes[Owner],call.receive<AccountPreferences>()))}

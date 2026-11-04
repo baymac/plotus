@@ -71,7 +71,7 @@ fun PlotSetupScreen(workspace: PlotWorkspace, step: PlotStep?, compact: Boolean,
             PlotusButton("Try again",{scope.launch {workspace.load()}})
             TextButton(onExit) {Text("Back to projects")}
         }
-        else PlotEditor(workspace,step,compact,{next->if(next==null)close {onStep(null)} else onStep(next)},Modifier.weight(1f),{workspace.save(requireBoundary=true,requireRoads=true,onSaved=onFloor)}) {reloadOpen=true}
+        else PlotEditor(workspace,step,compact,onStep,Modifier.weight(1f),{workspace.save(requireBoundary=true,requireRoads=true,onSaved=onFloor)}) {reloadOpen=true}
     }
     leaving?.let { action ->
         AlertDialog(onDismissRequest={if(!workspace.saving)leaving=null},title={
@@ -148,7 +148,9 @@ private fun PlotFields(workspace:PlotWorkspace,step:PlotStep,modifier:Modifier,o
     LaunchedEffect(workspace.validationAttempt,workspace.error,workspace.validation["boundary"]) {if(workspace.validation.isNotEmpty()||workspace.error!=null)scroll.scrollTo(0)}
     Column(modifier.fillMaxWidth().background(c.surface)) {
         Box(Modifier.padding(horizontal=20.dp,vertical=8.dp)) {
-            InspectorHeader(step.title(),!workspace.saving,workspace.dirty,onBack) {focus.clearFocus();keyboard?.hide();workspace.save()}
+            InspectorHeader(step.title(),!workspace.saving,workspace.dirty||workspace.project?.plotSetup==null,{
+                focus.clearFocus();keyboard?.hide();onBack()
+            }) {focus.clearFocus();keyboard?.hide();workspace.save(onSaved=onBack)}
         }
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(scroll).padding(horizontal=20.dp,vertical=16.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
             if(step!=PlotStep.BOUNDARY&&onReload!=null)PlotProblems(workspace,onReload=onReload)

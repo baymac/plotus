@@ -30,3 +30,5 @@ Architect Review, its shared Compose screens, owner-scoped review/optimization A
 The multi-page client PDF renderer and Auto V2 integration were authored on 3 November 2026. The report uses PyMuPDF/CairoSVG and deterministic projection of the already accepted portable scene; no model creates its geometry. The private pre-existing planning solver remains authoritative.
 
 The 4 November review refinement adds concise AI priorities with explicit next steps, one measured improvement goal per app request, targeted source-model preferences and measured goal acceptance. These are post-event additions around the pre-existing engine. New generation checks use frozen source and empty prior directories; a saved example or an unsuccessful bounded search is never reported as a fresh accepted generation.
+
+The 4 November generation-recovery experiment was withdrawn at the owner's request. The native generation code and worker path were restored to their pre-experiment revision. Existing saved drafts remain explicitly labeled for historical accuracy. The review, optimizer and client-report refinements are retained.

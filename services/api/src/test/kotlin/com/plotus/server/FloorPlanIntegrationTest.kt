@@ -97,7 +97,8 @@ class FloorPlanIntegrationTest {
             }
             val ids=runBlocking {(1..32).map {
                 val job=jobs.start(owner,project,StartPlanRequest(project.revision,UUID.randomUUID().toString())).plan
-                jobs.finish(owner,UUID.fromString(project.id),job.copy(status="ready",drawings=listOf(PlanDrawing("ground","Ground","test-drawing-payload",100,100,spaceEfficiency=if(it==1)null else efficiency))))
+                jobs.finish(owner,UUID.fromString(project.id),job.copy(status="ready",draft=it==32,drawings=listOf(PlanDrawing("ground","Ground","test-drawing-payload",100,100,spaceEfficiency=if(it==1)null else efficiency,
+                    assessment=if(it==32)PlanAssessment("draft","compact_solver",2,listOf("Access needs review.")) else null))))
                 job.id
             }}
             // Model existing completed runs whose result JSON has no duration field.
@@ -110,11 +111,14 @@ class FloorPlanIntegrationTest {
             val first=Json.decodeFromString<PlanGenerations>(firstResponse.bodyAsText())
             assertEquals(ids.reversed().take(30),first.plans.map {it.id});assertTrue(first.plans.all {it.drawings.isEmpty()})
             assertTrue(first.plans.all {it.durationMillis==125000L})
+            assertTrue(first.plans.first().draft);assertTrue(first.plans.drop(1).none {it.draft})
             assertFalse(firstResponse.bodyAsText().contains("test-drawing-payload"))
             val legacy=Json.decodeFromString<PlanGenerations>(client.get(path){bearerAuth("history-owner")}.bodyAsText())
             assertEquals(125000L,legacy.plans.single().durationMillis)
             assertEquals(ids.last(),legacy.plans.single().id);assertEquals("test-drawing-payload",legacy.plans.single().drawings.single().pngBase64)
             assertEquals(efficiency,legacy.plans.single().drawings.single().spaceEfficiency)
+            assertTrue(legacy.plans.single().draft)
+            assertEquals("draft",legacy.plans.single().drawings.single().assessment?.kind)
             val second=Json.decodeFromString<PlanGenerations>(list("&before=${first.nextBefore}").bodyAsText())
             assertEquals(ids.reversed().drop(30),second.plans.map {it.id});assertNull(second.nextBefore)
             val exact=client.get("$path/${ids.first()}"){bearerAuth("history-owner")}
@@ -145,7 +149,8 @@ class FloorPlanIntegrationTest {
         val release=CompletableDeferred<Unit>();var calls=0
         val engine=object:PlanEngine {
             override suspend fun preview(project:Project,setup:FloorPlanSetup)=FloorPlanPreview(canGenerate=true)
-            override suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing>{calls++;release.await();return emptyList()}
+            override suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing>{calls++;release.await();return listOf(
+                PlanDrawing("floor-0","Ground","checked-fixture",100,100))}
         }
         val service=FloorPlans(jobs,engine)
         try {testApplication {
@@ -181,6 +186,7 @@ class FloorPlanIntegrationTest {
             assertEquals(HttpStatusCode.Unauthorized,client.get("$path/generations/${job.id}").status)
             release.complete(Unit)
             withTimeout(5000) {while(service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id)).status=="running")delay(20)}
+            assertFalse(service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id)).draft)
             assertEquals(1,calls)
             assertEquals(job.id,Json.decodeFromString<GeneratedFloorPlan>(start().bodyAsText()).id);assertEquals(1,calls)
             val moved=plot.copy(northDegrees=45.0)

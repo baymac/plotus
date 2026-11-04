@@ -15,7 +15,7 @@ class PlanSceneTransportTest {
     private val scene=PlanScene3D(label="Ground",floorHeightMetres=3.2,wallHeightMetres=3.2,wallThicknessMetres=.254,
         footprint=listOf(outline),walls=listOf(outline))
 
-    private suspend fun generate(scene:PlanScene3D?):List<PlanDrawing> {
+    private suspend fun generate(scene:PlanScene3D?,assessment:PlanAssessment?=null,review:PlanReviewReport?=null):List<PlanDrawing> {
         val server=HttpServer.create(InetSocketAddress("127.0.0.1",0),0)
         fun route(path:String,result:JsonElement) {
             server.createContext(path) {exchange->
@@ -26,7 +26,7 @@ class PlanSceneTransportTest {
             }
         }
         route("/v1/programmes/resolve",buildJsonObject {put("programme",buildJsonObject {put("site_attempts",buildJsonArray {})});put("generation_available",true)})
-        route("/v1/plans/generate",buildJsonObject {put("drawings",Json.encodeToJsonElement(listOf(PlanDrawing("ground","Ground","image",800,600,scene3d=scene))))})
+        route("/v1/plans/generate",buildJsonObject {put("drawings",Json.encodeToJsonElement(listOf(PlanDrawing("ground","Ground","image",800,600,scene3d=scene,assessment=assessment,review=review))))})
         server.start()
         try {return HttpPlanEngine(URI("http://127.0.0.1:${server.address.port}"),"scene-fixture").generate(project,FloorPlanSetup())}
         finally {server.stop(0)}
@@ -41,5 +41,31 @@ class PlanSceneTransportTest {
         val failure=assertFailsWith<ApiFailure> {generate(scene.copy(footprint=listOf(PlanScenePolygon(outline.outer+PlanScenePoint(2001.0,0.0)))))}
         assertEquals(502,failure.status)
         assertEquals("PLAN_INVALID",failure.code)
+    }
+
+    private fun draftReview()=PlanReviewReport(rulesVersion="plotus-architect-review.2",
+        metrics=listOf("space" to 25,"circulation" to 20,"function" to 20,"daylight" to 15,"privacy" to 10,"access" to 10)
+            .map {ReviewMetric(it.first,it.first,it.second)},
+        gates=listOf(ReviewCheck("draft_acceptance","Complete source solve","not_assessed")))
+
+    @Test fun aDisclosedDraftCannotBeReturnedByGeneration()=runBlocking<Unit> {
+        val assessment=PlanAssessment("draft","compact_solver",3,listOf("Fixture fit needs review."))
+        assertEquals("PLAN_INVALID",assertFailsWith<ApiFailure> {generate(scene,assessment,draftReview())}.code)
+    }
+
+    @Test fun aDraftCannotCarryAnAcceptanceClaim()=runBlocking<Unit> {
+        val assessment=PlanAssessment("draft","compact_solver")
+        val failure=assertFailsWith<ApiFailure> {generate(scene,assessment,draftReview().copy(canOptimize=true))}
+        assertEquals("PLAN_INVALID",failure.code)
+        assertEquals("PLAN_INVALID",assertFailsWith<ApiFailure> {generate(scene,assessment,null)}.code)
+    }
+
+    @Test fun historicalPrivateDraftStaysReadableButCannotBeANewGeneration() {
+        val path=System.getenv("PLOTUS_DRAFT_RESULT_FIXTURE") ?: return
+        val result=Json.parseToJsonElement(java.io.File(path).readText()).jsonObject
+        val drawings=Json.decodeFromJsonElement<List<PlanDrawing>>(result["drawings"]!!)
+        assertEquals("PLAN_INVALID",assertFailsWith<ApiFailure> {validateGeneratedDrawings(drawings)}.code)
+        assertTrue(drawings.all {it.assessment?.kind=="draft"})
+        assertTrue(assertNotNull(drawings.first().review).isValid())
     }
 }

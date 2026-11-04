@@ -66,3 +66,5 @@ Open a completed History entry and choose **Review plan**. The review shows meas
 **AI recommendations** selects a few priorities from the measured findings, explains why they matter and suggests what to test. Open a recommendation to see its evidence and start a focused improvement test. If the provider is unavailable, the measured review remains usable.
 
 Choose one improvement and select **Test improvement**. Its starting measurement and success criterion stay visible while the solver tries up to three revisions. A revision is offered only when the selected goal improves and the layout passes its checks. Small wall and room changes can qualify. You can visit History or cancel during the test. **Use revision** saves the exact checked preview as a new History entry. A test can finish with no valid alternative or with alternatives that do not improve the selected goal; the current plan is kept in either case.
+
+Individual editor panels keep unsaved edits when Back returns to the canvas. Save returns after the API confirms the write; failed saves leave the panel open.

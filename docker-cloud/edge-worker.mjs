@@ -56,7 +56,7 @@ async function downloadAttachment(request,env,origin,url,format) {
   headers.delete("Cookie");headers.set("Origin",origin);headers.set("Host",target.host);
   headers.set("Accept","application/json");
   headers.set("X-Forwarded-Host",url.host);
-  const response=await fetch(new Request(target,{method:"GET",headers}),{redirect:"manual",signal:AbortSignal.timeout(25000)});
+  const response=await fetch(new Request(target,{method:"GET",headers}),{redirect:"manual",signal:AbortSignal.timeout(85000)});
   if(!response.ok)return privateResponse("This plan could not be downloaded. Return to Plotus and try again.",response.status);
   const file=await response.json();
   if(typeof file.base64!=="string" || file.base64.length>32*1024*1024 || typeof file.filename!=="string")throw new Error("Invalid export");
@@ -87,7 +87,7 @@ export default {
         const forwarded = new Request(target, request);
         forwarded.headers.set("Host", target.host);
         forwarded.headers.set("X-Forwarded-Host", url.host);
-        return await fetch(forwarded, { redirect: "manual", signal: AbortSignal.timeout(25000) });
+        return await fetch(forwarded, { redirect: "manual", signal: AbortSignal.timeout(planExportPath.test(path)?85000:25000) });
       } catch (_) { return privateResponse("Plotus is temporarily unavailable. Please try again."); }
     }
     if (request.method !== "GET" && request.method !== "HEAD") return privateResponse("Method not allowed.", 405);

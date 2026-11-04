@@ -31,6 +31,11 @@ class FloorPlanIntegrationTest {
                 presentations++;assertEquals(plot,saved);assertEquals(expectedUnits,units)
                 return drawings.map {it.copy(presentation=PlanPresentation(version=2,plotAreaSquareMetres=saved.areaSquareMetres,perimeterMetres=saved.perimeterMetres,builtUpAreaSquareMetres=100.0,carpetAreaSquareMetres=80.0,units=units,vectorAvailable=true),vectorSvgBase64="dmVjdG9yLWZpeHR1cmU=")}
             }
+            override suspend fun clientReport(project:Project,plan:GeneratedFloorPlan,brief:SavedFloorPlan,review:PlanReviewReport?,ai:AIPlanReview?):PlanExport {
+                exports++;assertEquals(plot,brief.plot);assertEquals(2,brief.setup.homes.single().bhk)
+                assertEquals(expectedUnits,plan.drawings.single().presentation?.units);assertEquals(scene,plan.drawings.single().scene3d)
+                return PlanExport("floor.pdf","application/pdf","Zml4dHVyZQ==")
+            }
             override suspend fun export(drawing:PlanDrawing,format:String):PlanExport {exports++;assertEquals(expectedUnits,drawing.presentation?.units);assertEquals(scene,drawing.scene3d);return PlanExport("floor.$format","application/octet-stream","Zml4dHVyZQ==")}
         }
         val service=FloorPlans(jobs,engine)
@@ -192,7 +197,7 @@ class FloorPlanIntegrationTest {
     @Test fun disabledParkingIsAnExclusionAndUserSetbacksAreNotReplaced() {
         val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(0))).rebuild()
         val project=ProjectDraft("Parking fixture","Test city").toProject(UUID.randomUUID().toString()).copy(plotSetup=plot)
-        val setup=FloorPlanSetup(setbackMode=PlanMode.CUSTOM,commonSetbackMetres=.9144).withParking(false)
+        val setup=FloorPlanSetup(setbackMode=PlanMode.CUSTOM,commonSetbackMetres=.9144,homes=listOf(PlanHome("home-1",mode=PlanMode.CUSTOM))).withParking(false)
         val input=programme(project,setup)
         val parking=input["shared_requirements"]!!.jsonArray.single().jsonObject
         assertEquals("excluded",parking["necessity"]!!.jsonPrimitive.content)
@@ -200,6 +205,18 @@ class FloorPlanIntegrationTest {
         assertEquals(914.4,input["setbacks"]!!.jsonObject["common_distance_mm"]!!.jsonPrimitive.double)
         val byEdge=programme(project,setup.copy(sameSetback=false,edgeSetbacksMetres=listOf(.3048,.6096,.9144,1.2192)))
         assertEquals(listOf(304.8,609.6,914.4,1219.2),byEdge["setbacks"]!!.jsonObject["by_edge"]!!.jsonArray.map {it.jsonObject["distance_mm"]!!.jsonPrimitive.double})
+    }
+    @Test fun automaticProgrammeUsesFixedDefaultsAndVastuWithoutOldSharedExtras() {
+        val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(0))).rebuild()
+        val project=ProjectDraft("Auto fixture","Test city").toProject(UUID.randomUUID().toString()).copy(plotSetup=plot)
+        val auto=FloorPlanSetup(homes=listOf(PlanHome("home-1",bhk=3,vastu=false)),sharedRooms=listOf(PlanRoom("old-garden",RoomKind.GARDEN))).withParking(false)
+        val compiled=programme(project,auto)
+        assertTrue(compiled["vastu"]!!.jsonPrimitive.boolean)
+        assertEquals("plotus-auto-v2",compiled["automatic_policy"]!!.jsonPrimitive.content)
+        assertTrue(compiled["shared_requirements"]!!.jsonArray.isEmpty())
+        val custom=programme(project,auto.copy(homes=auto.homes.map {it.copy(mode=PlanMode.CUSTOM)}))
+        assertFalse(custom["vastu"]!!.jsonPrimitive.boolean)
+        assertEquals(2,custom["shared_requirements"]!!.jsonArray.size)
     }
     @Test fun adapterPreservesCoordinatesRoadPriorityAndBedroomFeatures() {
         val plot=PlotSetup(lengths=listOf(18.0,12.0,18.0,12.0),roads=listOf(PlotRoad(1),PlotRoad(2,priority=1)),northDegrees=-45.0).rebuild()

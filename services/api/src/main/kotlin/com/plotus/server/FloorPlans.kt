@@ -30,6 +30,8 @@ interface PlanEngine {
     suspend fun cancel(jobID:String) {}
     suspend fun present(plot:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> = drawings
     suspend fun export(drawing:PlanDrawing,format:String):PlanExport = throw ApiFailure(503,"EXPORT_UNAVAILABLE","Export is temporarily unavailable.")
+    suspend fun clientReport(project:Project,plan:GeneratedFloorPlan,brief:SavedFloorPlan,review:PlanReviewReport?,ai:AIPlanReview?):PlanExport =
+        throw ApiFailure(503,"REPORT_UNAVAILABLE","The client report is temporarily unavailable.")
     suspend fun review(project:Project,setup:FloorPlanSetup,drawings:List<PlanDrawing>):PlanReviewReport =
         throw ApiFailure(503,"REVIEW_UNAVAILABLE","Plan review is temporarily unavailable.")
     suspend fun optimize(project:Project,setup:FloorPlanSetup,drawings:List<PlanDrawing>,request:StartOptimizationRequest,jobID:String):EngineOptimizationResult =
@@ -42,7 +44,7 @@ interface PlanEngine {
 class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngine {
     private val client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build()
     private suspend fun request(path:String,body:JsonObject):JsonObject=try {withContext(Dispatchers.IO) {
-        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(when(path){"/v1/programmes/resolve"->15L;"/v1/plans/cancel"->12L;"/v1/plans/optimization-status"->8L;else->260L}))
+        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(when(path){"/v1/programmes/resolve"->15L;"/v1/reports/client"->60L;"/v1/plans/cancel"->12L;"/v1/plans/optimization-status"->8L;else->260L}))
             .header("Authorization","Bearer $token").header("Content-Type","application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build()
         var response=runInterruptible {client.send(request,HttpResponse.BodyHandlers.ofInputStream())}
@@ -68,9 +70,9 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
             }
         }
         if(response.statusCode()==504)throw ApiFailure(504,"PLAN_TIMED_OUT","Generation reached its time limit. Try again.")
-        if(response.statusCode()!=200)throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")
+        if(response.statusCode()!=200){System.err.println("planning_http_failure path=$path status=${response.statusCode()}");throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")}
         try {Json.parseToJsonElement(bytes.decodeToString()).jsonObject}catch(_:Exception){throw ApiFailure(502,"ENGINE_INVALID_RESPONSE","The plan preview couldn’t be opened.")}
-    }}catch(failure:IOException){throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")}
+    }}catch(failure:IOException){System.err.println("planning_transport_failure path=$path type=${failure.javaClass.simpleName}");throw ApiFailure(503,"ENGINE_UNAVAILABLE","Plan generation is temporarily unavailable.")}
     override suspend fun preview(project:Project,setup:FloorPlanSetup):FloorPlanPreview {
         val local=setup.capabilityFindings()
         val response=request("/v1/programmes/resolve",buildJsonObject {put("programme",programme(project,setup))})
@@ -147,6 +149,14 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
     override suspend fun export(drawing:PlanDrawing,format:String):PlanExport = Json.decodeFromJsonElement(request("/v1/drawings/export",buildJsonObject {
         put("drawing",Json.encodeToJsonElement(drawing));put("format",format)
     }))
+    override suspend fun clientReport(project:Project,plan:GeneratedFloorPlan,brief:SavedFloorPlan,review:PlanReviewReport?,ai:AIPlanReview?):PlanExport =
+        Json.decodeFromJsonElement(request("/v1/reports/client",buildJsonObject {
+            putJsonObject("project"){put("name",project.name);put("location",project.location);project.client?.let {put("clientName",it.name)}}
+            putJsonObject("plan"){put("id",plan.id);put("createdAt",plan.createdAt)}
+            put("plot",Json.encodeToJsonElement(brief.plot));put("requirements",Json.encodeToJsonElement(brief.setup))
+            put("drawings",Json.encodeToJsonElement(plan.drawings));put("units",plan.drawings.firstOrNull()?.presentation?.units?.name ?: brief.setup.units.name)
+            review?.let {put("review",Json.encodeToJsonElement(it))};ai?.let {put("ai",Json.encodeToJsonElement(it))}
+        }))
     companion object {
         fun configured():PlanEngine? {
             val url=System.getenv("PLOTUS_ENGINE_URL")?.trim().orEmpty();val token=System.getenv("PLOTUS_ENGINE_SERVICE_TOKEN")?.trim().orEmpty()
@@ -160,11 +170,12 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
 internal fun FloorPlanSetup.capabilityFindings():List<PlanFinding> = buildList {
     if(homes.map {it.vastu}.distinct().size>1)add(PlanFinding("Use the same Vastu preference for every home in this building.","vastu"))
     homes.forEach {home->
-        if(home.notes.isNotBlank())add(PlanFinding("Additional notes are saved for review. Remove them to generate with the supported room controls.","home.${home.id}.notes"))
+        if(home.mode==PlanMode.CUSTOM&&home.notes.isNotBlank())add(PlanFinding("Additional notes are saved for review. Remove them to generate with the supported room controls.","home.${home.id}.notes"))
         if(home.mode==PlanMode.CUSTOM)home.rooms.filter {it.size!=RoomSize.MEDIUM}.forEach {add(PlanFinding("Custom room sizes aren’t available yet. Use automatic sizing for ${it.title}.","room.${it.id}"))}
     }
-    sharedRooms.filter {it.size!=RoomSize.MEDIUM}.forEach {add(PlanFinding("Use automatic sizing for ${it.title}.","room.${it.id}"))}
-    (homes.filter {it.mode==PlanMode.CUSTOM}.flatMap {it.rooms}+sharedRooms).forEach {
+    val activeShared=if(homes.any {it.mode==PlanMode.CUSTOM})sharedRooms else emptyList()
+    activeShared.filter {it.size!=RoomSize.MEDIUM}.forEach {add(PlanFinding("Use automatic sizing for ${it.title}.","room.${it.id}"))}
+    (homes.filter {it.mode==PlanMode.CUSTOM}.flatMap {it.rooms}+activeShared).forEach {
         if(it.open)add(PlanFinding("Open room layouts aren’t available yet.","room.${it.id}"))
         if(it.closet==Closet.WARDROBE)add(PlanFinding("Use a walk-in closet or remove the wardrobe request.","room.${it.id}"))
     }
@@ -198,7 +209,7 @@ internal fun programme(project:Project,setup:FloorPlanSetup):JsonObject {
         }
     }
     return buildJsonObject {
-        put("schema_version","naksha.app-plan-setup.v1");put("id","plotus-${project.id}")
+        put("schema_version","naksha.app-plan-setup.v1");put("id","plotus-${project.id}");put("automatic_policy","plotus-auto-v2")
         putJsonObject("plot") {
             put("confirmed",true);put("coordinate_system","x_right_y_down");put("north_angle_deg",(plot.northDegrees+360)%360);put("road_status","known")
             putJsonArray("vertices") {plot.vertices.forEachIndexed {i,p->addJsonObject {put("id",vertexName(i));put("x_mm",((p.x-origin.x)*1000).roundToInt());put("y_mm",((p.y-origin.y)*1000).roundToInt())}}}
@@ -218,7 +229,7 @@ internal fun programme(project:Project,setup:FloorPlanSetup):JsonObject {
             put("requirements_mode",if(home.mode==PlanMode.AUTO)"automatic" else "custom")
             if(home.mode==PlanMode.CUSTOM)put("requirements",rooms(home.rooms))
         }}}
-        put("shared_requirements",rooms(setup.sharedRooms,true));put("vastu",setup.homes.all {it.vastu})
+        put("shared_requirements",rooms(if(setup.homes.all {it.mode==PlanMode.AUTO})emptyList() else setup.sharedRooms,true));put("vastu",setup.homes.all {it.mode==PlanMode.AUTO||it.vastu})
     }
 }
 
@@ -315,11 +326,16 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
         jobs.cachePresentation(owner,project,key,drawings)
         return plan.copy(drawings=drawings)
     }
-    suspend fun export(owner:UUID,project:UUID,id:UUID,drawingID:String,format:String,units:PlotUnits?=null):PlanExport {
+    suspend fun export(owner:UUID,project:UUID,id:UUID,drawingID:String,format:String,units:PlotUnits?=null,details:Project?=null,review:PlanReviewReport?=null,ai:AIPlanReview?=null):PlanExport {
         if(format !in listOf("png","pdf","dwg"))throw ApiFailure(400,"INVALID_FORMAT","Choose PNG, PDF or DWG.")
         val plan=get(owner,project,id,units=units)
         if(plan.status!="ready")throw ApiFailure(409,"PLAN_NOT_READY","Wait for this plan to finish.")
         val drawing=plan.drawings.firstOrNull {it.id==drawingID} ?: throw ApiFailure(404,"DRAWING_NOT_FOUND","This floor drawing could not be found.")
+        if(format=="pdf") {
+            val brief=jobs?.snapshot(owner,project,id) ?: throw ApiFailure(409,"REPORT_UNAVAILABLE","The saved design brief is unavailable.")
+            val identity=details?.takeIf {it.id==project.toString()} ?: throw ApiFailure(409,"REPORT_UNAVAILABLE","Reopen the project before exporting its report.")
+            return connected().clientReport(identity,plan,brief,review,ai)
+        }
         if(format=="dwg"&&drawing.vectorSvgBase64==null)throw ApiFailure(422,"VECTOR_UNAVAILABLE","Generate a new plan to export DWG. This older plan has a saved image only.")
         return connected().export(drawing,format)
     }

@@ -48,13 +48,9 @@ class PlanSceneTransportTest {
             .map {ReviewMetric(it.first,it.first,it.second)},
         gates=listOf(ReviewCheck("draft_acceptance","Complete source solve","not_assessed")))
 
-    @Test fun aDisclosedDraftKeepsItsGeometryAndUnresolvedChecksAcrossHttp()=runBlocking<Unit> {
+    @Test fun aDisclosedDraftCannotBeReturnedByGeneration()=runBlocking<Unit> {
         val assessment=PlanAssessment("draft","compact_solver",3,listOf("Fixture fit needs review."))
-        val drawing=generate(scene,assessment,draftReview()).single()
-        assertEquals(assessment,drawing.assessment);assertEquals(scene,drawing.scene3d)
-        assertFalse(assertNotNull(drawing.review).requiredChecksPass)
-        assertFalse(assertNotNull(drawing.review).canOptimize)
-        assertNull(drawing.review?.designScore)
+        assertEquals("PLAN_INVALID",assertFailsWith<ApiFailure> {generate(scene,assessment,draftReview())}.code)
     }
 
     @Test fun aDraftCannotCarryAnAcceptanceClaim()=runBlocking<Unit> {
@@ -64,11 +60,11 @@ class PlanSceneTransportTest {
         assertEquals("PLAN_INVALID",assertFailsWith<ApiFailure> {generate(scene,assessment,null)}.code)
     }
 
-    @Test fun actualPrivateDraftMatchesThePublicDrawingAndReviewContract() {
+    @Test fun historicalPrivateDraftStaysReadableButCannotBeANewGeneration() {
         val path=System.getenv("PLOTUS_DRAFT_RESULT_FIXTURE") ?: return
         val result=Json.parseToJsonElement(java.io.File(path).readText()).jsonObject
         val drawings=Json.decodeFromJsonElement<List<PlanDrawing>>(result["drawings"]!!)
-        validateGeneratedDrawings(drawings)
+        assertEquals("PLAN_INVALID",assertFailsWith<ApiFailure> {validateGeneratedDrawings(drawings)}.code)
         assertTrue(drawings.all {it.assessment?.kind=="draft"})
         assertTrue(assertNotNull(drawings.first().review).isValid())
     }

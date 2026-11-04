@@ -55,6 +55,6 @@ internal fun EditorOverview(compact:Boolean,modifier:Modifier,content:@Composabl
 internal fun InspectorHeader(title:String,enabled:Boolean,canSave:Boolean,onBack:()->Unit,showSave:Boolean=true,onSave:()->Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min=48.dp),verticalAlignment=Alignment.CenterVertically) {
         EditorBack(title,"Back",enabled=enabled,onBack=onBack)
-        if(showSave)androidx.compose.material3.TextButton(onSave,enabled=enabled&&canSave) {Text("Save")}
+        if(showSave)androidx.compose.material3.TextButton(onSave,enabled=enabled&&canSave) {Text(if(enabled)"Save" else "Saving…")}
     }
 }

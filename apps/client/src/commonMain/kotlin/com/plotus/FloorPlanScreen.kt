@@ -49,8 +49,12 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     val selected=step ?: FloorStep.SETBACKS
     val close:(()->Unit)->Unit={action->focus.clearFocus();keyboard?.hide();if(workspace.dirty)leaving=action else action()}
     val busy=workspace.saving||workspace.generating
-    val canSave=workspace.dirty||workspace.needsReview
+    val canSave=!workspace.generating&&(workspace.dirty||workspace.needsReview||workspace.project?.floorPlan==null)
     fun hideKeyboard(){focus.clearFocus();keyboard?.hide()}
+    fun closeInspector(){
+        hideKeyboard()
+        when {editing!=null->editing=null;catalogue->catalogue=false;else->onStep(null)}
+    }
     val select:(FloorStep)->Unit={item->
         hideKeyboard()
         onStep(item)
@@ -118,10 +122,8 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                 }
                 Column(modifier.background(c.surface)) {
                     Box(Modifier.padding(horizontal=20.dp)) {
-                        InspectorHeader(editing?.second?.kind?.title ?: if(catalogue)"Add room" else when(selected){FloorStep.SETBACKS->"Setbacks";FloorStep.HISTORY->"History";else->"Requirements"},!workspace.saving,canSave&&selected!=FloorStep.HISTORY,{
-                            hideKeyboard()
-                            when {editing!=null->editing=null;catalogue->catalogue=false;else->close {onStep(null)}}
-                        },showSave=selected!=FloorStep.HISTORY) {hideKeyboard();workspace.save()}
+                        InspectorHeader(editing?.second?.kind?.title ?: if(catalogue)"Add room" else when(selected){FloorStep.SETBACKS->"Setbacks";FloorStep.HISTORY->"History";else->"Requirements"},!workspace.saving,canSave&&selected!=FloorStep.HISTORY,
+                            ::closeInspector,showSave=selected!=FloorStep.HISTORY) {hideKeyboard();workspace.save(onSaved=::closeInspector)}
                     }
                     Column(Modifier.weight(1f).verticalScroll(scroll).padding(20.dp),verticalArrangement=Arrangement.spacedBy(20.dp)) {
                         workspace.error?.let {FloorError(it)}
@@ -397,8 +399,6 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     var show3D by remember(plan?.id) {mutableStateOf(false)}
     if(plan?.status in listOf("running","queued","cancelling"))Column(modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
         CircularProgressIndicator();Spacer(Modifier.height(24.dp));FloorTitle(if(plan?.status=="cancelling"||workspace.cancelling)"Cancelling generation" else "Creating your floor plan")
-        if(plan?.status!="cancelling"&&!workspace.cancelling)Text("We’ll show a concept draft if a fully checked layout isn’t found.",
-            Modifier.widthIn(max=360.dp).padding(top=12.dp),fontSize=13.sp,color=c.muted,textAlign=TextAlign.Center)
         Spacer(Modifier.height(12.dp));RunningTime(plan!!)
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {

@@ -26,21 +26,11 @@ internal fun OptimizedRevision.validateRevision() {
 }
 
 internal fun validateGeneratedDrawings(drawings:List<PlanDrawing>) {
-    fun validDraft(drawing:PlanDrawing):Boolean {
-        val assessment=drawing.assessment ?: return true
-        val report=drawing.review
-        val model=assessment.model
-        return assessment.kind=="draft"&&assessment.source in setOf("native_candidate","compact_solver","meta_guided_solver","geometry_solver")&&
-            assessment.failedChecks in 0..10000&&assessment.issues.size<=6&&
-            assessment.issues.all {it.isNotBlank()&&it.length<=200}&&
-            (model==null||model.length<=120)&&drawing.analysisID==null&&
-            (report==null||report.isValid()&&!report.canOptimize&&!report.requiredChecksPass&&report.designScore==null)
-    }
-    val draft=drawings.any {it.assessment!=null}
+    // Assessment fields remain readable for saved history, but generation
+    // uses the original checked native path and cannot create more drafts.
     if(drawings.isEmpty()||drawings.size>6||drawings.map {it.id}.distinct().size!=drawings.size||
-        drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||
-            it.pngBase64.length>6_000_000||it.scene3d?.isValid()==false||!validDraft(it)}||
-        draft&&(drawings.any {it.assessment==null}||drawings.first().review==null))
+        drawings.any {it.assessment!=null||it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||
+            it.pngBase64.length>6_000_000||it.scene3d?.isValid()==false})
         throw ApiFailure(502,"PLAN_INVALID","The plan preview couldn’t be opened.")
 }
 
@@ -406,8 +396,7 @@ class FloorPlans(private val jobs:PostgresPlans?=null,private val engine:PlanEng
             try {
             if(store.find(owner,UUID.fromString(project.id),UUID.fromString(job.id))?.status !in listOf("running","queued"))return@launch
             // Include preflight and transport time beyond the engine's 240-second worker ceiling.
-            val finished=try {val drawings=withTimeout(280000) {planner.generate(project,if(units==null)saved.setup else saved.setup.copy(units=units),job.id)}
-                job.copy(status="ready",drawings=drawings,draft=drawings.any {it.assessment?.kind=="draft"})}
+            val finished=try {job.copy(status="ready",drawings=withTimeout(280000) {planner.generate(project,if(units==null)saved.setup else saved.setup.copy(units=units),job.id)})}
                 catch(cancelled:CancellationException){if(cancelled !is TimeoutCancellationException)throw cancelled;job.copy(status="failed",error="Generation took too long. Try again.")}
                 catch(failure:Exception){job.copy(status=if((failure as? ApiFailure)?.status==422)"blocked" else "failed",error=(failure as? ApiFailure)?.message ?: "Couldn’t generate this plan. Try again.")}
             store.finish(owner,UUID.fromString(project.id),finished)

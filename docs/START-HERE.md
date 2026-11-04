@@ -34,7 +34,7 @@ Select **Floor plan** after completing the boundary and road-facing sides.
 
 1. Choose **Setbacks** from the two buttons below the canvas. Pick Auto or Custom. For **Setback same for all sides?**, choose Yes to enter one distance or No to enter a distance for each edge. Select the building’s floors. Change feet/inches or metres in the canvas toolbar. The section name and Save stay in the top bar. Back returns to the main canvas without saving or discarding edits.
 2. Choose **Requirements** for BHK and **Vastu compliant**. Pick Auto or Custom on the Requirements row. Custom provides one room list; parking, lift and staircase are added from the same Add room catalogue. Room controls have standard room types without a name field.
-3. Save the requirements or choose **Generate plan**. You can return to Projects while generation runs and reopen Floor plan to check the result. A result contains a drawing for every requested floor. When a complete checked plan is unavailable, Plotus can show a **Draft · Needs review** with its remaining design issues. Automatic room targets may vary in that concept, as stated above the drawing. Review plan opens the actual checks; Optimize is available for checked plans. A no-result outcome keeps the requirements available for adjustment.
+3. Save the requirements or choose **Generate plan**. You can return to Projects while generation runs and reopen Floor plan to check the result. A result contains a drawing for each returned floor. A no-fit result keeps the requirements available for adjustment.
 
 The computed buildable area is saved with the project and reused on iPhone and web. Changing floors, BHK, Vastu or rooms keeps the same footprint. Only plot or setback changes require a new calculation.
 
@@ -66,3 +66,5 @@ Open a completed History entry and choose **Review plan**. The review shows meas
 **AI recommendations** selects a few priorities from the measured findings, explains why they matter and suggests what to test. Open a recommendation to see its evidence and start a focused improvement test. If the provider is unavailable, the measured review remains usable.
 
 Choose one improvement and select **Test improvement**. Its starting measurement and success criterion stay visible while the solver tries up to three revisions. A revision is offered only when the selected goal improves and the layout passes its checks. Small wall and room changes can qualify. You can visit History or cancel during the test. **Use revision** saves the exact checked preview as a new History entry. A test can finish with no valid alternative or with alternatives that do not improve the selected goal; the current plan is kept in either case.
+
+Individual editor panels keep unsaved edits when Back returns to the canvas. Save returns after the API confirms the write; failed saves leave the panel open.

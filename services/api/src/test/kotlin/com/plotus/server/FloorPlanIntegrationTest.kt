@@ -150,7 +150,7 @@ class FloorPlanIntegrationTest {
         val engine=object:PlanEngine {
             override suspend fun preview(project:Project,setup:FloorPlanSetup)=FloorPlanPreview(canGenerate=true)
             override suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing>{calls++;release.await();return listOf(
-                PlanDrawing("floor-0","Ground","draft-fixture",100,100,assessment=PlanAssessment("draft","compact_solver")))}
+                PlanDrawing("floor-0","Ground","checked-fixture",100,100))}
         }
         val service=FloorPlans(jobs,engine)
         try {testApplication {
@@ -186,7 +186,7 @@ class FloorPlanIntegrationTest {
             assertEquals(HttpStatusCode.Unauthorized,client.get("$path/generations/${job.id}").status)
             release.complete(Unit)
             withTimeout(5000) {while(service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id)).status=="running")delay(20)}
-            assertTrue(service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id)).draft)
+            assertFalse(service.get(owner,UUID.fromString(project.id),UUID.fromString(job.id)).draft)
             assertEquals(1,calls)
             assertEquals(job.id,Json.decodeFromString<GeneratedFloorPlan>(start().bodyAsText()).id);assertEquals(1,calls)
             val moved=plot.copy(northDegrees=45.0)

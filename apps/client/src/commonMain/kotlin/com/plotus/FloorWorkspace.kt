@@ -56,13 +56,14 @@ class FloorWorkspace(
     val dirty get()=draft!=saved.singleResidence()
     val needsReview get()=project?.floorPlan?.let {it.plot!=project?.plotSetup||it.setup!=it.setup.singleResidence()}==true
     val generating get()=starting||cancelling||generation?.status in listOf("queued","running","cancelling")
+    val reviews=PlanReviewWorkspace(scope,request) {plan->rememberPlan(plan)}
     private val base get()="/v1/projects/${project!!.id}/floor-plan"
     suspend fun load(id:String) {
         if(saving||dirty)return
         loading=true;error=null
         try {
             val p=authJson.decodeFromJsonElement<Project>(request("GET","/v1/projects/$id",null))
-            project=p;saved=p.floorPlan?.setup ?: FloorPlanSetup(units=p.plotSetup?.units ?: PlotUnits.FEET_INCHES);draft=saved.singleResidence();accepted(p)
+            project=p;saved=p.floorPlan?.setup ?: FloorPlanSetup(units=p.plotSetup?.units ?: PlotUnits.FEET_INCHES);draft=saved.singleResidence();accepted(p);reviews.attachProject(p.id)
             p.buildableArea?.let {areas[it.key]=it};restoreArea()
             validation=emptyMap();conflict=false
             loadHistory()

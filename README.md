@@ -20,6 +20,8 @@ Continue to **Floor plan** to review setbacks and the buildable area, choose the
 
 Choose **Generate plan** to request a checked concept. Follow the elapsed time while generation runs, browse earlier plans in History, or cancel a run. Generation continues when you leave the screen. Export a completed plan as PNG, PDF or DWG. If the requirements cannot produce a checked layout, Plotus asks you to adjust them. Detailed design, structural approval and construction documents still need a professional designer.
 
+Open **Review plan** to see measured design quality, separate Vastu alignment and specific recommendations. **AI recommendations** explains those findings. **Optimize** tests alternative arrangements with the existing solver, then lets you compare a checked revision before saving it as a new history entry. Your original plan is retained; missing historical evidence is shown as unassessed.
+
 On the web, newly generated plans also include a **3D** concept view. Switch between the original 2D drawing and a simple model of the same floor, orbit or pan around it, view it from above, and show furniture or full-height walls. The model uses restrained materials to explain the layout. Earlier saved drawings remain available in 2D.
 
 [App guide](docs/START-HERE.md) · [Design](docs/DESIGN.md)

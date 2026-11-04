@@ -58,3 +58,11 @@ If a save fails, your entered details stay in the form so you can try again. Whe
 ## Explore the demo
 
 Choose **View demo** on the iPhone welcome screen to explore local sample projects without an account. Demo changes last for that session and stay separate from your saved workspace.
+
+## Review and improve a plan
+
+Open a completed History entry and choose **Review plan**. The review shows measured Design Quality, a separate Vastu score and recommendations linked to real room geometry. Open a category for its measurements or choose **How scored** for the Balanced weights. Older plans may show **Not assessed** when their saved evidence is incomplete.
+
+**AI recommendations** explains existing measured findings. It does not calculate dimensions or certify a design. If the provider is unavailable, the measured review remains usable.
+
+Choose **Optimize**, select the improvements to explore and start the comparison. You can visit History or cancel while the solver checks candidates. **Use revision** saves the exact checked preview as a new History entry. **Keep current** retains the original. A bounded search can finish without finding a better valid alternative.

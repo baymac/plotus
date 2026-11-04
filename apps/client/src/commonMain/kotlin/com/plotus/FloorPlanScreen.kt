@@ -29,7 +29,7 @@ import org.jetbrains.compose.resources.painterResource
 import kotlin.uuid.Uuid
 
 @Composable
-fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:Boolean,onStep:(FloorStep?)->Unit,onPlot:()->Unit,onExit:()->Unit,generationID:String?=null,onGeneration:(String)->Unit={}) {
+fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:Boolean,onStep:(FloorStep?)->Unit,onPlot:()->Unit,onExit:()->Unit,generationID:String?=null,onGeneration:(String)->Unit={},reviewRoute:PlanReviewRoute?=null,onReview:(PlanReviewRoute?)->Unit={},onOptimization:(PlanOptimization,Boolean)->Unit={_,_->}) {
     val c=LocalPlotusColors.current
     val scope=rememberCoroutineScope()
     val units=LocalMeasurementUnits.current
@@ -41,6 +41,11 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     var editing by remember {mutableStateOf<Pair<String?,PlanRoom>?>(null)}
     var viewedFloor by remember(generationID) {mutableStateOf(0)}
     var exportOpen by remember(generationID) {mutableStateOf(false)}
+    val latestRoute by rememberUpdatedState(reviewRoute)
+    val latestGeneration by rememberUpdatedState(generationID)
+    val openOptimization:(PlanOptimization,Boolean)->Unit={job,compare->
+        if(latestGeneration==job.basePlanID&&latestRoute?.view==ReviewView.OPTIMIZE)onOptimization(job,compare)
+    }
     val selected=step ?: FloorStep.SETBACKS
     val close:(()->Unit)->Unit={action->focus.clearFocus();keyboard?.hide();if(workspace.dirty)leaving=action else action()}
     val busy=workspace.saving||workspace.generating
@@ -52,15 +57,27 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     }
     LaunchedEffect(workspace,id) {workspace.load(id)}
     LaunchedEffect(workspace,id,generationID,workspace.loading,units) {if(!workspace.loading&&workspace.project!=null&&generationID!=null)workspace.openPlan(generationID)}
+    LaunchedEffect(workspace,generationID,reviewRoute,workspace.loading) {
+        if(!workspace.loading&&generationID!=null&&reviewRoute!=null) {
+            workspace.reviews.open(generationID)
+            if(reviewRoute.view in listOf(ReviewView.PROGRESS,ReviewView.COMPARE))reviewRoute.itemID?.let(workspace.reviews::openOptimization)
+        }
+    }
     LaunchedEffect(workspace,step,workspace.loading) {if(!workspace.loading&&step==FloorStep.HISTORY&&generationID==null)workspace.loadHistory()}
     LaunchedEffect(step) {editing=null;catalogue=false}
     LaunchedEffect(workspace.footprintKey,workspace.loading,workspace.generating,workspace.generation?.id) {delay(700);workspace.refreshPreview()}
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
-        Row(Modifier.fillMaxWidth().height(64.dp).padding(start=if(compact)8.dp else 20.dp,end=16.dp),verticalAlignment=Alignment.CenterVertically) {
+        if(compact&&generationID!=null&&reviewRoute!=null)ArchitectReviewHeader(reviewHeading(reviewRoute,workspace.reviews),true,onBack={
+            when(reviewRoute.view){ReviewView.REVIEW->onReview(null);ReviewView.PROGRESS->onStep(FloorStep.HISTORY);else->onReview(PlanReviewRoute(ReviewView.REVIEW))}
+        })else Row(Modifier.fillMaxWidth().height(64.dp).padding(start=if(compact)8.dp else 20.dp,end=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             val viewed=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
             val heading=if(generationID!=null)viewed?.createdAt?.let(::planTimestamp) ?: "Floor plan" else workspace.project?.name ?: "Floor plan"
             EditorBack(heading,if(generationID!=null)"Back to history" else "Back to projects",enabled=!workspace.saving) {if(generationID!=null)onStep(FloorStep.HISTORY) else close(onExit)}
             if(keyboardVisible)PlotToolButton(PlotSymbol.KEYBOARD_HIDE,"Hide keyboard") {hideKeyboard()}
+            if(!compact&&generationID!=null&&viewed?.status=="ready"&&reviewRoute==null) {
+                PlotusButton("Review plan",{onReview(PlanReviewRoute(ReviewView.REVIEW))},outline=true)
+                PlotusButton("Optimize",{workspace.reviews.prepare();onReview(PlanReviewRoute(ReviewView.OPTIMIZE))},outline=true)
+            }
             if(generationID!=null&&viewed?.status=="ready")TextButton({exportOpen=!exportOpen},enabled=!workspace.exporting) {
                 Text(if(workspace.exporting)"Exporting…" else "Export")
             }
@@ -79,7 +96,19 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
             workspace.exportError?.let {message->Row(Modifier.fillMaxWidth().padding(horizontal=16.dp),verticalAlignment=Alignment.CenterVertically){Text(message,Modifier.weight(1f),fontSize=13.sp,color=MaterialTheme.colorScheme.error);PlotToolButton(PlotSymbol.CLOSE,"Dismiss export error"){workspace.dismissExportError()}}}
             val plan=workspace.viewingPlan?.takeIf {it.id==generationID} ?: workspace.generation?.takeIf {it.id==generationID}
             if(workspace.viewLoading&&plan==null)Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center){CircularProgressIndicator()}
-            else GenerationView(workspace,plan,compact,Modifier.weight(1f),{workspace.newAttempt();onStep(FloorStep.REQUIREMENTS)},{scope.launch {workspace.openPlan(generationID)}},viewedFloor,{viewedFloor=it},{onStep(FloorStep.HISTORY)},leaving!=null||exportOpen)
+            else if(reviewRoute!=null&&plan?.status=="ready")ArchitectReviewScreen(workspace,plan,reviewRoute,compact,Modifier.weight(1f),viewedFloor,{viewedFloor=it},onReview,{onStep(FloorStep.HISTORY)},openOptimization,{saved->
+                if(latestGeneration==plan.id&&latestRoute?.view==ReviewView.COMPARE)onGeneration(saved.id)
+            })
+            else Column(Modifier.weight(1f).fillMaxWidth()) {
+                GenerationView(workspace,plan,compact,Modifier.weight(1f),{workspace.newAttempt();onStep(FloorStep.REQUIREMENTS)},{scope.launch {workspace.openPlan(generationID)}},viewedFloor,{viewedFloor=it},{onStep(FloorStep.HISTORY)},leaving!=null||exportOpen)
+                if(compact&&plan?.status=="ready")Column(Modifier.fillMaxWidth().background(c.surface).padding(horizontal=20.dp,vertical=16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                    HorizontalDivider(color=c.line)
+                    Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+                        PlotusButton("Review plan",{onReview(PlanReviewRoute(ReviewView.REVIEW))},Modifier.weight(1f).height(48.dp),outline=true)
+                        PlotusButton("Optimize",{workspace.reviews.prepare();onReview(PlanReviewRoute(ReviewView.OPTIMIZE))},Modifier.weight(1f).height(48.dp))
+                    }
+                }
+            }
         } else {
             val inspector:@Composable (Modifier)->Unit={modifier->
                 val scroll=rememberScrollState()
@@ -111,7 +140,7 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
                                 val room=PlanRoom("room-${Uuid.random()}",kind)
                                 workspace.change(workspace.draft.withRoom(homeID,room));catalogue=false;editing=homeID to room
                             }
-                            selected==FloorStep.HISTORY->PlanHistory(workspace,Modifier.fillMaxWidth(),onGeneration)
+                            selected==FloorStep.HISTORY->PlanHistory(workspace,Modifier.fillMaxWidth(),onGeneration,onOptimization)
                             selected==FloorStep.SETBACKS->SetbackControls(workspace,!busy)
                             else->RequirementControls(workspace,!busy,{catalogue=true},{homeID,room->editing=homeID to room})
                         }
@@ -331,10 +360,17 @@ fun FloorPlanScreen(workspace:FloorWorkspace,id:String,step:FloorStep?,compact:B
     TextButton(onDelete,enabled=enabled) {Text("Delete ${room.kind.title.lowercase()}",color=MaterialTheme.colorScheme.error)}
 }
 
-@Composable private fun PlanHistory(workspace:FloorWorkspace,modifier:Modifier,onOpen:(String)->Unit) {
+@Composable private fun PlanHistory(workspace:FloorWorkspace,modifier:Modifier,onOpen:(String)->Unit,onOptimization:(PlanOptimization,Boolean)->Unit) {
     val c=LocalPlotusColors.current
     val scope=rememberCoroutineScope()
     Column(modifier.fillMaxWidth().padding(20.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(12.dp)) {
+        workspace.reviews.optimization?.takeIf {it.running||it.status=="ready"||it.status=="cancelled"&&it.revisionHash!=null}?.let {job->
+            Column(Modifier.widthIn(max=720.dp).fillMaxWidth().background(c.active,RoundedCornerShape(12.dp)).padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                Text(if(job.running)"Optimization in progress" else "Checked revision ready",fontSize=14.sp,fontWeight=FontWeight.SemiBold,color=c.primary)
+                Text("Your saved generations remain available.",fontSize=12.sp,color=c.muted)
+                PlotusButton(if(job.running)"View progress" else "Compare revision",{onOptimization(job,!job.running)},outline=true)
+            }
+        }
         if(workspace.history.isEmpty()&&!workspace.historyLoading&&workspace.historyError==null)Box(Modifier.fillMaxWidth().heightIn(min=240.dp),contentAlignment=Alignment.Center) {
             Text("No generations yet",color=c.muted)
         }

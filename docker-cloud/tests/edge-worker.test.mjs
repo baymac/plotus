@@ -116,6 +116,27 @@ test("floor-plan sections keep their protected path through sign-in",async t=>{
 });
 
 const exportPath="/v1/projects/c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a/floor-plan/generations/bba14508-f29e-4050-8ca3-2ca31b09a4ec/drawings/floor-0/export/";
+test("architect review and revision links keep their session gate and exact login return",async t=>{
+  const base="/projects/c4f872f5-7c67-4f4e-aef9-b5e67f01ca2a/floor-plan/history/bba14508-f29e-4050-8ca3-2ca31b09a4ec";
+  const job="88888888-8888-4888-8888-888888888888";
+  const paths=["review","recommendations","optimize","scoring","vastu","finding/finding-abc123","metric/space","optimization/"+job,"compare/"+job].map(p=>base+"/"+p);
+  for(const path of paths){
+    const response=await worker.fetch(request(path),env);
+    assert.equal(response.status,302);
+    assert.equal(response.headers.get("Location"),"/login?next="+encodeURIComponent(path));
+  }
+  t.mock.method(globalThis,"fetch",async()=>new Response(null,{status:200}));
+  const cookie={headers:{Cookie:"__Host-plotus_refresh=fixture"}};
+  for(const path of paths){
+    assert.equal((await worker.fetch(request(path,cookie),env)).status,200);
+    assert.equal((await worker.fetch(request("/login?next="+encodeURIComponent(path),cookie),env)).headers.get("Location"),path);
+  }
+  for(const suffix of ["review/extra","finding","metric/unknown","compare/not-a-job","optimization"]){
+    const response=await worker.fetch(request("/login?next="+encodeURIComponent(base+"/"+suffix),cookie),env);
+    assert.equal(response.headers.get("Location"),"/projects");
+  }
+});
+
 test("a deliberate download gets a genuine private attachment through the live session and owned API",async t=>{
   const calls=[];
   t.mock.method(globalThis,"fetch",async(input,options)=>{

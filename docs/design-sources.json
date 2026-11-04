@@ -1,7 +1,7 @@
 {
   "fileKey": "0AIbJahPpgu09bT3AqguPx",
   "pageId": "349:144623",
-  "inspected": "2026-10-28",
+  "inspected": "2026-11-01",
   "assets": [
     {
       "file": "assets/design/0a0c5.svg",
@@ -349,6 +349,42 @@
       "sourceNodes": [
         "358:39930"
       ]
+    },
+    {
+      "file": "apps/client/src/commonMain/composeResources/drawable/review_back.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "8c6b596733698f6511f9f29f6cf2c32352610862bf19fdea50424326436289cf",
+      "sourceNodes": [
+        "517:388170"
+      ]
+    },
+    {
+      "file": "apps/client/src/commonMain/composeResources/drawable/review_close.svg",
+      "width": "20",
+      "height": "20",
+      "sha256": "763458a7423bf5ea34255e8bf4df04b5d5568d4cddfec152b4273097e5f3ff2b",
+      "sourceNodes": [
+        "516:367130"
+      ]
+    },
+    {
+      "file": "apps/client/src/commonMain/composeResources/drawable/review_clock.svg",
+      "width": "28",
+      "height": "28",
+      "sha256": "219c9916de1d62612a705c436632774a227355474ad16dc54f66f2f79fa97828",
+      "sourceNodes": [
+        "517:389954"
+      ]
+    },
+    {
+      "file": "apps/client/src/commonMain/composeResources/drawable/review_spark.svg",
+      "width": "18",
+      "height": "18",
+      "sha256": "82f2c3dbc537cb5016dc257a313380bd614b36eea15d726d5e12d1d8668f5274",
+      "sourceNodes": [
+        "517:389854"
+      ]
     }
   ],
   "floorPlanSources": {
@@ -360,5 +396,15 @@
     "roomCatalogue": "358:41668",
     "bedroom": "362:23482",
     "generation": "374:30342"
+  },
+  "architectReviewSources": {
+    "page": "349:144623",
+    "mobileReview": "517:388170",
+    "desktopReview": "516:365531",
+    "mobileOptimize": "517:389908",
+    "mobileComparison": "517:390011",
+    "mobileProgress": "517:389954",
+    "mobileAI": "517:389854",
+    "scope": "User-approved post-event Architect Review additions; duplicate controls removed on App design clean. Original 01 App design page unchanged."
   }
 }

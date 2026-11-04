@@ -21,8 +21,8 @@ import kotlinx.serialization.SerializationException
 
 private val Owner = AttributeKey<UUID>("verified-owner")
 
-fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sketches: SketchImports = SketchImports.configured(), floorPlans:FloorPlans=FloorPlans(),buildableAreas:BuildableAreas=BuildableAreas()) {
-    monitor.subscribe(ApplicationStopped) {sketches.close();floorPlans.close()}
+fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sketches: SketchImports = SketchImports.configured(), floorPlans:FloorPlans=FloorPlans(),buildableAreas:BuildableAreas=BuildableAreas(),planReviews:PlanReviews=PlanReviews()) {
+    monitor.subscribe(ApplicationStopped) {sketches.close();floorPlans.close();planReviews.close()}
     install(ContentNegotiation) { json() }
     install(RequestBodyLimit) { bodyLimit { call -> when {
         call.request.path().matches(Regex("^/v1/projects/[^/]+/sketch$"))->4*1024*1024L
@@ -124,6 +124,41 @@ fun Application.plotusModule(store: ProjectStore, identity: IdentityVerifier, sk
                 val job=try {UUID.fromString(call.parameters["job"])}catch(_:IllegalArgumentException){throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")}
                 call.respond(floorPlans.cancel(owner,id,job))
             }
+            get("/projects/{id}/floor-plan/generations/{job}/review") {
+                val owner=call.attributes[Owner];val project=store.get(owner,call.projectID())
+                call.respond(planReviews.review(owner,project,call.reviewID("job")))
+            }
+            post("/projects/{id}/floor-plan/generations/{job}/ai-review") {
+                val owner=call.attributes[Owner];val project=store.get(owner,call.projectID())
+                call.respond(planReviews.explain(owner,project,call.reviewID("job")))
+            }
+            post("/projects/{id}/floor-plan/generations/{job}/optimizations") {
+                val owner=call.attributes[Owner];val project=store.get(owner,call.projectID())
+                call.respond(HttpStatusCode.Accepted,planReviews.start(owner,project,call.reviewID("job"),call.receive<StartOptimizationRequest>()))
+            }
+            get("/projects/{id}/floor-plan/optimizations") {
+                val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
+                call.respond(planReviews.current(owner,id))
+            }
+            get("/projects/{id}/floor-plan/optimizations/{optimization}") {
+                val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
+                val job=call.reviewID("optimization")
+                call.respond(if(call.request.queryParameters["by"]=="request")planReviews.byRequest(owner,id,job)
+                    else planReviews.get(owner,id,job,call.request.queryParameters["summary"]=="true"))
+            }
+            post("/projects/{id}/floor-plan/optimizations/{optimization}/cancel") {
+                val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
+                call.respond(planReviews.cancel(owner,id,call.reviewID("optimization")))
+            }
+            post("/projects/{id}/floor-plan/optimizations/{optimization}/dismiss") {
+                val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
+                call.respond(planReviews.dismiss(owner,id,call.reviewID("optimization")))
+            }
+            post("/projects/{id}/floor-plan/optimizations/{optimization}/apply") {
+                val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
+                val saved=planReviews.apply(owner,id,call.reviewID("optimization"),call.receive<ApplyOptimizationRequest>())
+                call.respond(floorPlans.get(owner,id,saved,units=store.preferences(owner).units))
+            }
             get("/projects/{id}/floor-plan/generations/{job}/drawings/{drawing}/export/{format}") {
                 val owner=call.attributes[Owner];val id=call.projectID();store.get(owner,id)
                 val job=try {UUID.fromString(call.parameters["job"])}catch(_:IllegalArgumentException){throw ApiFailure(404,"PLAN_NOT_FOUND","This plan could not be found.")}
@@ -150,6 +185,8 @@ private fun ProjectDraft.validate() {
 }
 private fun ApplicationCall.projectID(): UUID = try { UUID.fromString(parameters["id"]) }
     catch (_: IllegalArgumentException) { throw ApiFailure(400,"INVALID_PROJECT_ID","This project address is invalid.") }
+private fun ApplicationCall.reviewID(name:String):UUID=try {UUID.fromString(parameters[name])}
+    catch(_:IllegalArgumentException){throw ApiFailure(400,"INVALID_PLAN_ID","This plan address is invalid.")}
 
 fun main() {
     val store = PostgresProjects.configured()
@@ -159,5 +196,6 @@ fun main() {
     val engine=HttpPlanEngine.configured()
     val plans=FloorPlans(jobs,engine)
     val areas=BuildableAreas(PostgresBuildableAreas(store.source),engine)
-    embeddedServer(Netty,port=port,host=System.getenv("HOST") ?: "127.0.0.1") { plotusModule(store,identity,floorPlans=plans,buildableAreas=areas) }.start(wait=true)
+    val reviews=PlanReviews(jobs,PostgresPlanReviews(store.source).also {it.recover()},engine)
+    embeddedServer(Netty,port=port,host=System.getenv("HOST") ?: "127.0.0.1") { plotusModule(store,identity,floorPlans=plans,buildableAreas=areas,planReviews=reviews) }.start(wait=true)
 }

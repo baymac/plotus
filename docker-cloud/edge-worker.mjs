@@ -1,6 +1,7 @@
 const appPaths = new Set(["/projects", "/settings", "/settings/general", "/settings/account"]);
 const uuid = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
-const projectPath = new RegExp(`^/projects/${uuid}/(?:plot(?:/(boundary|direction|roads))?|floor-plan(?:/(setbacks|requirements|history(?:/${uuid})?))?)$`);
+const reviewPath = `(?:review|recommendations|optimize|scoring|vastu|finding/[A-Za-z0-9_-]{1,160}|metric/(?:space|circulation|function|daylight|privacy|access)|(?:optimization|compare)/${uuid})`;
+const projectPath = new RegExp(`^/projects/${uuid}/(?:plot(?:/(boundary|direction|roads))?|floor-plan(?:/(?:setbacks|requirements|history(?:/${uuid}(?:/${reviewPath})?)?))?)$`);
 const planExportPath = new RegExp(`^/v1/projects/${uuid}/floor-plan/generations/${uuid}/drawings/[A-Za-z0-9_-]{1,128}/export/(png|pdf|dwg)$`);
 const isAppPath = path => appPaths.has(path) || projectPath.test(path);
 const entryPaths = new Set(["/login", "/_app", "/_app/", "/_app/index.html"]);

@@ -17,15 +17,35 @@ internal expect fun readAppLocation(): AppLocation?
 internal expect fun observeAppLocation(onChange: () -> Unit): () -> Unit
 internal expect fun writeAppLocation(path: String, replace: Boolean)
 
+enum class ReviewView(val segment:String,val title:String) {
+    REVIEW("review","Review plan"), AI("recommendations","AI recommendations"), FINDING("finding","Design recommendation"),
+    OPTIMIZE("optimize","Optimize plan"), PROGRESS("optimization","Optimizing"), COMPARE("compare","Compare revisions"),
+    METHOD("scoring","How scoring works"), VASTU("vastu","Vastu alignment"), METRIC("metric","Measured evidence")
+}
+data class PlanReviewRoute(val view:ReviewView,val itemID:String?=null) {
+    val suffix get()="/"+view.segment+(itemID?.let {"/"+it} ?: "")
+}
+
 private val plotPathPattern = Regex("^/projects/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})/plot(?:/(boundary|direction|roads))?$")
 internal fun plotLocation(path: String?): Pair<String, PlotStep?>? = plotPathPattern.matchEntire(path?.trimEnd('/').orEmpty())?.let { match ->
     match.groupValues[1] to PlotStep.entries.firstOrNull { it.segment == match.groupValues[2] }
 }
 private const val routeUUID="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-private val floorPathPattern=Regex("^/projects/($routeUUID)/floor-plan(?:/(setbacks|requirements|history)(?:/($routeUUID))?)?$")
-private fun floorMatch(path:String?)=floorPathPattern.matchEntire(path?.trimEnd('/').orEmpty())?.takeIf {it.groupValues[3].isEmpty()||it.groupValues[2]=="history"}
+private val floorPathPattern=Regex("^/projects/($routeUUID)/floor-plan(?:/(setbacks|requirements|history)(?:/($routeUUID)(?:/(review|recommendations|finding|optimize|optimization|compare|scoring|vastu|metric)(?:/([A-Za-z0-9_-]{1,160}))?)?)?)?$")
+private fun floorMatch(path:String?)=floorPathPattern.matchEntire(path?.trimEnd('/').orEmpty())?.takeIf {
+    val generation=it.groupValues[3];val view=it.groupValues[4];val item=it.groupValues[5]
+    (generation.isEmpty()||it.groupValues[2]=="history")&&when(view){
+        "finding"->item.isNotEmpty()
+        "metric"->item in listOf("space","circulation","function","daylight","privacy","access")
+        "optimization","compare"->Regex(routeUUID).matches(item)
+        else->item.isEmpty()
+    }
+}
 internal fun floorLocation(path:String?):Pair<String,FloorStep?>?=floorMatch(path)?.let {match->match.groupValues[1] to FloorStep.entries.firstOrNull {it.segment==match.groupValues[2]}}
 internal fun floorGeneration(path:String?):String?=floorMatch(path)?.groupValues?.get(3)?.ifEmpty {null}
+internal fun floorReview(path:String?):PlanReviewRoute?=floorMatch(path)?.let {m->
+    ReviewView.entries.firstOrNull {it.segment==m.groupValues[4]}?.let {PlanReviewRoute(it,m.groupValues[5].ifEmpty {null})}
+}
 internal fun destinationForPath(path: String?): Destination? = Destination.entries.firstOrNull { it !in listOf(Destination.PLOT,Destination.FLOOR_PLAN) && it.path == path?.trimEnd('/') }
     ?: plotLocation(path)?.let { Destination.PLOT } ?: floorLocation(path)?.let {Destination.FLOOR_PLAN}
 private fun overviewPath(path:String):String = plotLocation(path)?.let {"/projects/${it.first}/plot"}
@@ -41,8 +61,9 @@ internal class AppNavigation(initial: AppLocation?, private val updateLocation: 
     var plotStep by mutableStateOf<PlotStep?>(null); private set
     var floorStep by mutableStateOf<FloorStep?>(if(floorGeneration(initial?.path)!=null)FloorStep.HISTORY else null);private set
     var generationID by mutableStateOf(floorGeneration(initial?.path));private set
+    var reviewRoute by mutableStateOf(floorReview(initial?.path));private set
     private var returnTo = safeAppPath(initial?.next)
-    val path: String get() = when(destination) {Destination.PLOT->"/projects/$projectID/plot" + (plotStep?.let { "/${it.segment}" } ?: "");Destination.FLOOR_PLAN->"/projects/$projectID/floor-plan"+(floorStep?.let {"/${it.segment}"} ?: "")+(generationID?.let {"/$it"} ?: "");else->destination.path}
+    val path: String get() = when(destination) {Destination.PLOT->"/projects/$projectID/plot" + (plotStep?.let { "/${it.segment}" } ?: "");Destination.FLOOR_PLAN->"/projects/$projectID/floor-plan"+(floorStep?.let {"/${it.segment}"} ?: "")+(generationID?.let {"/$it"} ?: "")+(reviewRoute?.suffix ?: "");else->destination.path}
     init {
         if(browser&&projectID!=null&&initial?.path?.trimEnd('/')!=path)updateLocation(path,true)
     }
@@ -61,6 +82,7 @@ internal class AppNavigation(initial: AppLocation?, private val updateLocation: 
         destination=target;projectID=id
         plotStep=if(reopening)null else plot?.second
         generationID=floorGeneration(location.path)
+        reviewRoute=floorReview(location.path)
         floorStep=if(generationID!=null)FloorStep.HISTORY else if(reopening)null else floor?.second
         if(reopening&&location.path.trimEnd('/')!=path)updateLocation(path,true)
         if (destination == Destination.LOGIN) returnTo = safeAppPath(location.next)
@@ -68,22 +90,23 @@ internal class AppNavigation(initial: AppLocation?, private val updateLocation: 
     fun navigate(target: Destination, replace: Boolean = false) {
         require(target !in listOf(Destination.PLOT,Destination.FLOOR_PLAN)) { "Open a project with its ID and planning step." }
         if (destination == target && !replace) return
-        destination = target; projectID = null
+        destination = target; projectID = null;reviewRoute=null
         if (browser) updateLocation(target.path, replace)
     }
     fun openProject(id: String, step: PlotStep? = null, replace: Boolean = false) {
         val target = "/projects/$id/plot" + (step?.let { "/${it.segment}" } ?: "")
         require(!browser || plotLocation(target) != null) { "Invalid project route" }
         if (destination == Destination.PLOT && projectID == id && plotStep == step && !replace) return
-        destination = Destination.PLOT; projectID = id; plotStep = step;floorStep=null;generationID=null
+        destination = Destination.PLOT; projectID = id; plotStep = step;floorStep=null;generationID=null;reviewRoute=null
         if (browser) updateLocation(target, replace)
     }
-    fun openFloor(id:String,step:FloorStep?=null,replace:Boolean=false,generation:String?=null) {
+    fun openFloor(id:String,step:FloorStep?=null,replace:Boolean=false,generation:String?=null,review:PlanReviewRoute?=null) {
         require(generation==null||step==FloorStep.HISTORY)
-        val target="/projects/$id/floor-plan"+(step?.let {"/${it.segment}"} ?: "")+(generation?.let {"/$it"} ?: "")
+        require(review==null||generation!=null)
+        val target="/projects/$id/floor-plan"+(step?.let {"/${it.segment}"} ?: "")+(generation?.let {"/$it"} ?: "")+(review?.suffix ?: "")
         require(!browser||floorLocation(target)!=null) {"Invalid floor-plan route"}
-        if(destination==Destination.FLOOR_PLAN&&projectID==id&&floorStep==step&&generationID==generation&&!replace)return
-        destination=Destination.FLOOR_PLAN;projectID=id;floorStep=step;generationID=generation;plotStep=null
+        if(destination==Destination.FLOOR_PLAN&&projectID==id&&floorStep==step&&generationID==generation&&reviewRoute==review&&!replace)return
+        destination=Destination.FLOOR_PLAN;projectID=id;floorStep=step;generationID=generation;plotStep=null;reviewRoute=review
         if(browser)updateLocation(target,replace)
     }
     fun reconcileSession(signedIn: Boolean, initializing: Boolean) {

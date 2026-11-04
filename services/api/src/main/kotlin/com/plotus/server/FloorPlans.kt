@@ -15,6 +15,14 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import kotlin.math.roundToInt
 
+internal fun OptimizedRevision.validateRevision() {
+    if(!review.isValid()||review.sourceHash==null||!review.requiredChecksPass||drawings.isEmpty()||drawings.size>6||
+        drawings.any {it.width !in 1..4096||it.height !in 1..4096||it.width.toLong()*it.height>16_000_000||
+            it.pngBase64.length>6_000_000||it.scene3d?.isValid()==false}||
+        comparisons.size>32||comparisons.any {it.current?.isFinite()==false||it.revised?.isFinite()==false})
+        throw ApiFailure(502,"OPTIMIZATION_INVALID","The revision didn’t pass the required checks.")
+}
+
 interface PlanEngine {
     suspend fun preview(project:Project,setup:FloorPlanSetup):FloorPlanPreview
     suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing>
@@ -22,13 +30,19 @@ interface PlanEngine {
     suspend fun cancel(jobID:String) {}
     suspend fun present(plot:PlotSetup,units:PlotUnits,drawings:List<PlanDrawing>):List<PlanDrawing> = drawings
     suspend fun export(drawing:PlanDrawing,format:String):PlanExport = throw ApiFailure(503,"EXPORT_UNAVAILABLE","Export is temporarily unavailable.")
+    suspend fun review(project:Project,setup:FloorPlanSetup,drawings:List<PlanDrawing>):PlanReviewReport =
+        throw ApiFailure(503,"REVIEW_UNAVAILABLE","Plan review is temporarily unavailable.")
+    suspend fun optimize(project:Project,setup:FloorPlanSetup,drawings:List<PlanDrawing>,request:StartOptimizationRequest,jobID:String):EngineOptimizationResult =
+        throw ApiFailure(503,"OPTIMIZATION_UNAVAILABLE","Plan optimization is temporarily unavailable.")
+    suspend fun optimizationStatus(jobID:String,knownRevision:String?=null):EngineOptimizationProgress =
+        throw ApiFailure(503,"OPTIMIZATION_UNAVAILABLE","Plan optimization is temporarily unavailable.")
 }
 
 /** The private service URL and bearer credential never leave the API process. */
 class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngine {
     private val client=HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build()
     private suspend fun request(path:String,body:JsonObject):JsonObject=try {withContext(Dispatchers.IO) {
-        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(when(path){"/v1/programmes/resolve"->15L;"/v1/plans/cancel"->12L;else->260L}))
+        val request=HttpRequest.newBuilder(endpoint.resolve(path)).timeout(Duration.ofSeconds(when(path){"/v1/programmes/resolve"->15L;"/v1/plans/cancel"->12L;"/v1/plans/optimization-status"->8L;else->260L}))
             .header("Authorization","Bearer $token").header("Content-Type","application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body.toString())).build()
         var response=runInterruptible {client.send(request,HttpResponse.BodyHandlers.ofInputStream())}
@@ -81,6 +95,36 @@ class HttpPlanEngine(private val endpoint:URI,private val token:String):PlanEngi
     override suspend fun generate(project:Project,setup:FloorPlanSetup):List<PlanDrawing> = generateRequest(project,setup,null)
     override suspend fun generate(project:Project,setup:FloorPlanSetup,jobID:String):List<PlanDrawing> = generateRequest(project,setup,jobID)
     override suspend fun cancel(jobID:String) {request("/v1/plans/cancel",buildJsonObject {put("job_id",jobID)})}
+    private fun reviewInput(project:Project,setup:FloorPlanSetup,drawings:List<PlanDrawing>)=buildJsonObject {
+        put("programme",programme(project,setup))
+        put("drawings",buildJsonArray {drawings.forEach {drawing->
+            val encoded=Json.encodeToJsonElement(drawing).jsonObject
+            add(JsonObject(encoded.filterKeys {it in setOf("id","analysisID","review","spaceEfficiency","scene3d","presentation")}))
+        }})
+    }
+    override suspend fun review(project:Project,setup:FloorPlanSetup,drawings:List<PlanDrawing>):PlanReviewReport =
+        Json.decodeFromJsonElement<PlanReviewReport>(request("/v1/plans/review",reviewInput(project,setup,drawings))).also {
+            if(!it.isValid())throw ApiFailure(502,"REVIEW_INVALID","The measured review couldn’t be opened.")
+        }
+    override suspend fun optimize(project:Project,setup:FloorPlanSetup,drawings:List<PlanDrawing>,request:StartOptimizationRequest,jobID:String):EngineOptimizationResult {
+        val body=JsonObject(reviewInput(project,setup,drawings)+buildJsonObject {
+            put("profile",request.profile);put("operations",Json.encodeToJsonElement(request.operations));put("max_candidates",request.maxCandidates)
+            put("job_id",jobID);put("seed",(UUID.fromString(jobID).leastSignificantBits and 0x7fffffff).toInt())
+        })
+        return Json.decodeFromJsonElement<EngineOptimizationResult>(this.request("/v1/plans/optimize",body)).also {
+            if(it.status !in listOf("ready","no_improvement")||it.requested !in 5..10||it.checked !in 0..it.requested||
+                it.valid !in 0..it.checked||it.distinct !in 0..it.valid)throw ApiFailure(502,"OPTIMIZATION_INVALID","The revision couldn’t be opened.")
+            it.revision?.let {revision->
+                revision.validateRevision()
+                if(revision.drawings.map {d->d.id}.toSet()!=drawings.map {d->d.id}.toSet())
+                    throw ApiFailure(502,"OPTIMIZATION_INVALID","The revision changed the saved floor programme.")
+            }
+        }
+    }
+    override suspend fun optimizationStatus(jobID:String,knownRevision:String?):EngineOptimizationProgress =
+        Json.decodeFromJsonElement<EngineOptimizationProgress>(request("/v1/plans/optimization-status",buildJsonObject {
+            put("job_id",jobID);knownRevision?.let {put("known_revision",it)}
+        })).also {it.revision?.validateRevision()}
     private suspend fun generateRequest(project:Project,setup:FloorPlanSetup,jobID:String?):List<PlanDrawing> {
         val preview=preview(project,setup)
         if(!preview.canGenerate)throw ApiFailure(422,"PLAN_NO_FIT",preview.findings.firstOrNull()?.message ?: "Check the floor-plan requirements.")
@@ -190,10 +234,10 @@ class PostgresPlans(private val source:DataSource) {
     /** List lightweight summaries; fetch a drawing only when its history entry is opened. */
     suspend fun history(owner:UUID,project:UUID,before:UUID?=null):PlanGenerations=db {c->
         val cursor=if(before==null)"" else " AND (created_at,id)<(SELECT created_at,id FROM plotus.plan_generations WHERE owner_id=? AND project_id=? AND id=?)"
-        c.prepareStatement("SELECT id,status,created_at,updated_at,source_revision,result->>'error' AS error FROM plotus.plan_generations WHERE owner_id=? AND project_id=?$cursor ORDER BY created_at DESC,id DESC LIMIT 31").use {
+        c.prepareStatement("SELECT id,status,created_at,updated_at,source_revision,result->>'error' AS error,result->>'durationMillis' AS saved_duration_ms FROM plotus.plan_generations WHERE owner_id=? AND project_id=?$cursor ORDER BY created_at DESC,id DESC LIMIT 31").use {
             it.setObject(1,owner);it.setObject(2,project)
             if(before!=null){it.setObject(3,owner);it.setObject(4,project);it.setObject(5,before)}
-            val rows=it.executeQuery().use {r->buildList {while(r.next())add(GeneratedFloorPlan(r.getObject("id").toString(),r.getString("status"),error=r.getString("error"),createdAt=r.getTimestamp("created_at").toInstant().toString(),sourceRevision=r.getLong("source_revision"),durationMillis=r.runDurationMillis()))}}
+            val rows=it.executeQuery().use {r->buildList {while(r.next())add(GeneratedFloorPlan(r.getObject("id").toString(),r.getString("status"),error=r.getString("error"),createdAt=r.getTimestamp("created_at").toInstant().toString(),sourceRevision=r.getLong("source_revision"),durationMillis=r.runDurationMillis(r.getString("saved_duration_ms")?.toLongOrNull())))} }
             PlanGenerations(rows.take(30),if(rows.size>30)rows[29].id else null)
         }
     }
@@ -212,7 +256,7 @@ class PostgresPlans(private val source:DataSource) {
             c.prepareStatement("SELECT * FROM plotus.plan_generations WHERE owner_id=? AND project_id=? AND request_id=?").use {
                 it.setObject(1,owner);it.setObject(2,UUID.fromString(project.id));it.setObject(3,UUID.fromString(request.requestID));it.executeQuery().use {r->if(r.next()){val found=r.plan();c.commit();return@db StartedPlan(found,false)}}
             }
-            c.createStatement().use {it.executeQuery("SELECT 1 FROM plotus.plan_generations WHERE status IN ('queued','running','cancelling') LIMIT 1").use {r->if(r.next())throw ApiFailure(429,"ENGINE_BUSY","A plan is being generated. Try again shortly.")}}
+            c.createStatement().use {it.executeQuery("SELECT 1 FROM (SELECT status FROM plotus.plan_generations UNION ALL SELECT status FROM plotus.plan_optimizations) jobs WHERE status IN ('queued','running','cancelling') LIMIT 1").use {r->if(r.next())throw ApiFailure(429,"ENGINE_BUSY","A plan is being generated or optimized. Try again shortly.")}}
             val id=UUID.randomUUID()
             c.prepareStatement("""INSERT INTO plotus.plan_generations(id,owner_id,project_id,request_id,source_revision,snapshot,status)
                 SELECT ?,owner_id,id,?,revision,jsonb_build_object('plot',plot_setup,'floorPlan',floor_plan),'running'
@@ -240,13 +284,13 @@ class PostgresPlans(private val source:DataSource) {
     fun recover() {source.connection.use {c->c.createStatement().use {it.executeUpdate("UPDATE plotus.plan_generations SET status=CASE WHEN status='cancelling' THEN 'cancelled' ELSE 'failed' END,updated_at=clock_timestamp() WHERE status IN ('queued','running','cancelling')")}}}
     // updated_at is written when a run finishes or is recovered after interruption.
     // Presentation caching changes only result.drawings, so later exports never extend it.
-    private fun java.sql.ResultSet.runDurationMillis():Long? =
+    private fun java.sql.ResultSet.runDurationMillis(saved:Long?=null):Long? =
         if(getString("status") in listOf("ready","blocked","failed","cancelled"))
-            Duration.between(getTimestamp("created_at").toInstant(),getTimestamp("updated_at").toInstant()).toMillis().coerceAtLeast(0)
+            saved?.coerceAtLeast(0) ?: Duration.between(getTimestamp("created_at").toInstant(),getTimestamp("updated_at").toInstant()).toMillis().coerceAtLeast(0)
         else null
     private fun java.sql.ResultSet.plan():GeneratedFloorPlan = (getString("result")?.let {Json.decodeFromString<GeneratedFloorPlan>(it)}
         ?: GeneratedFloorPlan(getObject("id").toString(),getString("status"),error=if(getString("status")=="failed")"Generation was interrupted. Try again." else null,createdAt=getTimestamp("created_at").toInstant().toString(),sourceRevision=getLong("source_revision")))
-        .copy(durationMillis=runDurationMillis())
+        .let {it.copy(durationMillis=runDurationMillis(it.durationMillis))}
     private suspend fun <T> db(action:(java.sql.Connection)->T):T=withContext(Dispatchers.IO) {source.connection.use(action)}
 }
 

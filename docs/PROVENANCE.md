@@ -24,3 +24,5 @@ The planning engine and its CAD assets are pre-existing private technology. They
 Private product source, customer data, generated plans and credentials are not included in the public app source.
 
 Sketch-image selection, the review flow and the authenticated Meta vision adapter were written during the event. The configured image-understanding model is an external hosted service, not event-authored model code. Images are processed by the provider; its source and credentials are outside this repository.
+
+Architect Review, its shared Compose screens, owner-scoped review/optimization APIs and Meta explanation adapter were added on 1 November 2026 after the hackathon. The user-approved Figma additions on App design clean are their visual source. The deterministic metrics, archive and runtime soft-objective adapter are new additions around the pre-existing private solver. The hosted Meta model interprets structured findings; it does not produce measurements, compliance results or geometry. No model source or credentials are included.

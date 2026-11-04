@@ -113,7 +113,15 @@ fun PlotusApp() {
                         } else if(destination==Destination.FLOOR_PLAN&&workspace!=null) {
                             val id=navigation.projectID!!
                             Box(Modifier.weight(1f).fillMaxWidth()) {
-                                FloorPlanScreen(workspace.floor(id),id,navigation.floorStep,compact,{navigation.openFloor(id,it,replace=compact)},{navigation.openProject(id)},{navigation.navigate(Destination.PROJECTS)},navigation.generationID,{generation->navigation.openFloor(id,FloorStep.HISTORY,generation=generation)})
+                                FloorPlanScreen(workspace.floor(id),id,navigation.floorStep,compact,{navigation.openFloor(id,it,replace=compact)},{navigation.openProject(id)},{navigation.navigate(Destination.PROJECTS)},navigation.generationID,{generation->
+                                    if(navigation.destination==Destination.FLOOR_PLAN&&navigation.projectID==id)navigation.openFloor(id,FloorStep.HISTORY,generation=generation)
+                                },navigation.reviewRoute,{review->
+                                    if(navigation.destination==Destination.FLOOR_PLAN&&navigation.projectID==id&&navigation.generationID!=null)
+                                        navigation.openFloor(id,FloorStep.HISTORY,generation=navigation.generationID,review=review)
+                                },{job,compare->
+                                    if(navigation.destination==Destination.FLOOR_PLAN&&navigation.projectID==id)
+                                        navigation.openFloor(id,FloorStep.HISTORY,generation=job.basePlanID,review=PlanReviewRoute(if(compare)ReviewView.COMPARE else ReviewView.PROGRESS,job.id))
+                                })
                             }
                         } else {
                         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = if (compact) 24.dp else 32.dp,

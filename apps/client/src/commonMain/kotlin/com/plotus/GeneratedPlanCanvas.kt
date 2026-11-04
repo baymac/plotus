@@ -17,6 +17,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -36,6 +39,7 @@ import com.plotus.shared.METRES_PER_FOOT
 import com.plotus.shared.decimal
 import com.plotus.shared.measureLabel
 import com.plotus.shared.FloorPlanSetup
+import com.plotus.shared.PlanScenePoint
 import com.plotus.shared.PlanMode
 import com.plotus.shared.buildingLabel
 import org.jetbrains.compose.resources.decodeToImageBitmap
@@ -49,7 +53,7 @@ import org.jetbrains.skia.svg.SVGLengthContext
  * Map paper/ink to the active palette without changing the saved engine output.
  */
 @OptIn(ExperimentalComposeUiApi::class)
-@Composable internal fun GeneratedPlanCanvas(drawing:PlanDrawing,compact:Boolean,modifier:Modifier=Modifier,roadLabels:List<String> = emptyList(),requirements:FloorPlanSetup?=null) {
+@Composable internal fun GeneratedPlanCanvas(drawing:PlanDrawing,compact:Boolean,modifier:Modifier=Modifier,roadLabels:List<String> = emptyList(),requirements:FloorPlanSetup?=null,highlightRoomIDs:Set<String> = emptySet(),showMetrics:Boolean=true,showRequirements:Boolean=true,preview:Boolean=false) {
     val c=LocalPlotusColors.current
     val presentation=drawing.presentation
     val units=LocalMeasurementUnits.current
@@ -82,26 +86,41 @@ import org.jetbrains.skia.svg.SVGLengthContext
     Column(modifier.background(c.background)) {
     Box(Modifier.fillMaxWidth().weight(1f).clipToBounds().onSizeChanged {size=it}) {
         if(vector!=null||bitmap!=null)Canvas(Modifier.fillMaxSize().semantics {contentDescription="Generated floor plan. Read-only canvas. Drag to pan, pinch or use the toolbar to zoom."+(if(vector!=null)" Vector drawing." else " Image drawing.")}
-            .canvasNavigation(viewport,Offset(size.width/2f,(size.height+72*density)/2f))) {
+            .canvasNavigation(viewport,Offset(size.width/2f,(size.height+(if(preview)48 else 72)*density)/2f))) {
                 if(grid) {
                     val spacing=24*density
                     var x=16*density
                     while(x<size.width) {var y=16*density;while(y<size.height){drawCircle(c.border.copy(alpha=.65f),.65f*density,Offset(x,y));y+=spacing};x+=spacing}
                 }
-                val top=96*density
+                val top=(if(preview)64 else 96)*density
                 val sideMargin=if(presentation?.roadPosition in listOf("west","east"))80 else 32
                 val fit=minOf((size.width-sideMargin*density)/drawingWidth,(size.height-top-24*density)/drawingHeight).coerceAtLeast(.01f)
                 val view=viewport.view
                 val scale=fit*view.zoom
-                val centre=Offset(size.width/2f,(size.height+72*density)/2f)+view.pan
+                val centre=Offset(size.width/2f,(size.height+(if(preview)48 else 72)*density)/2f)+view.pan
                 withTransform({translate(centre.x-drawingWidth*scale/2,centre.y-drawingHeight*scale/2);scale(scale,scale,pivot=Offset.Zero)}) {
                     if(vector!=null) {
                         vector.render(drawContext.canvas.nativeCanvas,c.ink.toArgb())
+                        val projection=vector.projection
+                        if(projection!=null&&highlightRoomIDs.isNotEmpty())drawing.scene3d?.rooms?.filter {it.id in highlightRoomIDs}?.forEach {room->
+                            room.polygons.forEach {polygon->
+                                val path=Path().apply {fillType=PathFillType.EvenOdd}
+                                (listOf(polygon.outer)+polygon.holes).forEach {ring->
+                                    ring.forEachIndexed {index,point->
+                                        val p=projection.point(point)
+                                        if(index==0)path.moveTo(p.x,p.y) else path.lineTo(p.x,p.y)
+                                    }
+                                    path.close()
+                                }
+                                drawPath(path,c.primary.copy(alpha=.14f))
+                                drawPath(path,c.primary,style=Stroke(width=2*density/scale))
+                            }
+                        }
                     } else if(bitmap!=null)drawImage(bitmap,colorFilter=filter)
                 }
             }
         else Text("This floor drawing couldn’t be opened.",Modifier.align(Alignment.Center),color=c.muted)
-        if(requirements!=null)Column(Modifier.align(Alignment.TopStart).padding(start=16.dp,end=16.dp,top=if(compact)60.dp else 76.dp).widthIn(max=248.dp).background(c.surface,RoundedCornerShape(10.dp)).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+        if(showRequirements&&requirements!=null)Column(Modifier.align(Alignment.TopStart).padding(start=16.dp,end=16.dp,top=if(compact)60.dp else 76.dp).widthIn(max=248.dp).background(c.surface,RoundedCornerShape(10.dp)).padding(horizontal=12.dp,vertical=10.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
             var expanded by remember(drawing.id,compact) {mutableStateOf(!compact)}
             requirements?.let {setup->
                 val home=setup.homes.firstOrNull()
@@ -148,7 +167,14 @@ import org.jetbrains.skia.svg.SVGLengthContext
             }
         }
     }
-    if(presentation!=null) {
+    if(showMetrics&&presentation!=null)GeneratedPlanMeasurements(presentation,compact)
+    }
+}
+
+@Composable internal fun GeneratedPlanMeasurements(presentation:com.plotus.shared.PlanPresentation,compact:Boolean) {
+    val c=LocalPlotusColors.current
+    val units=LocalMeasurementUnits.current
+
         androidx.compose.material3.HorizontalDivider(color=c.line)
         Row(Modifier.fillMaxWidth().background(c.surface).padding(horizontal=if(compact)16.dp else 24.dp,vertical=16.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(16.dp)) {
             fun area(value:Double?)=value?.let {if(units==PlotUnits.METRES)"${decimal(kotlin.math.round(it*10)/10)} m²" else "${decimal(kotlin.math.round(it/(METRES_PER_FOOT*METRES_PER_FOOT)*10)/10)} sq ft"} ?: "—"
@@ -163,14 +189,12 @@ import org.jetbrains.skia.svg.SVGLengthContext
             }
             PlotCompass(presentation.northDegrees,Modifier.size(if(compact)76.dp else 96.dp))
         }
-    }
-    }
 }
 
 internal expect fun planTimestamp(iso:String):String
 
 /** A retained SVG document; each draw replays real geometry at the canvas transform. */
-internal class VectorPlan private constructor(private val document:SVGDOM,val width:Float,val height:Float) {
+internal class VectorPlan private constructor(private val document:SVGDOM,val width:Float,val height:Float,val projection:PlanCanvasProjection?=null) {
     private val bounds=org.jetbrains.skia.Rect.makeWH(width,height)
     private val paper=org.jetbrains.skia.Paint().apply {color=-1}
     private val ink=org.jetbrains.skia.Paint()
@@ -208,9 +232,27 @@ internal class VectorPlan private constructor(private val document:SVGDOM,val wi
                     val root=requireNotNull(document.root) {"Missing SVG root"}
                     val size=try {root.getIntrinsicSize(SVGLengthContext(0f,0f))} finally {root.close()}
                     require(size.x.isFinite()&&size.y.isFinite()&&size.x>0&&size.y>0) {"Invalid SVG size"}
-                    VectorPlan(document,size.x,size.y)
+                    VectorPlan(document,size.x,size.y,PlanCanvasProjection.decode(svg,size.x,size.y))
                 }catch(error:Throwable) {document.close();throw error}
             }.getOrNull()
+        }
+    }
+}
+
+/** Native portable scene metres and the designed SVG's foot-based viewBox share one frame. */
+internal data class PlanCanvasProjection(val x:Float,val y:Float,val width:Float,val height:Float,val pixelsWidth:Float,val pixelsHeight:Float) {
+    fun point(value:PlanScenePoint):Offset {
+        val fit=minOf(pixelsWidth/width,pixelsHeight/height)
+        return Offset(((value.x/METRES_PER_FOOT).toFloat()-x)*fit+(pixelsWidth-width*fit)/2,
+            ((value.y/METRES_PER_FOOT).toFloat()-y)*fit+(pixelsHeight-height*fit)/2)
+    }
+    companion object {
+        fun decode(svg:String,pixelsWidth:Float,pixelsHeight:Float):PlanCanvasProjection? {
+            if(!Regex("data-plotus-frame=['\"]designed['\"]").containsMatchIn(svg))return null
+            val raw=Regex("viewBox=['\"]([^'\"]+)['\"]").find(svg)?.groupValues?.get(1) ?: return null
+            val values=raw.trim().split(Regex("[,\\s]+")).map {it.toFloatOrNull() ?: return null}
+            if(values.size!=4||values.any {!it.isFinite()}||values[2]<=0||values[3]<=0)return null
+            return PlanCanvasProjection(values[0],values[1],values[2],values[3],pixelsWidth,pixelsHeight)
         }
     }
 }

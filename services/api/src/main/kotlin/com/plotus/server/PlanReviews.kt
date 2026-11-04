@@ -36,7 +36,7 @@ class PlanReviews(private val jobs:PostgresPlans?=null,private val store:Postgre
         val report=review(owner,project,id)
         val projectID=UUID.fromString(project.id)
         val hash=report.sourceHash ?: return AIPlanReview("unavailable","The measured review is still available.")
-        storage().ai(owner,projectID,id,hash)?.takeIf {it.status=="ready"&&it.recommendations.all {r->r.nextStep.isNotBlank()}}?.let {return it}
+        storage().ai(owner,projectID,id,hash)?.takeIf {it.status=="ready"&&it.recommendations.isNotEmpty()&&it.recommendations.all {r->r.nextStep.isNotBlank()}}?.let {return it}
         if(report.findings.isEmpty())return AIPlanReview("not_needed","No measured recommendations need an AI explanation.")
         val provider=ai ?: return AIPlanReview("unavailable","The measured review and solver optimization are still available.")
         val key=owner.toString()+"/"+id+"/"+hash

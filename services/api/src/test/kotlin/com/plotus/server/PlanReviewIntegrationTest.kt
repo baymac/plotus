@@ -25,7 +25,9 @@ class PlanReviewIntegrationTest {
         val source=PGSimpleDataSource().apply {setURL(url!!);user="plotus";password=System.getenv("PLOTUS_TEST_DATABASE_PASSWORD")}
         val owner=UUID.randomUUID();val other=UUID.randomUUID()
         val projects=PostgresProjects(source).also {it.migrate()};val jobs=PostgresPlans(source);val reviews=PostgresPlanReviews(source)
-        val baseline=report(80,'a');val revised=report(90,'b')
+        val baseline=report(80,'a').copy(findings=listOf(ReviewFinding("service","measured","space","medium",
+            "Review service space","Measured space above its comfort target.",ReviewOperation.BALANCE_ROOM_PROPORTIONS)))
+        val revised=report(90,'b')
         val oldDrawing=PlanDrawing("floor-0","Ground","synthetic",100,100,review=baseline)
         val newDrawing=oldDrawing.copy(pngBase64="revised synthetic",review=revised)
         val revision=OptimizedRevision(listOf(newDrawing),revised,listOf(ReviewComparison("design","Design quality","score",80.0,90.0)))
@@ -47,7 +49,12 @@ class PlanReviewIntegrationTest {
                 revision=revision.takeUnless {knownRevision==revised.sourceHash})
             override suspend fun cancel(jobID:String){cancellations+=jobID}
         }
-        val service=PlanReviews(jobs,reviews,engine,ai=null);val floors=FloorPlans(jobs,engine)
+        val aiCalls=java.util.concurrent.atomic.AtomicInteger()
+        val service=PlanReviews(jobs,reviews,engine,ai=ArchitectAI {
+            aiCalls.incrementAndGet()
+            AIPlanReview("ready","Test a compact arrangement.",listOf(AIReviewRecommendation("service",
+                "Oversized service rooms can reduce useful family space.","Test a compact bathroom while keeping fixtures and clear access.")))
+        });val floors=FloorPlans(jobs,engine)
         try {testApplication {
             application {plotusModule(projects,IdentityVerifier {if(it=="review-owner")owner else other},floorPlans=floors,planReviews=service)}
             val project=runBlocking {
@@ -69,6 +76,12 @@ class PlanReviewIntegrationTest {
             val measured=client.get(reportPath){bearerAuth("review-owner")}
             assertEquals(HttpStatusCode.OK,measured.status)
             assertEquals(80,Json.decodeFromString<PlanReviewReport>(measured.bodyAsText()).designScore)
+            runBlocking {reviews.saveAI(owner,projectID,UUID.fromString(original.id),baseline.sourceHash!!,AIPlanReview("ready","Old empty explanation."))}
+            suspend fun explain()=client.post(path+"/generations/"+original.id+"/ai-review"){bearerAuth("review-owner")}
+            val explanation=explain();assertEquals(HttpStatusCode.OK,explanation.status)
+            assertTrue(Json.decodeFromString<AIPlanReview>(explanation.bodyAsText()).recommendations.single().nextStep.isNotBlank())
+            assertEquals(1,aiCalls.get())
+            assertEquals(HttpStatusCode.OK,explain().status);assertEquals(1,aiCalls.get())
             val request=StartOptimizationRequest(UUID.randomUUID().toString(),operations=listOf(ReviewOperation.SHORTEN_PASSAGE))
             suspend fun start()=client.post(path+"/generations/"+original.id+"/optimizations"){
                 bearerAuth("review-owner");contentType(ContentType.Application.Json);setBody(Json.encodeToString(request))

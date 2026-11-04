@@ -7,8 +7,20 @@ import java.net.URI
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import kotlin.test.*
+import kotlinx.serialization.json.*
 
 class PlanEngineFailureTest {
+    @Test fun rejectedAttemptsExplainKnownChecksWithoutLeakingNativeIdentifiers() {
+        val upstream=buildJsonObject {putJsonObject("report") {putJsonObject("validation") {putJsonArray("hard_failures") {
+            add("ground:source_fit:private-home:kitchen:kitchen:1:kitchen_casework")
+            add("ground:source_parking:private-owner:parking:1")
+        }}}}
+        val message=generationCheckMessage(upstream)
+        assertTrue("kitchen fixtures and access" in message)
+        assertTrue("parking and entrance access" in message)
+        assertFalse("private-owner" in message);assertFalse("private-home" in message)
+        assertFalse("cannot fit" in message)
+    }
     @Test fun searchAndResourceLimitsAreNotReportedAsRejectedLayouts()=runBlocking<Unit> {
         val cases=listOf(
             Triple(422,"search_budget_exhausted",422 to "PLAN_SEARCH_LIMIT"),

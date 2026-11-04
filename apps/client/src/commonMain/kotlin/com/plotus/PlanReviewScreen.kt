@@ -120,12 +120,13 @@ internal fun reviewHeading(route:PlanReviewRoute,workspace:PlanReviewWorkspace):
                             ReviewTitle(finding.title)
                             ReviewNote(priorityLabel(finding.priority)+" · "+(report.metrics.find {it.id==finding.metricID}?.title ?: "Vastu"))
                             finding.measurements.forEach {ReviewMeasuredRow(it)}
-                            ReviewBody(finding.explanation)
-                            ReviewSection("Keep in the revision")
-                            ReviewStatus("Saved setbacks and plot direction")
-                            ReviewStatus("Required openings and private room access")
-                            ReviewStatus("Parking and entrance access")
-                            ReviewNote("The solver tests feasibility and compares the result. An improvement is not promised.")
+                            val explanation=review.ai?.recommendations?.find {it.findingID==finding.id}
+                            ReviewBody(explanation?.explanation ?: finding.explanation)
+                            ReviewSection("What to test")
+                            ReviewBody(explanation?.nextStep?.takeIf {it.isNotBlank()} ?: finding.operation?.goal ?: finding.explanation)
+                            finding.operation?.let {ReviewNote("Success: "+it.goal.lowercase()+".")}
+                            if(finding.operation==null)ReviewNote("This finding needs a designer's review. An automatic test is unavailable.")
+                            ReviewNote("The saved brief and required layout checks apply to every revision.")
                         } ?: ReviewNote("This recommendation is no longer in the measured report.")
                     }
                     ReviewView.METRIC->selectedMetric?.let {metric->
@@ -141,7 +142,7 @@ internal fun reviewHeading(route:PlanReviewRoute,workspace:PlanReviewWorkspace):
                     ReviewView.PROGRESS->{
                         ReviewProgress(job,onHistory,{onView(PlanReviewRoute(ReviewView.COMPARE,it))})
                         if(job?.status in listOf("no_improvement","failed","cancelled"))PlotusButton("Try fewer changes",{
-                            review.prepare(ReviewOperation.CONSOLIDATE_OPEN_SPACE);onView(PlanReviewRoute(ReviewView.OPTIMIZE))
+                            review.prepare();onView(PlanReviewRoute(ReviewView.OPTIMIZE))
                         },outline=true)
                     }
                     ReviewView.COMPARE-> {
@@ -177,15 +178,15 @@ internal fun reviewHeading(route:PlanReviewRoute,workspace:PlanReviewWorkspace):
                             preview?.review?.sourceHash?.let {hash->review.apply(hash,onSaved)}
                         },Modifier.weight(1f).height(48.dp),enabled=!review.busy&&preview?.review?.requiredChecksPass==true&&preview?.review?.sourceHash!=null)
                     }
-                    ReviewView.OPTIMIZE->PlotusButton(if(review.starting)"Starting…" else "Compare up to 5 layouts",{
+                    ReviewView.OPTIMIZE->PlotusButton(if(review.starting)"Starting…" else "Test improvement",{
                         review.start {onOptimization(it,false)}
                     },Modifier.fillMaxWidth().height(48.dp),enabled=!review.busy&&report?.canOptimize==true&&review.selectedOperations.isNotEmpty())
-                    ReviewView.FINDING->PlotusButton("Try this revision",{
+                    ReviewView.FINDING->PlotusButton("Test this improvement",{
                         review.prepare(selectedFinding?.operation);onView(PlanReviewRoute(ReviewView.OPTIMIZE))
                     },Modifier.fillMaxWidth().height(48.dp),enabled=report?.canOptimize==true&&selectedFinding?.operation!=null&&!review.busy)
-                    else->PlotusButton("Optimize plan",{
+                    else->PlotusButton("Choose an improvement",{
                         review.prepare();onView(PlanReviewRoute(ReviewView.OPTIMIZE))
-                    },Modifier.fillMaxWidth().height(48.dp),enabled=report?.canOptimize==true&&!review.busy)
+                    },Modifier.fillMaxWidth().height(48.dp),enabled=report?.canOptimize==true&&report.findings.any {it.operation!=null}&&!review.busy)
                 }
             }
         }
@@ -229,8 +230,8 @@ internal fun reviewHeading(route:PlanReviewRoute,workspace:PlanReviewWorkspace):
     HorizontalDivider(color=c.line)
     ReviewSection("Recommended next")
     if(report.findings.isEmpty())ReviewNote("No measured optimization opportunity is flagged by this review.")
-    report.findings.forEachIndexed {index,finding->if(index>0)HorizontalDivider(color=c.line);ReviewFindingCard(finding,onView=onView)}
-    ReviewNote("Recommendations are proposals until a revision passes the checks.")
+    report.priorities.forEachIndexed {index,finding->if(index>0)HorizontalDivider(color=c.line);ReviewFindingCard(finding,onView=onView)}
+    if(report.findings.size>report.priorities.size)ReviewNote("Open a category below to see the remaining findings.")
     HorizontalDivider(color=c.line)
     Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
         ReviewSection("Design breakdown",Modifier.weight(1f))
@@ -256,8 +257,8 @@ internal fun reviewHeading(route:PlanReviewRoute,workspace:PlanReviewWorkspace):
         workspace.aiLoading->{ReviewTitle("Reviewing the measured findings");LinearProgressIndicator(Modifier.fillMaxWidth())}
         workspace.ai?.status=="ready"->{
             ReviewTitle(workspace.ai!!.summary)
-            ReviewNote("Measurements and scores come from the deterministic plan review.")
-            workspace.ai!!.recommendations.forEach {r->report.findings.find {it.id==r.findingID}?.let {ReviewFindingCard(it,r.explanation,onView)}}
+            ReviewNote("Uses the saved plan's measurements and checks.")
+            workspace.ai!!.recommendations.forEach {r->report.findings.find {it.id==r.findingID}?.let {ReviewFindingCard(it,r.explanation,onView,r.nextStep)}}
         }
         workspace.ai?.status=="not_needed"->ReviewBody(workspace.ai!!.summary)
         else->{
@@ -272,27 +273,31 @@ internal fun reviewHeading(route:PlanReviewRoute,workspace:PlanReviewWorkspace):
 
 @Composable private fun ReviewOptimizationSetup(report:PlanReviewReport,workspace:PlanReviewWorkspace,onView:(PlanReviewRoute?)->Unit) {
     val c=LocalPlotusColors.current
-    ReviewTitle("Find a better arrangement")
-    ReviewBody("Try alternative room arrangements and compare only those that pass the required checks.")
-    Column(Modifier.fillMaxWidth().background(c.quiet,RoundedCornerShape(12.dp)).padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        ReviewSection("Balanced")
-        ReviewNote("Space, circulation, function, daylight, privacy and access.")
-        Text("View scoring weights",Modifier.clickable(role=Role.Button){onView(PlanReviewRoute(ReviewView.METHOD))}.padding(vertical=6.dp),fontSize=14.sp,fontWeight=FontWeight.SemiBold,color=c.primary)
-    }
-    ReviewSection("Explore these improvements")
-    val options=(listOf(ReviewOperation.CONSOLIDATE_OPEN_SPACE,ReviewOperation.SHORTEN_PASSAGE,ReviewOperation.BALANCE_ROOM_PROPORTIONS)+report.findings.mapNotNull {it.operation}+workspace.selectedOperations).distinct()
+    ReviewTitle("Test one improvement")
+    ReviewBody("Choose a measured finding. The solver tests a focused revision and checks whether that goal improves.")
+    val options=report.findings.mapNotNull {it.operation}.distinct()
+    if(options.isEmpty())ReviewNote("No measured improvement is flagged for this plan.")
     Column {options.forEach {operation->
         val selected=operation in workspace.selectedOperations
-        Row(Modifier.fillMaxWidth().heightIn(min=48.dp).toggleable(selected,role=Role.Checkbox){workspace.choose(operation)},verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            Checkbox(selected,onCheckedChange=null,modifier=Modifier.size(24.dp))
-            Text(operation.title,fontSize=14.sp,lineHeight=21.sp)
+        Row(Modifier.fillMaxWidth().heightIn(min=64.dp).selectable(selected,role=Role.RadioButton){workspace.choose(operation)},verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            RadioButton(selected,onClick=null,modifier=Modifier.size(24.dp))
+            Column(verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                Text(operation.title,fontSize=14.sp,lineHeight=21.sp,fontWeight=FontWeight.SemiBold)
+                ReviewNote(operation.goal)
+            }
         }
     }}
+    val measured=workspace.selectedOperations.flatMap {it.measurementIDs}.toSet()
+    report.measurements.filter {it.id in measured}.takeIf {it.isNotEmpty()}?.let {values->
+        ReviewSection("Starting measurement")
+        values.forEach {ReviewMeasuredRow(it)}
+    }
     HorizontalDivider(color=c.line)
-    ReviewSection("Always preserved")
-    ReviewNote("Room requirements, saved setbacks, plot direction, required openings, staircase geometry and vehicle access.")
+    ReviewSection("How the result is chosen")
+    ReviewBody("The selected goal must improve in the measured result. The overall design score must hold or improve when both scores are available.")
+    ReviewNote("Room requirements, setbacks, plot direction, openings, private access and furniture sizes remain required.")
     if(report.vastu.requested)ReviewStatus("Selected Vastu hard rules remain required")
-    ReviewNote("Up to five distinct candidate arrangements are attempted. The bounded search may find fewer valid alternatives.")
+    ReviewNote("Up to three attempts. Only a measured improvement that passes the layout checks can be applied.")
 }
 
 @Composable private fun ReviewProgress(job:PlanOptimization?,onHistory:()->Unit,onCompare:(String)->Unit) {
@@ -310,14 +315,23 @@ internal fun reviewHeading(route:PlanReviewRoute,workspace:PlanReviewWorkspace):
         Text((seconds/60).toString().padStart(2,'0')+":"+(seconds%60).toString().padStart(2,'0'),fontSize=40.sp,lineHeight=48.sp,fontWeight=FontWeight.Bold,
             modifier=Modifier.semantics {contentDescription="Elapsed "+runDurationLabel(elapsed)})
     }
-    ReviewTitle(when {job.status=="no_improvement"->"No better validated layout found";job.status=="failed"->"Optimization couldn’t finish";job.status=="cancelled"->"Optimization cancelled";else->"Checking alternative layouts"})
-    ReviewBody(if(job.running)"Finding layouts that preserve your requirements and pass the checks." else job.error ?: "Your current plan remains selected.")
+    job.operations.forEach {ReviewTag(it.goal)}
+    val targets=job.operations.flatMap {it.measurementIDs}.toSet()
+    job.baseReview?.measurements?.filter {it.id in targets}?.forEach {ReviewMeasuredRow(it)}
+    ReviewTitle(when {
+        job.status=="no_improvement"&&job.valid==0->"No alternative passed the checks"
+        job.status=="no_improvement"->"The selected goal did not improve"
+        job.status=="failed"->"The improvement test couldn’t finish"
+        job.status=="cancelled"->"Improvement test cancelled"
+        else->"Testing the selected improvement"
+    })
+    ReviewBody(if(job.running)"Testing the goal against your saved plan and checking each candidate." else job.error ?: "No better revision was found in this test. Your current plan is kept.")
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(12.dp)) {
         for((value,label) in listOf(job.requested to "Requested",job.checked to "Checked",job.valid to "Valid"))Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)){
             Text(value.toString(),fontSize=26.sp,fontWeight=FontWeight.Bold);ReviewNote(label)
         }
     }
-    ReviewNote(job.distinct.toString()+" distinct valid arrangements checked.")
+    ReviewNote(job.distinct.toString()+" different checked revisions, including changes within the same arrangement.")
     HorizontalDivider(color=c.line)
     ReviewStatus("Current plan remains available")
     if(job.revision!=null){
@@ -331,7 +345,12 @@ internal fun reviewHeading(route:PlanReviewRoute,workspace:PlanReviewWorkspace):
 @Composable private fun ReviewComparison(revision:OptimizedRevision,baseline:PlanReviewReport?) {
     val c=LocalPlotusColors.current
     val units=LocalMeasurementUnits.current
-    ReviewTag(if(baseline?.designScore==null)"Checked alternative · Balanced" else "Best checked revision · Balanced")
+    ReviewTag(if(revision.goals.isNotEmpty())"Selected goal improved · Layout checked" else "Checked alternative")
+    revision.goals.forEach {goal->
+        ReviewSection(goal.operation.title)
+        ReviewMeasuredRow(ReviewMeasurement(goal.id,"Current",goal.current,goal.unit))
+        ReviewMeasuredRow(ReviewMeasurement(goal.id,"Revised",goal.revised,goal.unit))
+    }
     ReviewSection("Compare the measured changes")
     ReviewStatus("Required layout checks passed")
     ReviewNote("Structural and local-code approval not assessed.")
@@ -387,14 +406,15 @@ internal fun reviewHeading(route:PlanReviewRoute,workspace:PlanReviewWorkspace):
     ReviewNote("Preferences do not override daylight, circulation, safe dimensions, saved setbacks or configured local rules.")
 }
 
-@Composable private fun ReviewFindingCard(finding:ReviewFinding,explanation:String?=null,onView:(PlanReviewRoute?)->Unit) {
+@Composable private fun ReviewFindingCard(finding:ReviewFinding,explanation:String?=null,onView:(PlanReviewRoute?)->Unit,nextStep:String?=null) {
     val c=LocalPlotusColors.current
     Column(Modifier.fillMaxWidth().clickable(role=Role.Button){onView(PlanReviewRoute(ReviewView.FINDING,finding.id))}.padding(vertical=12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
         Text(priorityLabel(finding.priority)+" · "+metricTitle(finding.metricID),fontSize=12.sp,lineHeight=18.sp,color=if(finding.priority=="critical")MaterialTheme.colorScheme.error else c.primary)
         ReviewSection(finding.title)
-        explanation?.let {ReviewBody(it)}
+        ReviewBody(explanation ?: finding.explanation)
+        nextStep?.takeIf {it.isNotBlank()}?.let {ReviewSection("What to test");ReviewBody(it)}
         finding.measurements.filter {it.value!=null}.forEach {ReviewNote(it.label+" · "+reviewValue(it))}
-        Text("Explore fix ↗",fontSize=14.sp,lineHeight=20.sp,color=c.primary,fontWeight=FontWeight.SemiBold)
+        Text("Review improvement ↗",fontSize=14.sp,lineHeight=20.sp,color=c.primary,fontWeight=FontWeight.SemiBold)
     }
 }
 

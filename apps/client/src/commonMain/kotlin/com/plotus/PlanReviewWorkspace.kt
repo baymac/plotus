@@ -71,9 +71,7 @@ class PlanReviewWorkspace(
     }
     private fun defaults(value:PlanReviewReport) {
         goalsInitialized=true
-        selectedOperations=value.findings.mapNotNull {it.operation}.toSet().ifEmpty {
-            setOf(ReviewOperation.CONSOLIDATE_OPEN_SPACE,ReviewOperation.SHORTEN_PASSAGE,ReviewOperation.BALANCE_ROOM_PROPORTIONS)
-        }
+        selectedOperations=value.priorities.mapNotNull {it.operation}.take(1).toSet()
     }
     fun explain(force:Boolean=false) {
         val id=planID ?: return
@@ -91,7 +89,7 @@ class PlanReviewWorkspace(
     }
     fun choose(operation:ReviewOperation) {
         goalsInitialized=true
-        selectedOperations=if(operation in selectedOperations)selectedOperations-operation else selectedOperations+operation
+        selectedOperations=if(operation in selectedOperations)emptySet() else setOf(operation)
         requestID=null;intent=null
     }
     fun prepare(operation:ReviewOperation?=null) {
@@ -105,7 +103,7 @@ class PlanReviewWorkspace(
         val key=id+"/"+selectedOperations.sortedBy {it.name}.joinToString {it.name}
         if(intent!=key){requestID=null;intent=key}
         val token=requestID ?: Uuid.random().toString().also {requestID=it}
-        val body=StartOptimizationRequest(token,operations=selectedOperations.toList())
+        val body=StartOptimizationRequest(token,operations=selectedOperations.toList(),maxCandidates=3)
         starting=true;error=null
         scope.launch {
             try {

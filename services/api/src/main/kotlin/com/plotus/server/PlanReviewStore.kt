@@ -79,7 +79,7 @@ class PostgresPlanReviews(private val source:DataSource) {
             if(r.next())throw ApiFailure(429,"ENGINE_BUSY","A plan is being generated or optimized. Try again shortly.")
         }}
         val id=UUID.randomUUID()
-        val job=PlanOptimization(id.toString(),base.toString(),"running","",requested=request.maxCandidates,baseReview=report)
+        val job=PlanOptimization(id.toString(),base.toString(),"running","",requested=request.maxCandidates,baseReview=report,operations=request.operations)
         c.prepareStatement("""INSERT INTO plotus.plan_optimizations(id,owner_id,project_id,base_generation_id,
             request_id,source_revision,snapshot,operations,status,result)
             SELECT ?,owner_id,project_id,id,?,source_revision,snapshot,?::jsonb,'running',?::jsonb
@@ -163,7 +163,7 @@ class PostgresPlanReviews(private val source:DataSource) {
     private fun ResultSet.optimization()=Json.decodeFromString<PlanOptimization>(getString("result")).copy(
         id=getObject("id").toString(),basePlanID=getObject("base_generation_id").toString(),status=getString("status"),
         createdAt=getTimestamp("created_at").toInstant().toString(),updatedAt=getTimestamp("updated_at").toInstant().toString(),
-        appliedPlanID=getString("applied_plan_id"))
+        appliedPlanID=getString("applied_plan_id"),operations=Json.decodeFromString(getString("operations")))
     private fun globalLock(c:Connection){c.createStatement().use {it.execute("SELECT pg_advisory_xact_lock(738291614)")}}
     private suspend fun <T> db(action:(Connection)->T):T=withContext(Dispatchers.IO){source.connection.use(action)}
     private suspend fun <T> transaction(action:(Connection)->T):T=db {c->c.autoCommit=false
